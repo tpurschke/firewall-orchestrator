@@ -1,0 +1,92 @@
+﻿@using FWO.Api.Client
+@using FWO.Config.Api
+@using FWO.Config.Api.Data
+
+
+@page "/settings/report"
+@attribute [Authorize(Roles = "admin, reporter, reporter-viewall, recertifier, auditor, fw-admin")]
+
+@inject ApiConnection apiConnection
+@inject UserConfig userConfig
+
+<h3>@(userConfig.GetText("report_settings"))</h3>
+@(userConfig.GetText("U5413"))
+<hr />
+
+@if (configData != null)
+{
+    <form class="form-inline" onsubmit="return false">
+        <label for="elementsPerFetch" class="col-form-label col-sm-4">@(userConfig.GetText("elementsPerFetch")):</label>
+        <div class="col-sm-2">
+            <input id="elementsPerFetch" type="number" class="form-control form-control-sm" @bind="configData!.ElementsPerFetch" />
+        </div>
+    </form>
+    <form class="form-inline" onsubmit="return false">
+        <label for="minCollapseAllDevices" class="col-form-label col-sm-4">@(userConfig.GetText("minCollapseAllDevices")):</label>
+        <div class="col-sm-2">
+            <input id="minCollapseAllDevices" type="number" class="form-control form-control-sm" @bind="configData!.MinCollapseAllDevices">
+        </div>
+    </form>
+    @* <form class="form-inline" onsubmit="return false">
+        <label for="maxMessages" class="col-form-label col-sm-4">@(userConfig.GetText("maxMessages")):</label>
+        <div class="col-sm-2">
+            <input id="maxMessages" type="number" class="form-control form-control-sm w-100" @bind="configData!.MaxMessages">
+        </div>
+    </form> *@
+    <form class="form-inline" onsubmit="return false">
+        <label for="messageViewTime" class="col-form-label col-sm-4">@(userConfig.GetText("messageViewTime")):</label>
+        <div class="col-sm-2">
+            <input id="messageViewTime" type="number" class="form-control form-control-sm" @bind="configData!.MessageViewTime">
+        </div>
+    </form>
+    <hr />
+    <button class="btn btn-sm btn-primary" @onclick="Save">@(userConfig.GetText("save"))</button>
+}
+else
+{
+    <div class="spinner-border" role="status">
+        <span class="sr-only">Loading...</span>
+    </div>
+}
+
+
+
+@code
+{
+    [CascadingParameter]
+    Action<Exception?, string, string, bool>? DisplayMessageInUi { get; set; }
+
+    ConfigData? configData;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            configData = await userConfig.GetEditableConfig();
+        }
+        catch (Exception exception)
+        {
+            DisplayMessageInUi!(exception, userConfig.GetText("report_settings"), userConfig.GetText("E5421"), false);
+        }
+    }
+
+    private async Task Save()
+    {
+        try
+        {
+            if (configData != null)
+            {
+                await userConfig.WriteToDatabase(configData, apiConnection);
+                DisplayMessageInUi!(null, userConfig.GetText("report_settings"), userConfig.GetText("U5301"), false);             
+            }
+            else
+            {
+                throw new Exception("Data saved before loaded. This should be impossible.");
+            }
+        }
+        catch (Exception exception)
+        {
+            DisplayMessageInUi!(exception, userConfig.GetText("report_settings"), "", true);
+        }
+    }
+}

@@ -132,3 +132,117 @@ adding report template format fk and permissions
 
 ### 5.3.2 - 05.07.2021
 - some minor bufixes
+
+### 5.3.3 - 10.07.2021
+- add column ldap_name to ldap_connection
+- add column ldap_connection_id to uiuser
+
+### 5.3.4 - 29.07.2021
+- moving to API hasura v2.0
+
+### 5.4.1 - 10.09.2021
+- moving towards full API-based importer modules
+- in preparation for coming import changes
+
+### 5.4.2 - 17.09.2021
+- as a start of FortiManager importer only some network objects are imported (PoC)
+- renaming fortimanager version
+- adding importer loop for new API based imports 
+
+### 5.5.1 - 27.10.2021
+- preparing DB for NAT rules (transforming all existing rules)
+- restricting all existing reports to access rules
+- introducing swagger REST API for user management
+- adding swagger REST API interactive documentation for user management
+- moving to hasura 2.0.10 for slight performance boost (see https://github.com/hasura/graphql-engine/releases/tag/v2.0.10)
+
+### 5.5.2 - 06.11.2021
+- new default report template for NAT rules
+
+### 5.5.3 - 08.12.2021
+- add column global_tenant_name to ldap_connection
+
+### 5.5.4 - 13.12.2021
+- insert default config values
+
+### 5.5.5 - 20.12.2021
+- set ldap_tenant_level to 5
+
+### 5.5.6 - 02.01.2022
+- introducing multi device manager for auto discovery
+
+### 5.5.7 - 04.01.2022
+- add column report_parameters to report_template, update data for default templates
+
+### 5.6.1 - 12.01.2022
+- update data for default templates for time filter
+
+### 5.6.2 - 17.01.2022
+- adding new legacy fortigate all in one device type (ssh)
+- clean separation of legacy and api importer
+
+### 5.6.3 - 19.01.2022
+- migrating jsonb import config fields (import_config and import_full_config tables) to json
+- this allows for import of bigger configs but is only a workaround that will not help for configs with >40.000 rules
+
+### 5.6.4 - 25.01.2022
+- main release merge
+- migrated api import-loop to a single python script without any sys executes of ext. scripts
+- minor but fixes and vip nat for fortimanager
+
+### 5.6.5 - 11.02.2022
+- next planned release
+- fixing migration scripts
+- splitting import_config into chunks to enable import of big managements
+- introducing fw-admin role (device admin without delete & auto-discovery rights)
+- working fortinet src hide nat behind interface
+
+### 5.6.6 - 07.03.2022
+- allow for users in rule destination (CP)
+- monitoring module
+- CPR8x auto-discovery
+
+### 5.6.7 - 04.04.2022
+- allow deactivation of ldap connection
+- rework of python logging
+- db index optimization
+- fixing CIDR filtering
+
+### 5.6.8
+- no end ip address for obj types <> range
+- fixing range display in reporting
+
+### 5.6.9 - 28.04.2022
+- import of fw configs directly from URL (import-mgm.py -m 17 -i https://x.y/z.conf)
+- ldap connection check improvements
+- alerting - handle import attempts
+
+### 5.7.1 - 13.10.2022
+- new workflow module for requesting changes
+- new Cisco FireFlow import module 
+- support for new operating system debian testing
+- bugfix enrichable objects in CP NAT rules
+- bugfix filter line brackets
+- new central credentials handling for import
+
+### 5.7.2 - 21.10.2022
+- start routing/interface (implemented for fortinet only) import and path analysis
+- also adding dummy router for testing and interconnecting routing clouds
+- new report type: resolved rules (report without group objects, exporting into pure rule tables without additional object tables)
+- new user management API call for creating JWTs with arbitrary lifetime
+
+### 5.8 - 23.10.2022
+- fix for CP R81 bug with certain installations - we now allow for domain UID as well as domain name for getting import data
+- also adding domain UID in auto discovery module
+- from now on reserving 3 digit version numbers for bug fixes only 
+
+### 5.8.1 - 26.10.2022
+- hotfix DB user group import
+
+### 5.8.2 - 30.10.2022
+- new report type resolved tech info (no names)
+- fix for log file rotation issues (log lock)
+- fix change report warning for empty reports
+
+### 6.0 - 02.11.2022
+- clean-up work and new major version

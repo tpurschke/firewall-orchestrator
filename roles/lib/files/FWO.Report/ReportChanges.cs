@@ -1,33 +1,32 @@
 ﻿using FWO.Api.Data;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
-using FWO.ApiClient;
+using FWO.Api.Client;
 using FWO.Report.Filter;
-using FWO.ApiClient.Queries;
 using FWO.Ui.Display;
+using FWO.Config.Api;
+using FWO.Logging;
 
 namespace FWO.Report
 {
     public class ReportChanges : ReportBase
     {
-        public ReportChanges(DynGraphqlQuery query) : base(query) { }
+        public ReportChanges(DynGraphqlQuery query, UserConfig userConfig, ReportType reportType) : base(query, userConfig, reportType) { }
 
-        public override Task GetObjectsInReport(int objectsPerFetch, APIConnection apiConnection, Func<Management[], Task> callback)
+        public override async Task<bool> GetObjectsInReport(int objectsPerFetch, ApiConnection apiConnection, Func<Management[], Task> callback)
+        {
+            await callback(Managements);
+            // currently no further objects to be fetched
+            GotObjectsInReport = true;
+            return true;
+        }
+
+        public override Task<bool> GetObjectsForManagementInReport(Dictionary<string, object> objQueryVariables, byte objects, int maxFetchCycles, ApiConnection apiConnection, Func<Management[], Task> callback)
         {
             throw new NotImplementedException();
         }
 
-        public override Task GetObjectsForManagementInReport(Dictionary<string, object> objQueryVariables, byte objects, APIConnection apiConnection, Func<Management[], Task> callback)
-        {
-            throw new NotImplementedException();
-        }
 
-
-        public override async Task Generate(int changesPerFetch, APIConnection apiConnection, Func<Management[], Task> callback)
+        public override async Task Generate(int changesPerFetch, ApiConnection apiConnection, Func<Management[], Task> callback, CancellationToken ct)
         {
             Query.QueryVariables["limit"] = changesPerFetch;
             Query.QueryVariables["offset"] = 0;
@@ -35,19 +34,43 @@ namespace FWO.Report
             Managements = Array.Empty<Management>();
 
             Managements = await apiConnection.SendQueryAsync<Management[]>(Query.FullQuery, Query.QueryVariables);
+
             while (gotNewObjects)
             {
+                if (ct.IsCancellationRequested)
+                {
+                    Log.WriteDebug("Generate Changes Report", "Task cancelled");
+                    ct.ThrowIfCancellationRequested();
+                }
                 Query.QueryVariables["offset"] = (int)Query.QueryVariables["offset"] + changesPerFetch;
                 gotNewObjects = Managements.Merge(await apiConnection.SendQueryAsync<Management[]>(Query.FullQuery, Query.QueryVariables));
                 await callback(Managements);
             }
         }
 
+        public override string SetDescription()
+        {
+            int managementCounter = 0;
+            int deviceCounter = 0;
+            int ruleChangeCounter = 0;
+            foreach (Management management in Managements.Where(mgt => !mgt.Ignore && mgt.Devices != null &&
+                    Array.Exists(mgt.Devices, device => device.RuleChanges != null && device.RuleChanges.Length > 0)))
+            {
+                managementCounter++;
+                foreach (Device device in management.Devices.Where(dev => dev.RuleChanges != null && dev.RuleChanges.Length > 0))
+                {
+                    deviceCounter++;
+                    ruleChangeCounter += device.RuleChanges.Length;
+                }
+            }
+            return $"{managementCounter} {userConfig.GetText("managements")}, {deviceCounter} {userConfig.GetText("gateways")}, {ruleChangeCounter} {userConfig.GetText("changes")}";
+        }
+
         public override string ExportToCsv()
         {
             StringBuilder csvBuilder = new StringBuilder();
 
-            foreach (Management management in Managements)
+            foreach (Management management in Managements.Where(mgt => !mgt.Ignore))
             {
                 //foreach (var item in collection)
                 //{
@@ -63,8 +86,10 @@ namespace FWO.Report
         public override string ExportToHtml()
         {
             StringBuilder report = new StringBuilder();
+            RuleChangeDisplay ruleChangeDisplay = new RuleChangeDisplay(userConfig);
 
-            foreach (Management management in Managements)
+            foreach (Management management in Managements.Where(mgt => !mgt.Ignore && mgt.Devices != null &&
+                    Array.Exists(mgt.Devices, device => device.RuleChanges != null && device.RuleChanges.Length > 0)))
             {
                 report.AppendLine($"<h3>{management.Name}</h3>");
                 report.AppendLine("<hr>");
@@ -76,46 +101,46 @@ namespace FWO.Report
 
                     report.AppendLine("<table>");
                     report.AppendLine("<tr>");
-                    report.AppendLine("<th>Change Time</th>");
-                    report.AppendLine("<th>Change Type</th>");
-                    report.AppendLine("<th>Name</th>");
-                    report.AppendLine("<th>Source Zone</th>");
-                    report.AppendLine("<th>Source</th>");
-                    report.AppendLine("<th>Destination Zone</th>");
-                    report.AppendLine("<th>Destination</th>");
-                    report.AppendLine("<th>Services</th>");
-                    report.AppendLine("<th>Action</th>");
-                    report.AppendLine("<th>Track</th>");
-                    report.AppendLine("<th>Enabled</th>");
-                    report.AppendLine("<th>UID</th>");
-                    report.AppendLine("<th>Comment</th>");
+                    report.AppendLine($"<th>{userConfig.GetText("change_time")}</th>");
+                    report.AppendLine($"<th>{userConfig.GetText("change_type")}</th>");
+                    report.AppendLine($"<th>{userConfig.GetText("name")}</th>");
+                    report.AppendLine($"<th>{userConfig.GetText("source_zone")}</th>");
+                    report.AppendLine($"<th>{userConfig.GetText("source")}</th>");
+                    report.AppendLine($"<th>{userConfig.GetText("destination_zone")}</th>");
+                    report.AppendLine($"<th>{userConfig.GetText("destination")}</th>");
+                    report.AppendLine($"<th>{userConfig.GetText("services")}</th>");
+                    report.AppendLine($"<th>{userConfig.GetText("action")}</th>");
+                    report.AppendLine($"<th>{userConfig.GetText("track")}</th>");
+                    report.AppendLine($"<th>{userConfig.GetText("enabled")}</th>");
+                    report.AppendLine($"<th>{userConfig.GetText("uid")}</th>");
+                    report.AppendLine($"<th>{userConfig.GetText("comment")}</th>");
                     report.AppendLine("</tr>");
 
-                    if (device.RuleChanges.Length > 0)
+                    if (device.RuleChanges != null)
                     {
                         foreach (RuleChange ruleChange in device.RuleChanges)
                         {
                             report.AppendLine("<tr>");
-                            report.AppendLine($"<td>{ruleChange.DisplayChangeTime()}</td>");
-                            report.AppendLine($"<td>{ruleChange.DisplayChangeAction()}</td>");
-                            report.AppendLine($"<td>{ruleChange.DisplayName()}</td>");
-                            report.AppendLine($"<td>{ruleChange.DisplaySourceZone()}</td>");
-                            report.AppendLine($"<td>{ruleChange.DisplaySource()}</td>");
-                            report.AppendLine($"<td>{ruleChange.DisplayDestinationZone()}</td>");
-                            report.AppendLine($"<td>{ruleChange.DisplayDestination()}</td>");
-                            report.AppendLine($"<td>{ruleChange.DisplayService()}</td>");
-                            report.AppendLine($"<td>{ruleChange.DisplayAction()}</td>");
-                            report.AppendLine($"<td>{ruleChange.DisplayTrack()}</td>");
-                            report.AppendLine($"<td>{ruleChange.DisplayEnabled(export: true)}</td>");
-                            report.AppendLine($"<td>{ruleChange.DisplayUid()}</td>");
-                            report.AppendLine($"<td>{ruleChange.DisplayComment()}</td>");
+                            report.AppendLine($"<td>{ruleChangeDisplay.DisplayChangeTime(ruleChange)}</td>");
+                            report.AppendLine($"<td>{ruleChangeDisplay.DisplayChangeAction(ruleChange)}</td>");
+                            report.AppendLine($"<td>{ruleChangeDisplay.DisplayName(ruleChange)}</td>");
+                            report.AppendLine($"<td>{ruleChangeDisplay.DisplaySourceZone(ruleChange)}</td>");
+                            report.AppendLine($"<td>{ruleChangeDisplay.DisplaySource(ruleChange)}</td>");
+                            report.AppendLine($"<td>{ruleChangeDisplay.DisplayDestinationZone(ruleChange)}</td>");
+                            report.AppendLine($"<td>{ruleChangeDisplay.DisplayDestination(ruleChange)}</td>");
+                            report.AppendLine($"<td>{ruleChangeDisplay.DisplayService(ruleChange)}</td>");
+                            report.AppendLine($"<td>{ruleChangeDisplay.DisplayAction(ruleChange)}</td>");
+                            report.AppendLine($"<td>{ruleChangeDisplay.DisplayTrack(ruleChange)}</td>");
+                            report.AppendLine($"<td>{ruleChangeDisplay.DisplayEnabled(ruleChange, export: true)}</td>");
+                            report.AppendLine($"<td>{ruleChangeDisplay.DisplayUid(ruleChange)}</td>");
+                            report.AppendLine($"<td>{ruleChangeDisplay.DisplayComment(ruleChange)}</td>");
                             report.AppendLine("</tr>");
                         }
                     }
                     else
                     {
                         report.AppendLine("<tr>");
-                        report.AppendLine($"<td colspan=\"{ColumnCount}\">No changes found!</td>");
+                        report.AppendLine($"<td colspan=\"{ColumnCount}\">{userConfig.GetText("no_changes_found")}</td>");
                         report.AppendLine("</tr>");
                     }
 
@@ -123,7 +148,7 @@ namespace FWO.Report
                 }
             }
 
-            return GenerateHtmlFrame(title: "Changes Report", Query.RawFilter, DateTime.Now, report);
+            return GenerateHtmlFrame(title: userConfig.GetText("changes_report"), Query.RawFilter, DateTime.Now, report);
         }
     }
 }

@@ -1,256 +1,380 @@
-import re
-import logging
-import common
+from asyncio.log import logger
+from fwo_log import getFwoLogger
 import json
-
-def create_domain_rule_header(section_name, layer_name, import_id, rule_uid, rule_num, section_header_uids, parent_uid):
-    section_header_uids.append(rule_uid)
-    header_rule_csv = '"' + import_id + '"' + common.csv_delimiter  # control_id
-    header_rule_csv += '"' + str(rule_num) + '"' + common.csv_delimiter  # rule_num
-    header_rule_csv += '"' + layer_name + '"' + common.csv_delimiter  # rulebase_name
-    header_rule_csv += common.csv_delimiter  # rule_ruleid
-    header_rule_csv += '"' + 'False' + '"' + common.csv_delimiter  # rule_disabled
-    header_rule_csv += '"' + 'False' + '"' + common.csv_delimiter  # rule_src_neg
-    header_rule_csv += '"' + 'Any' + '"' + common.csv_delimiter  # src
-    header_rule_csv += '"' + common.any_obj_uid + '"' + common.csv_delimiter  # src_refs
-    header_rule_csv += '"' + 'False' + '"' + common.csv_delimiter  # rule_dst_neg
-    header_rule_csv += '"' + 'Any' + '"' + common.csv_delimiter  # dst
-    header_rule_csv += '"' + common.any_obj_uid + '"' + common.csv_delimiter  # dst_refs
-    header_rule_csv += '"' + 'False' + '"' + common.csv_delimiter  # rule_svc_neg
-    header_rule_csv += '"' + 'Any' + '"' + common.csv_delimiter  # svc
-    header_rule_csv += '"' + common.any_obj_uid + '"' + common.csv_delimiter  # svc_refs
-    header_rule_csv += '"' + 'Accept' + '"' + common.csv_delimiter  # action
-    header_rule_csv += '"' + 'Log' + '"' + common.csv_delimiter  # track
-    header_rule_csv += '"' + 'Policy Targets' + '"' + common.csv_delimiter  # install-on
-    header_rule_csv += '"' + 'Any' + '"' + common.csv_delimiter  # time
-    header_rule_csv += '""' + common.csv_delimiter  # comments
-    header_rule_csv += common.csv_delimiter  # name
-    header_rule_csv += '"' + rule_uid + '"' + common.csv_delimiter  # uid
-    header_rule_csv += '"' + section_name + '"' + common.csv_delimiter  # head_text
-    header_rule_csv += common.csv_delimiter  # from_zone
-    header_rule_csv += common.csv_delimiter  # to_zone
-    header_rule_csv += common.csv_delimiter  # last_change_admin
-    if parent_uid != "":
-        header_rule_csv += '"' + parent_uid + '"' # parent_rule_uid
-    return header_rule_csv + common.line_delimiter
+import common
+import cpcommon
+import fwo_const
 
 
-def create_section_header(section_name, layer_name, import_id, rule_uid, rule_num, section_header_uids, parent_uid):
-    section_header_uids.append(rule_uid)
-    header_rule_csv = '"' + import_id + '"' + common.csv_delimiter  # control_id
-    header_rule_csv += '"' + str(rule_num) + '"' + common.csv_delimiter  # rule_num
-    header_rule_csv += '"' + layer_name + '"' + common.csv_delimiter  # rulebase_name
-    header_rule_csv += common.csv_delimiter  # rule_ruleid
-    header_rule_csv += '"' + 'False' + '"' + common.csv_delimiter  # rule_disabled
-    header_rule_csv += '"' + 'False' + '"' + common.csv_delimiter  # rule_src_neg
-    header_rule_csv += '"' + 'Any' + '"' + common.csv_delimiter  # src
-    header_rule_csv += '"' + common.any_obj_uid + '"' + common.csv_delimiter  # src_refs
-    header_rule_csv += '"' + 'False' + '"' + common.csv_delimiter  # rule_dst_neg
-    header_rule_csv += '"' + 'Any' + '"' + common.csv_delimiter  # dst
-    header_rule_csv += '"' + common.any_obj_uid + '"' + common.csv_delimiter  # dst_refs
-    header_rule_csv += '"' + 'False' + '"' + common.csv_delimiter  # rule_svc_neg
-    header_rule_csv += '"' + 'Any' + '"' + common.csv_delimiter  # svc
-    header_rule_csv += '"' + common.any_obj_uid + '"' + common.csv_delimiter  # svc_refs
-    header_rule_csv += '"' + 'Accept' + '"' + common.csv_delimiter  # action
-    header_rule_csv += '"' + 'Log' + '"' + common.csv_delimiter  # track
-    header_rule_csv += '"' + 'Policy Targets' + '"' + common.csv_delimiter  # install-on
-    header_rule_csv += '"' + 'Any' + '"' + common.csv_delimiter  # time
-    header_rule_csv += '""' + common.csv_delimiter  # comments
-    header_rule_csv += common.csv_delimiter  # name
-    header_rule_csv += '"' + rule_uid + '"' + common.csv_delimiter  # uid
-    header_rule_csv += '"' + section_name + '"' + common.csv_delimiter  # head_text
-    header_rule_csv += common.csv_delimiter  # from_zone
-    header_rule_csv += common.csv_delimiter  # to_zone
-    header_rule_csv += common.csv_delimiter  # last_change_admin
-    if parent_uid != "":
-        header_rule_csv += '"' + parent_uid + '"' # parent_rule_uid
-    return header_rule_csv + common.line_delimiter
+def add_section_header_rule_in_json(rulebase, section_name, layer_name, import_id, rule_uid, rule_num, section_header_uids, parent_uid):
+    section_header_uids.append(common.sanitize(rule_uid))
+    rule = {
+        "control_id":       int(import_id),
+        "rule_num":         int(rule_num),
+        "rulebase_name":    common.sanitize(layer_name),
+        # rule_ruleid
+        "rule_disabled":    False,
+        "rule_src_neg":     False,
+        "rule_src":         "Any",
+        "rule_src_refs":    common.sanitize(cpcommon.any_obj_uid),
+        "rule_dst_neg":     False,
+        "rule_dst":         "Any",
+        "rule_dst_refs":    common.sanitize(cpcommon.any_obj_uid),
+        "rule_svc_neg":     False,
+        "rule_svc":         "Any",
+        "rule_svc_refs":    common.sanitize(cpcommon.any_obj_uid),
+        "rule_action":      "Accept",
+        "rule_track":       "Log",
+        "rule_installon":   "Policy Targets",
+        "rule_time":        "Any",
+        "rule_implied":      False,
+        # "rule_comment":     None,
+        # rule_name
+        "rule_uid":         common.sanitize(rule_uid),
+        "rule_head_text":   common.sanitize(section_name),
+        # rule_from_zone
+        # rule_to_zone
+        # rule_last_change_admin
+        "parent_rule_uid":  common.sanitize(parent_uid)
+    }
+    rulebase.append(rule)
 
 
-def csv_add_field(content, csv_del, apostrophe):
-    if content == '':  # do not add apostrophes for empty fields
-        field_result = csv_del
-    else:
-        field_result = apostrophe + content + apostrophe + csv_del
-    return field_result
+def add_domain_rule_header_rule_in_json(rulebase, section_name, layer_name, import_id, rule_uid, rule_num, section_header_uids, parent_uid):
+    add_section_header_rule_in_json(rulebase, section_name, layer_name,
+                                    import_id, rule_uid, rule_num, section_header_uids, parent_uid)
 
 
-def csv_dump_rule(rule, layer_name, import_id, rule_num, parent_uid):
-    apostrophe = '"'
-    rule_csv = ''
-
+def parse_single_rule_to_json(src_rule, rulebase, layer_name, import_id, rule_num, parent_uid, debug_level=0):
+    logger = getFwoLogger()
     # reference to domain rule layer, filling up basic fields
-    if 'type' in rule and rule['type'] != 'place-holder':
-#            add_missing_info_to_domain_ref_rule(rule)
-        if 'rule-number' in rule:  # standard rule, no section header
-            # print ("rule #" + str(rule['rule-number']) + "\n")
-            rule_csv += csv_add_field(import_id, common.csv_delimiter, apostrophe)  # control_id
-            rule_csv += csv_add_field(str(rule_num), common.csv_delimiter, apostrophe)  # rule_num
-            rule_csv += csv_add_field(layer_name, common.csv_delimiter, apostrophe)  # rulebase_name
-            rule_csv += csv_add_field('', common.csv_delimiter, apostrophe)  # rule_ruleid is empty
-            rule_csv += csv_add_field(str(not rule['enabled']), common.csv_delimiter, apostrophe)  # rule_disabled
-            rule_csv += csv_add_field(str(rule['source-negate']), common.csv_delimiter, apostrophe)  # src_neg
-
+    if 'type' in src_rule and src_rule['type'] != 'place-holder':
+        if 'rule-number' in src_rule:  # standard rule, no section header
             # SOURCE names
             rule_src_name = ''
-            for src in rule["source"]:
-                if src['type'] == 'LegacyUserAtLocation':
-                    rule_src_name += src['name'] + common.list_delimiter
-                elif src['type'] == 'access-role':
-                    if isinstance(src['networks'], str):  # just a single source
-                        if src['networks'] == 'any':
-                            rule_src_name += src["name"] + '@' + 'Any' + common.list_delimiter
-                        else:
-                            rule_src_name += src["name"] + '@' + src['networks'] + common.list_delimiter
-                    else:  # more than one source
-                        for nw in src['networks']:
-                            rule_src_name += src[
-                                                # TODO: this is not correct --> need to reverse resolve name from given UID
-                                                "name"] + '@' + nw + common.list_delimiter
-                else:  # standard network objects as source
+            for src in src_rule["source"]:
+                if 'type' in src:
+                    if src['type'] == 'LegacyUserAtLocation':
+                        rule_src_name += src['name'] + common.list_delimiter
+                    elif src['type'] == 'access-role':
+                        if isinstance(src['networks'], str):  # just a single source
+                            if src['networks'] == 'any':
+                                rule_src_name += src["name"] + \
+                                    '@' + 'Any' + common.list_delimiter
+                            else:
+                                rule_src_name += src["name"] + '@' + \
+                                    src['networks'] + common.list_delimiter
+                        else:  # more than one source
+                            for nw in src['networks']:
+                                rule_src_name += src[
+                                    # TODO: this is not correct --> need to reverse resolve name from given UID
+                                    "name"] + '@' + nw + common.list_delimiter
+                    else:  # standard network objects as source
+                        rule_src_name += src["name"] + common.list_delimiter
+                else:
+                    # assuming standard network object as source (interface) with missing type
                     rule_src_name += src["name"] + common.list_delimiter
+
             rule_src_name = rule_src_name[:-1]  # removing last list_delimiter
-            rule_csv += csv_add_field(rule_src_name, common.csv_delimiter, apostrophe)  # src_names
 
             # SOURCE refs
             rule_src_ref = ''
-            for src in rule["source"]:
-                if src['type'] == 'LegacyUserAtLocation':
-                    rule_src_ref += src["userGroup"] + '@' + src["location"] + common.list_delimiter
-                elif src['type'] == 'access-role':
-                    if isinstance(src['networks'], str):  # just a single source
-                        if src['networks'] == 'any':
-                            rule_src_ref += src['uid'] + '@' + common.any_obj_uid + common.list_delimiter
-                        else:
-                            rule_src_ref += src['uid'] + '@' + src['networks'] + common.list_delimiter
-                    else:  # more than one source
-                        for nw in src['networks']:
-                            rule_src_ref += src['uid'] + '@' + nw + common.list_delimiter
-                else:  # standard network objects as source
+            for src in src_rule["source"]:
+                if 'type' in src:
+                    if src['type'] == 'LegacyUserAtLocation':
+                        rule_src_ref += src["userGroup"] + '@' + \
+                            src["location"] + common.list_delimiter
+                    elif src['type'] == 'access-role':
+                        if isinstance(src['networks'], str):  # just a single source
+                            if src['networks'] == 'any':
+                                rule_src_ref += src['uid'] + '@' + \
+                                    cpcommon.any_obj_uid + common.list_delimiter
+                            else:
+                                rule_src_ref += src['uid'] + '@' + \
+                                    src['networks'] + common.list_delimiter
+                        else:  # more than one source
+                            for nw in src['networks']:
+                                rule_src_ref += src['uid'] + \
+                                    '@' + nw + common.list_delimiter
+                    else:  # standard network objects as source
+                        rule_src_ref += src["uid"] + common.list_delimiter
+                else:
+                    # assuming standard network object as source (interface) with missing type
                     rule_src_ref += src["uid"] + common.list_delimiter
             rule_src_ref = rule_src_ref[:-1]  # removing last list_delimiter
-            rule_csv += csv_add_field(rule_src_ref, common.csv_delimiter, apostrophe)  # src_refs
 
-            rule_csv += csv_add_field(str(rule['destination-negate']), common.csv_delimiter, apostrophe)  # destination negation
-
+            # rule_dst...
             rule_dst_name = ''
-            for dst in rule["destination"]:
-                rule_dst_name += dst["name"] + common.list_delimiter
+            for dst in src_rule["destination"]:
+                if 'type' in dst:
+                    if dst['type'] == 'LegacyUserAtLocation':
+                        rule_dst_name += dst['name'] + common.list_delimiter
+                    elif dst['type'] == 'access-role':
+                        if isinstance(dst['networks'], str):  # just a single destination
+                            if dst['networks'] == 'any':
+                                rule_dst_name += dst["name"] + \
+                                    '@' + 'Any' + common.list_delimiter
+                            else:
+                                rule_dst_name += dst["name"] + '@' + \
+                                    dst['networks'] + common.list_delimiter
+                        else:  # more than one source
+                            for nw in dst['networks']:
+                                rule_dst_name += dst[
+                                    # TODO: this is not correct --> need to reverse resolve name from given UID
+                                    "name"] + '@' + nw + common.list_delimiter
+                    else:  # standard network objects as destination
+                        rule_dst_name += dst["name"] + common.list_delimiter
+                else:
+                    # assuming standard network object as destination (interface) with missing type
+                        rule_dst_name += dst["name"] + common.list_delimiter
+
             rule_dst_name = rule_dst_name[:-1]
-            rule_csv += csv_add_field(rule_dst_name, common.csv_delimiter, apostrophe)  # rule dest_name
 
             rule_dst_ref = ''
-            for dst in rule["destination"]:
-                rule_dst_ref += dst["uid"] + common.list_delimiter
-            rule_dst_ref = rule_dst_ref[:-1]
-            rule_csv += csv_add_field(rule_dst_ref, common.csv_delimiter, apostrophe)  # rule_dest_refs
+            for dst in src_rule["destination"]:
+                if 'type' in dst:
+                    if dst['type'] == 'LegacyUserAtLocation':
+                        rule_dst_ref += dst["userGroup"] + '@' + \
+                            dst["location"] + common.list_delimiter
+                    elif dst['type'] == 'access-role':
+                        if isinstance(dst['networks'], str):  # just a single destination
+                            if dst['networks'] == 'any':
+                                rule_dst_ref += dst['uid'] + '@' + \
+                                    cpcommon.any_obj_uid + common.list_delimiter
+                            else:
+                                rule_dst_ref += dst['uid'] + '@' + \
+                                    dst['networks'] + common.list_delimiter
+                        else:  # more than one source
+                            for nw in dst['networks']:
+                                rule_dst_ref += dst['uid'] + \
+                                    '@' + nw + common.list_delimiter
+                    else:  # standard network objects as destination
+                        rule_dst_ref += dst["uid"] + common.list_delimiter
 
-            # SERVICE names
+                else:
+                    # assuming standard network object as destination (interface) with missing type
+                        rule_dst_ref += dst["uid"] + common.list_delimiter
+                    
+            rule_dst_ref = rule_dst_ref[:-1]
+
+            # rule_svc...
             rule_svc_name = ''
-            rule_svc_name += str(rule['service-negate']) + '"' + common.csv_delimiter + '"'
-            for svc in rule["service"]:
+            for svc in src_rule["service"]:
                 rule_svc_name += svc["name"] + common.list_delimiter
             rule_svc_name = rule_svc_name[:-1]
-            rule_csv += csv_add_field(rule_svc_name, common.csv_delimiter, apostrophe)  # rule svc name
 
-            # SERVICE refs
             rule_svc_ref = ''
-            for svc in rule["service"]:
+            for svc in src_rule["service"]:
                 rule_svc_ref += svc["uid"] + common.list_delimiter
             rule_svc_ref = rule_svc_ref[:-1]
-            rule_csv += csv_add_field(rule_svc_ref, common.csv_delimiter, apostrophe)  # rule svc ref
 
-            rule_action = rule['action']
-            rule_action_name = rule_action['name']
-            rule_csv += csv_add_field(rule_action_name, common.csv_delimiter, apostrophe)  # rule action
-            rule_track = rule['track']
-            rule_track_type = rule_track['type']
-            rule_csv += csv_add_field(rule_track_type['name'], common.csv_delimiter, apostrophe)  # rule track
-
-            rule_install_on = rule['install-on']
-            first_rule_install_target = rule_install_on[0]
-            rule_csv += csv_add_field(first_rule_install_target['name'], common.csv_delimiter, apostrophe)  # install on
-
-            rule_time = rule['time']
-            first_rule_time = rule_time[0]
-            rule_csv += csv_add_field(first_rule_time['name'], common.csv_delimiter, apostrophe)  # time
-
-            rule_csv += csv_add_field(rule['comments'], common.csv_delimiter, apostrophe)  # time
-
-            if 'name' in rule:
-                rule_name = rule['name']
+            if 'name' in src_rule and src_rule['name'] != '':
+                rule_name = src_rule['name']
             else:
-                rule_name = ''
-            rule_csv += csv_add_field(rule_name, common.csv_delimiter, apostrophe)  # rule_name
+                rule_name = None
 
-            rule_csv += csv_add_field(rule['uid'], common.csv_delimiter, apostrophe)  # rule_uid
-            rule_head_text = ''
-            rule_csv += csv_add_field(rule_head_text, common.csv_delimiter, apostrophe)  # rule_head_text
-            rule_from_zone = ''
-            rule_csv += csv_add_field(rule_from_zone, common.csv_delimiter, apostrophe)
-            rule_to_zone = ''
-            rule_csv += csv_add_field(rule_to_zone, common.csv_delimiter, apostrophe)
-            rule_meta_info = rule['meta-info']
-            rule_csv += csv_add_field(rule_meta_info['last-modifier'], common.csv_delimiter, apostrophe)
+            if 'meta-info' in src_rule and 'last-modifier' in src_rule['meta-info']:
+                rule_last_change_admin = src_rule['meta-info']['last-modifier']
+            else:
+                rule_last_change_admin = None
+
             # new in v5.1.17:
-            if 'parent_rule_uid' in rule:
-                logging.debug('csv_dump_rule: found rule (uid=' + rule['uid'] + ') with parent_rule_uid set: ' + rule['parent_rule_uid'])
-                parent_rule_uid = rule['parent_rule_uid']
+            if 'parent_rule_uid' in src_rule:
+                logger.debug(
+                    'found rule (uid=' + src_rule['uid'] + ') with parent_rule_uid set: ' + src_rule['parent_rule_uid'])
+                parent_rule_uid = src_rule['parent_rule_uid']
             else:
-                # parent_rule_uid = ""
                 parent_rule_uid = parent_uid
-                #if parent_uid != "":
-                #    logging.debug('csv_dump_rule: no parent_rule_uid set in rule, using parent_uid from function parameter, uid=' + rule['uid'] )
-            rule_csv += csv_add_field(parent_rule_uid, common.csv_delimiter, apostrophe)
+            if parent_rule_uid == '':
+                parent_rule_uid = None
 
-            rule_csv = rule_csv[:-1] 
-            rule_csv += common.line_delimiter  # remove last csv delimiter and add line delimiter
-    return rule_csv
+            # new in v5.5.1:
+            if 'rule_type' in src_rule:
+                rule_type = src_rule['rule_type']
+            else:
+                rule_type = 'access'
+
+            if 'comments' in src_rule:
+                if src_rule['comments'] == '':
+                    comments = None
+                else:
+                    comments = src_rule['comments']
+            else:
+                comments = None
+
+            rule = {
+                "control_id":       int(import_id),
+                "rule_num":         int(rule_num),
+                "rulebase_name":    common.sanitize(layer_name),
+                # rule_ruleid
+                "rule_disabled": not bool(src_rule['enabled']),
+                "rule_src_neg":     bool(src_rule['source-negate']),
+                "rule_src":         common.sanitize(rule_src_name),
+                "rule_src_refs":    common.sanitize(rule_src_ref),
+                "rule_dst_neg":     bool(src_rule['destination-negate']),
+                "rule_dst":         common.sanitize(rule_dst_name),
+                "rule_dst_refs":    common.sanitize(rule_dst_ref),
+                "rule_svc_neg":     bool(src_rule['service-negate']),
+                "rule_svc":         common.sanitize(rule_svc_name),
+                "rule_svc_refs":    common.sanitize(rule_svc_ref),
+                "rule_action":      common.sanitize(src_rule['action']['name']),
+                "rule_track":       common.sanitize(src_rule['track']['type']['name']),
+                "rule_installon":   common.sanitize(src_rule['install-on'][0]['name']),
+                "rule_time":        common.sanitize(src_rule['time'][0]['name']),
+                "rule_comment":     common.sanitize(comments),
+                "rule_name":        common.sanitize(rule_name),
+                "rule_uid":         common.sanitize(src_rule['uid']),
+                "rule_implied":     False,
+                "rule_type":        common.sanitize(rule_type),
+                # "rule_head_text": common.sanitize(section_name),
+                # rule_from_zone
+                # rule_to_zone
+                "rule_last_change_admin": common.sanitize(rule_last_change_admin),
+                "parent_rule_uid":  common.sanitize(parent_rule_uid)
+            }
+            rulebase.append(rule)
 
 
-def csv_dump_rules(rulebase, layer_name, import_id, rule_num, section_header_uids, parent_uid):
-    result = ''
+def parse_rulebase_json(src_rulebase, target_rulebase, layer_name, import_id, rule_num, section_header_uids, parent_uid, debug_level=0, recursion_level=1):
 
-    if 'layerchunks' in rulebase:
-        for chunk in rulebase['layerchunks']:
+    if (recursion_level > fwo_const.max_recursion_level):
+        raise common.ImportRecursionLimitReached(
+            "parse_rulebase_json") from None
+
+    logger = getFwoLogger()
+    if 'layerchunks' in src_rulebase:
+        for chunk in src_rulebase['layerchunks']:
             if 'rulebase' in chunk:
                 for rules_chunk in chunk['rulebase']:
-                    rule_num, rules_in_csv = csv_dump_rules(rules_chunk, layer_name, import_id, rule_num, section_header_uids, parent_uid)
-                    result += rules_in_csv
+                    rule_num = parse_rulebase_json(rules_chunk, target_rulebase, layer_name, import_id, rule_num,
+                                                   section_header_uids, parent_uid, debug_level=debug_level, recursion_level=recursion_level+1)
             else:
-                logging.warning("parse_rule: found no rulebase in chunk:\n" + json.dumps(chunk, indent=2))
+                logger.warning("found no rulebase in chunk:\n" +
+                               json.dumps(chunk, indent=2))
     else:
-        if 'rulebase' in rulebase:
-            if rulebase['type'] == 'access-section' and not rulebase['uid'] in section_header_uids: # add section header, but only if it does not exist yet (can happen by chunking a section)
+        if 'rulebase' in src_rulebase:
+            # add section header, but only if it does not exist yet (can happen by chunking a section)
+            if src_rulebase['type'] == 'access-section' and not src_rulebase['uid'] in section_header_uids:
                 section_name = ""
-                if 'name' in rulebase:
-                    section_name = rulebase['name']
-                if 'parent_rule_uid' in rulebase:
-                    parent_uid = rulebase['parent_rule_uid']
+                if 'name' in src_rulebase:
+                    section_name = src_rulebase['name']
+                if 'parent_rule_uid' in src_rulebase:
+                    parent_uid = src_rulebase['parent_rule_uid']
                 else:
                     parent_uid = ""
-                section_header = create_section_header(section_name, layer_name, import_id, rulebase['uid'], rule_num, section_header_uids, parent_uid)
+                add_section_header_rule_in_json(target_rulebase, section_name, layer_name,
+                                                import_id, src_rulebase['uid'], rule_num, section_header_uids, parent_uid)
                 rule_num += 1
-                result += section_header
-                parent_uid = rulebase['uid']
-            for rule in rulebase['rulebase']:
+                parent_uid = src_rulebase['uid']
+            for rule in src_rulebase['rulebase']:
                 if rule['type'] == 'place-holder':  # add domain rules
                     section_name = ""
-                    if 'name' in rulebase:
+                    if 'name' in src_rulebase:
                         section_name = rule['name']
-                    result += create_domain_rule_header(section_name, layer_name, import_id, rule['uid'], rule_num, section_header_uids, parent_uid)
-                else: # parse standard sections
-                   rule_num, rules_in_layer = csv_dump_rules(rule, layer_name, import_id, rule_num, section_header_uids, parent_uid)
-                   result += rules_in_layer
-        if rulebase['type'] == 'place-holder':  # add domain rules
-            logging.debug('csv_dump_rules: found domain rule ref: ' + rulebase['uid'])
-            section_name = ""
-            if 'name' in rulebase:
-                section_name = rulebase['name']
-            result += create_domain_rule_header(section_name, layer_name, import_id, rulebase['uid'], rule_num, section_header_uids, parent_uid)
-            rule_num += 1
-        if 'rule-number' in rulebase:
-            result += csv_dump_rule(rulebase, layer_name, import_id, rule_num, parent_uid)
-            rule_num += 1
-    return rule_num, result
+                    add_domain_rule_header_rule_in_json(
+                        target_rulebase, section_name, layer_name, import_id, rule['uid'], rule_num, section_header_uids, parent_uid)
+                else:  # parse standard sections
+                    parse_single_rule_to_json(
+                        rule, target_rulebase, layer_name, import_id, rule_num, parent_uid, debug_level=debug_level)
+                    rule_num += 1
 
+        if src_rulebase['type'] == 'place-holder':  # add domain rules
+            logger.debug('found domain rule ref: ' + src_rulebase['uid'])
+            section_name = ""
+            if 'name' in src_rulebase:
+                section_name = src_rulebase['name']
+            add_domain_rule_header_rule_in_json(
+                target_rulebase, section_name, layer_name, import_id, src_rulebase['uid'], rule_num, section_header_uids, parent_uid)
+            rule_num += 1
+        if 'rule-number' in src_rulebase:   # rulebase is just a single rule
+            parse_single_rule_to_json(
+                src_rulebase, target_rulebase, layer_name, import_id, rule_num, parent_uid)
+            rule_num += 1
+    return rule_num
+
+
+def parse_nat_rulebase_json(src_rulebase, target_rulebase, layer_name, import_id, rule_num, section_header_uids, parent_uid, debug_level=0, recursion_level=1):
+
+    if (recursion_level > fwo_const.max_recursion_level):
+        raise common.ImportRecursionLimitReached(
+            "parse_nat_rulebase_json") from None
+
+    logger = getFwoLogger()
+    if 'nat_rule_chunks' in src_rulebase:
+        for chunk in src_rulebase['nat_rule_chunks']:
+            if 'rulebase' in chunk:
+                for rules_chunk in chunk['rulebase']:
+                    rule_num = parse_nat_rulebase_json(rules_chunk, target_rulebase, layer_name, import_id, rule_num,
+                                                       section_header_uids, parent_uid, debug_level=debug_level, recursion_level=recursion_level+1)
+            else:
+                logger.warning(
+                    "parse_rule: found no rulebase in chunk:\n" + json.dumps(chunk, indent=2))
+    else:
+        if 'rulebase' in src_rulebase:
+            # add section header, but only if it does not exist yet (can happen by chunking a section)
+            if src_rulebase['type'] == 'access-section' and not src_rulebase['uid'] in section_header_uids:
+                section_name = ""
+                if 'name' in src_rulebase:
+                    section_name = src_rulebase['name']
+                parent_uid = ""
+                add_section_header_rule_in_json(target_rulebase, section_name, layer_name,
+                                                import_id, src_rulebase['uid'], rule_num, section_header_uids, parent_uid)
+                rule_num += 1
+                parent_uid = src_rulebase['uid']
+            for rule in src_rulebase['rulebase']:
+                (rule_match, rule_xlate) = parse_nat_rule_transform(rule, rule_num)
+                parse_single_rule_to_json(
+                    rule_match, target_rulebase, layer_name, import_id, rule_num, parent_uid)
+                parse_single_rule_to_json(
+                    rule_xlate, target_rulebase, layer_name, import_id, rule_num, parent_uid)
+                rule_num += 1
+
+        if 'rule-number' in src_rulebase:   # rulebase is just a single rule
+            (rule_match, rule_xlate) = parse_nat_rule_transform(
+                src_rulebase, rule_num)
+            parse_single_rule_to_json(
+                rule_match, target_rulebase, layer_name, import_id, rule_num, parent_uid)
+            parse_single_rule_to_json(
+                rule_xlate, target_rulebase, layer_name, import_id, rule_num, parent_uid)
+            rule_num += 1
+    return rule_num
+
+
+def parse_nat_rule_transform(xlate_rule_in, rule_num):
+    # todo: cleanup certain fields (install-on, ....)
+    rule_match = {
+        'uid': xlate_rule_in['uid'],
+        'source': [xlate_rule_in['original-source']],
+        'destination': [xlate_rule_in['original-destination']],
+        'service': [xlate_rule_in['original-service']],
+        'action': {'name': 'Drop'},
+        'track': {'type': {'name': 'None'}},
+        'type': 'nat',
+        'rule-number': rule_num,
+        'source-negate': False,
+        'destination-negate': False,
+        'service-negate': False,
+        'install-on': [{'name': 'Policy Targets'}],
+        'time': [{'name': 'Any'}],
+        'enabled': xlate_rule_in['enabled'],
+        'comments': xlate_rule_in['comments'],
+        'rule_type': 'original'
+    }
+    rule_xlate = {
+        'uid': xlate_rule_in['uid'],
+        'source': [xlate_rule_in['translated-source']],
+        'destination': [xlate_rule_in['translated-destination']],
+        'service': [xlate_rule_in['translated-service']],
+        'action': {'name': 'Drop'},
+        'track': {'type': {'name': 'None'}},
+        'type': 'nat',
+        'rule-number': rule_num,
+        'enabled': True,
+        'source-negate': False,
+        'destination-negate': False,
+        'service-negate': False,
+        'install-on': [{'name': 'Policy Targets'}],
+        'time': [{'name': 'Any'}],
+        'rule_type': 'xlate'
+    }
+    return (rule_match, rule_xlate)

@@ -1,0 +1,124 @@
+﻿@using System.Text
+@using FWO.Config.Api
+
+@inject ApiConnection apiConnection
+@inject UserConfig userConfig
+
+@page "/archive"
+
+<h3>@(userConfig.GetText("archive"))</h3>
+
+<Table TableClass="table table-bordered table-sm table-responsive vheight75 overflow-auto sticky-header" TableItem="ReportFile" Items="archivedReports" PageSize="0">
+    <Column TableItem="ReportFile" Title="@(userConfig.GetText("actions"))">
+        <Template>
+            <div class="btn-group">
+                @if (!Exporting)
+                {
+                    <button class="btn btn-sm btn-info" @onclick="async () => { Exporting = true; await GetGeneratedReportContent(context.Id); ShowDownloadReportFileDialog = true; Exporting = false; }">@(userConfig.GetText("download"))</button>
+                    @if (context.Owner.DbId == userConfig.User.DbId || authenticationStateTask!.Result.User.IsInRole("admin"))
+                    {
+                        <button class="btn btn-sm btn-danger" @onclick="() => { reportFileContext = context; ShowDeleteReportFileDialog = true; }">@(userConfig.GetText("delete"))</button>
+                    }
+                }
+                else
+                {                    
+                    <div class="spinner-border" role="status">
+                        <span class="sr-only">Exporting...</span>
+                    </div>
+                }
+            </div>
+        </Template>
+    </Column>
+    <Column TableItem="ReportFile" Title="@(userConfig.GetText("name"))" Field="@(reportFile => reportFile.Name)" Sortable="true" Filterable="true"/>
+    <Column TableItem="ReportFile" Title="@(userConfig.GetText("report_type"))" Field="@(reportFile => reportFile.Type)" Sortable="true">
+        <Template>
+            @(userConfig.GetText(((FWO.Report.Filter.ReportType)((int)(context.Type ?? 0))).ToString()?.ToLower() ?? "none"))
+        </Template>
+    </Column>
+    <Column TableItem="ReportFile" Title="@(userConfig.GetText("template"))" Field="@(reportFile => reportFile.Template.Name)" Filterable="true"/>
+    <Column TableItem="ReportFile" Title="@(userConfig.GetText("generation_date"))" Field="@(reportFile => reportFile.GenerationDateStart)" Sortable="true" Filterable="true"/>
+    <Column TableItem="ReportFile" Title="@(userConfig.GetText("owner"))" Field="@(reportFile => reportFile.Owner.Name)" Sortable="true" Filterable="true"/>
+    <Column TableItem="ReportFile" Title="@(userConfig.GetText("description"))" Field="@(reportFile => reportFile.Description)" Sortable="true" Filterable="true"/>
+</Table>
+
+<PopUp Show="ShowDeleteReportFileDialog" Title="@(userConfig.GetText("generated_report"))">
+    <Body>
+        <p>@(userConfig.GetText("U3002")) "@reportFileContext.Name" ?</p>
+    </Body>
+    <Footer>
+        <button class="btn btn-sm btn-danger" @onclick="DeleteGeneratedReport">@(userConfig.GetText("delete"))</button>
+        <button class="btn btn-sm btn-secondary" @onclick="() => ShowDeleteReportFileDialog = false">@(userConfig.GetText("cancel"))</button>
+    </Footer>
+</PopUp>
+
+<ReportDownloadPopUp Title="@(userConfig.GetText("generated_report"))" ReportFile="reportFileContext"
+Show="ShowDownloadReportFileDialog" ShowJson="true" OnClose="() => ShowDownloadReportFileDialog = false" />
+
+@code
+{
+    [CascadingParameter]
+    Action<Exception?, string, string, bool>? DisplayMessageInUi { get; set; }
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? authenticationStateTask { get; set; }
+
+    private List<ReportFile> archivedReports = new List<ReportFile>();
+
+    private ReportFile reportFileContext = new ReportFile();
+    private bool ShowDeleteReportFileDialog = false;
+    private bool ShowDownloadReportFileDialog = false;
+
+    private bool Exporting = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            archivedReports = (await apiConnection.SendQueryAsync<ReportFile[]>(ReportQueries.getGeneratedReports)).ToList();
+        }
+        catch (Exception exception)
+        {
+            DisplayMessageInUi!(exception, userConfig.GetText("archive_fetch"), "", true);
+        }
+    }
+
+    private async Task GetGeneratedReportContent(int reportId)
+    {
+        try
+        {
+            var queryVariables = new
+            {
+                report_id = reportId
+            };
+
+            reportFileContext = (await apiConnection.SendQueryAsync<ReportFile[]>(ReportQueries.getGeneratedReport, queryVariables))[0];
+        }
+        catch (Exception exception)
+        {
+            Log.WriteError("Fetch downloads of generated report", "Unclassified error.", exception);
+            DisplayMessageInUi!(exception, userConfig.GetText("fetch_report"), "", false);
+        }
+    }
+
+    private async Task DeleteGeneratedReport()
+    {
+        try
+        {
+            var queryVariables = new
+            {
+                report_id = reportFileContext.Id
+            };
+
+            await apiConnection.SendQueryAsync<object>(ReportQueries.deleteGeneratedReport, queryVariables);
+
+            archivedReports.Remove(reportFileContext);
+
+            ShowDeleteReportFileDialog = false;
+        }
+        catch (Exception exception)
+        {
+            Log.WriteError("Delete generated report", "Unclassified error.", exception);
+            DisplayMessageInUi!(exception, userConfig.GetText("delete_report"), "", false);
+        }
+    }
+}

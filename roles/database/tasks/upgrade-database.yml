@@ -3,8 +3,8 @@
 
 - name: guard - stop when trying anything but an upgrade with existing database
   fail:
-    msg: "Error: You choose new installation on a system with existing database {{ fworch_db_name }}"
-  when: installation_mode != "upgrade" or db_exists.query_result.0.count == 0
+    msg: "Error: You chose upgrade on a system without existing database {{ fworch_db_name }}"
+  when: db_exists.query_result.0.count == 0
 
 - name: create upgrade dir
   file:
@@ -22,9 +22,9 @@
   set_fact:
     upgrade_files: "{{ upgrade_files + [ item | basename | splitext | first | regex_replace('([\\d\\.]+)\\.sql', '\\1') ] }}"
   when: |
-    installed_version < item | basename | splitext | first | regex_replace('([\\d\\.]+)\\.sql', '\\1') 
+    item | basename | splitext | first | regex_replace('([\\d\\.]+)\\.sql', '\\1') is version(installed_version, '>=') 
     and 
-    current_version >= item | basename | splitext | first | regex_replace('([\\d\\.]+)\\.sql', '\\1')
+    item | basename | splitext | first | regex_replace('([\\d\\.]+)\\.sql', '\\1') is version(current_version, '<=')
   with_fileglob:
     - "upgrade/*.sql"
 
@@ -41,21 +41,10 @@
   loop: "{{ upgrade_files }}"
   become: yes
 
-- name: install upgrades as_single_query
-  postgresql_query:
-    db: "{{ fworch_db_name }}"
-    path_to_script: "{{ database_install_dir }}/upgrade/{{ item }}.sql"
-    as_single_query: "{{ postgresql_query_as_single_query }}"
-  loop: "{{ upgrade_files | sort }}"
-  become: yes
-  become_user: postgres
-  when: ansible_version.string is version_compare('2.10', '>=')
+- name: include upgrades as postgresql_query is not available in all ansible versions
+  include_tasks: upgrade_database_new.yml
+  when: ansible_version.full is version('2.10', '>=')
 
-- name: install upgrades normally
-  postgresql_query:
-    db: "{{ fworch_db_name }}"
-    path_to_script: "{{ database_install_dir }}/upgrade/{{ item }}.sql"
-  loop: "{{ upgrade_files | sort }}"
-  become: yes
-  become_user: postgres
-  when: ansible_version.string is version_compare('2.10', '<')
+- name: include upgrades as postgresql_query is not available in all ansible versions
+  include_tasks: upgrade_database_old.yml
+  when: ansible_version.full is version('2.10', '<=')

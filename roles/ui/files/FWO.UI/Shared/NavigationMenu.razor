@@ -1,0 +1,146 @@
+﻿@using FWO.Config.Api
+@using FWO.Config.Api.Data
+
+@inject GlobalConfig globalConfig
+@inject UserConfig userConfig
+@inject IJSRuntime jsRuntime
+
+<nav class="navbar navbar-expand-xl navbar-dark bg-dark shadow w-100">
+    <a class="navbar-brand" href="#">
+        <img src="/images/FWO_logo_navbar.png">&nbsp;@userConfig.GetText("fworch_long")&nbsp;v@(globalConfig.productVersion)
+    </a>
+
+
+    <button class="navbar-toggler" type="button" @onclick="ToggleNavMenu">
+        <span class="navbar-toggler-icon"></span>
+    </button>
+
+    <div class="navbar-collapse @NavMenuCollapseClass">
+        <ul class="navbar-nav mr-auto">
+            <AuthorizeView Roles="admin, fw-admin, reporter, reporter-viewall, auditor">
+                <li class="nav-item px-2">
+                    <NavLink class="nav-link" href="/report">
+                        <span class="oi oi-spreadsheet"></span> @(userConfig.GetText("reporting"))
+                    </NavLink>
+                </li>
+                <li class="nav-item px-2">
+                    <NavLink class="nav-link" href="/schedule">
+                        <span class="oi oi-calendar"></span> @(userConfig.GetText("scheduling"))
+                    </NavLink>
+                </li>
+                <li class="nav-item px-2">
+                    <NavLink class="nav-link" href="/archive">
+                        <span class="oi oi-box"></span> @(userConfig.GetText("archive"))
+                    </NavLink>
+                </li>
+            </AuthorizeView>
+            <AuthorizeView Roles="admin, requester, fw-admin, auditor, approver, planner, implementer, reviewer">
+                <li class="nav-item px-2">
+                    <NavLink class="nav-link" href="@firstPage">
+                        <span class="oi oi-comment-square"></span> @(userConfig.GetText("workflow"))
+                    </NavLink>
+                </li>
+            </AuthorizeView>
+            <AuthorizeView Roles="admin, recertifier, auditor">
+                <li class="nav-item px-2">
+                    <NavLink class="nav-link" href="/certification">
+                        <span class="oi oi-badge"></span> @(userConfig.GetText("recertification"))
+                    </NavLink>
+                </li>
+            </AuthorizeView>
+            @* <li class="nav-item px-2">
+            <NavLink class="nav-link" href="#">
+                <span class="oi oi-book"></span> @(userConfig.GetText("documentation"))
+            </NavLink>
+            </li> *@
+        </ul>
+
+        <ul class="navbar-nav">
+            <AuthorizeView Roles="admin, fw-admin, auditor">
+                <li class="nav-item px-2">
+                    <NavLink class="nav-link" href="/monitoring">
+                            @if(ShowAlert)
+                            {
+                                <span class="oi oi-bell" style="color: red"></span>
+                            }
+                        <span class="oi oi-monitor"></span> @(userConfig.GetText("monitoring"))
+                    </NavLink>
+                </li>
+            </AuthorizeView>
+            <li class="nav-item px-2">
+                <NavLink class="nav-link" href="/settings">
+                    <span class="oi oi-cog"></span> @(userConfig.GetText("settings"))
+                </NavLink>
+            </li>
+            <li class="nav-item px-2">
+                <NavLink class="nav-link" @onclick="@(async () => await jsRuntime.InvokeAsync<object>("newWindow", args: $"/help/?lang={userConfig.GetUserLanguage()}"))">
+                    <span class="oi oi-info"></span> @(userConfig.GetText("help"))
+                </NavLink>
+            </li>
+            <li class="nav-item px-2">
+                <NavLink class="nav-link" href="/settings/user">
+                    <span class="oi oi-person"></span> @(userConfig.User.Name.ToUpper())
+                </NavLink>
+            </li>
+        </ul>
+    </div>
+</nav>
+
+@code
+{
+    [CascadingParameter]
+    private Task<AuthenticationState>? authenticationStateTask { get; set; }
+
+    [Parameter]
+    public bool ShowAlert { get; set; }
+    
+    [Parameter]
+    public EventCallback<bool> ShowAlertChanged { get; set; }
+
+    bool collapseNavMenu = true;
+
+    string NavMenuCollapseClass => (collapseNavMenu ? " collapse" : "");
+
+    string firstPage = "";
+
+    protected override void OnInitialized()
+    {
+        userConfig.OnChange += OnChange;
+        if(authenticationStateTask!.Result.User.IsInRole("admin") || 
+            authenticationStateTask!.Result.User.IsInRole("fw-admin") ||
+            authenticationStateTask!.Result.User.IsInRole("auditor"))
+        {
+            firstPage = "/request/ticketsoverview";
+        }
+        else if(authenticationStateTask!.Result.User.IsInRole("requester"))
+        {
+            firstPage = "/request/tickets";
+        }
+        else if(authenticationStateTask!.Result.User.IsInRole("approver"))
+        {
+            firstPage = "/request/approvals";
+        }
+        else if(authenticationStateTask!.Result.User.IsInRole("planner"))
+        {
+            firstPage = "/request/plannings";
+        }
+        else if(authenticationStateTask!.Result.User.IsInRole("implementer"))
+        {
+            firstPage = "/request/implementations";
+        }
+        else
+        {
+            firstPage = "/request/reviews";
+        }
+    }
+
+    void ToggleNavMenu()
+    {
+        collapseNavMenu = !collapseNavMenu;
+    }
+
+    private void OnChange(Config _, ConfigItem[] __)
+    {
+        Task.Run(async() => await InvokeAsync(StateHasChanged));
+    }
+}

@@ -1,12 +1,8 @@
-﻿using FWO.ApiClient;
+﻿using FWO.Api.Client;
+using FWO.Api.Client.Queries;
 using FWO.Api.Data;
 using FWO.Report.Filter;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
-using FWO.ApiClient.Queries;
+using FWO.Config.Api;
 using System.Text.Json;
 using System.Text;
 using WkHtmlToPdfDotNet;
@@ -45,68 +41,104 @@ namespace FWO.Report
     </head>
     <body>
         <h2>##Title##</h2>
-        <p>Filter: ##Filter## - Generated on: ##Date##</p>
+        <p>Filter: ##Filter##</p>
+        <p>##Date-of-Config##: ##GeneratedFor## (UTC)</p>
+        <p>##GeneratedOn##: ##Date## (UTC)</p>
+        <p>Devices: ##DeviceFilter##</p>
         <hr>
         ##Body##
     </body>
 </html>");
 
-        public Management[] Managements = null;
-        
-        // public Management[] ReportObjects = null;
-        
+        public Management[] Managements = new Management[] { };
 
         public readonly DynGraphqlQuery Query;
+        protected UserConfig userConfig;
+        public ReportType ReportType;
 
         private string htmlExport = "";
 
         // Pdf converter
         protected static readonly SynchronizedConverter converter = new SynchronizedConverter(new PdfTools());
 
-        public ReportBase(DynGraphqlQuery query)
+        public ReportBase(DynGraphqlQuery query, UserConfig UserConfig, ReportType reportType)
         {
             Query = query;
+            userConfig = UserConfig;
+            ReportType = reportType;
         }
 
-        public abstract Task Generate(int rulesPerFetch, APIConnection apiConnection, Func<Management[], Task> callback);
+        public abstract Task Generate(int rulesPerFetch, ApiConnection apiConnection, Func<Management[], Task> callback, CancellationToken ct);
 
         public bool GotObjectsInReport { get; protected set; } = false;
-        public abstract Task GetObjectsInReport(int objectsPerFetch, APIConnection apiConnection, Func<Management[], Task> callback); // to be called when exporting
-        public abstract Task GetObjectsForManagementInReport(Dictionary<string, object> objQueryVariables, byte objects, APIConnection apiConnection, Func<Management[], Task> callback);
+
+        public abstract Task<bool> GetObjectsInReport(int objectsPerFetch, ApiConnection apiConnection, Func<Management[], Task> callback); // to be called when exporting
+
+        public abstract Task<bool> GetObjectsForManagementInReport(Dictionary<string, object> objQueryVariables, byte objects, int maxFetchCycles, ApiConnection apiConnection, Func<Management[], Task> callback);
 
         public abstract string ExportToCsv();
 
         public virtual string ExportToJson()
         {
-            return JsonSerializer.Serialize(Managements, new JsonSerializerOptions { WriteIndented = true });
+            return JsonSerializer.Serialize(Managements.Where(mgt => !mgt.Ignore), new JsonSerializerOptions { WriteIndented = true });
         }
 
         public abstract string ExportToHtml();
 
+        public virtual string SetDescription()
+        {
+            int managementCounter = 0;
+            foreach (var management in Managements.Where(mgt => !mgt.Ignore))
+            {
+                managementCounter++;
+            }
+            return $"{managementCounter} {userConfig.GetText("managements")}";
+        }
+
         protected string GenerateHtmlFrame(string title, string filter, DateTime date, StringBuilder htmlReport)
         {
-            if (htmlExport == "")
+            if (string.IsNullOrEmpty(htmlExport))
             {
-                HtmlTemplate = HtmlTemplate.Replace("##Body##", htmlReport.ToString());
                 HtmlTemplate = HtmlTemplate.Replace("##Title##", title);
                 HtmlTemplate = HtmlTemplate.Replace("##Filter##", filter);
-                HtmlTemplate = HtmlTemplate.Replace("##Date##", date.ToString());
+                HtmlTemplate = HtmlTemplate.Replace("##GeneratedOn##", userConfig.GetText("generated_on"));
+                HtmlTemplate = HtmlTemplate.Replace("##Date##", date.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssK"));
+                HtmlTemplate = HtmlTemplate.Replace("##Date-of-Config##", userConfig.GetText("date_of_config"));
+                HtmlTemplate = HtmlTemplate.Replace("##GeneratedFor##", DateTime.Parse(Query.ReportTimeString).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssK"));
+                HtmlTemplate = HtmlTemplate.Replace("##DeviceFilter##", string.Join("; ", Array.ConvertAll(Managements, management => management.NameAndDeviceNames())));
+                HtmlTemplate = HtmlTemplate.Replace("##Body##", htmlReport.ToString());
                 htmlExport = HtmlTemplate.ToString();
             }
             return htmlExport;
         }
 
-        public virtual byte[] ToPdf()
+        public virtual byte[] ToPdf(PaperKind paperKind, int width = -1, int height = -1)
         {
             // HTML
-            string html = ExportToHtml();
+            if (string.IsNullOrEmpty(htmlExport))
+                htmlExport = ExportToHtml();
 
             GlobalSettings globalSettings = new GlobalSettings
             {
                 ColorMode = ColorMode.Color,
                 Orientation = Orientation.Landscape,
-                PaperSize = PaperKind.A4
             };
+
+            if (paperKind == PaperKind.Custom)
+            {
+                if (width > 0 && height > 0)
+                {
+                    globalSettings.PaperSize = new PechkinPaperSize(width + "mm", height + "mm");
+                }
+                else
+                {
+                    throw new Exception("Custom paper size: width or height <= 0");
+                }
+            }
+            else
+            {
+                globalSettings.PaperSize = paperKind;
+            }
 
             HtmlToPdfDocument doc = new HtmlToPdfDocument()
             {
@@ -116,7 +148,7 @@ namespace FWO.Report
                     new ObjectSettings()
                     {
                         PagesCount = true,
-                        HtmlContent = html,
+                        HtmlContent = htmlExport,
                         WebSettings = { DefaultEncoding = "utf-8" },
                         HeaderSettings = { FontSize = 9, Right = "Page [page] of [toPage]", Line = true, Spacing = 2.812 }
                     }
@@ -124,33 +156,30 @@ namespace FWO.Report
             };
 
             return converter.Convert(doc);
-
-            //// CONFIG
-            //PdfGenerateConfig config = new PdfGenerateConfig();
-            //config.PageOrientation = PageOrientation.Landscape;
-            //config.SetMargins(20);
-            //config.PageSize = PageSize.A4;
-
-            //PdfDocument document = PdfGenerator.GeneratePdf(html, config);
-
-            //using (MemoryStream stream = new MemoryStream())
-            //{
-            //    document.Save(stream, false);
-            //    return stream.ToArray();
-            //}
         }
 
-        public static ReportBase ConstructReport(string filterInput)
+        public static ReportBase ConstructReport(string filterInput, DeviceFilter deviceFilter, TimeFilter timeFilter, ReportType reportType, UserConfig userConfig)
         {
-            DynGraphqlQuery query = Compiler.Compile(filterInput);
+            DynGraphqlQuery query = Compiler.Compile(filterInput, reportType, deviceFilter, timeFilter);
 
-            return query.ReportType switch
+            return reportType switch
             {
-                "statistics" => new ReportStatistics(query),
-                "rules" => new ReportRules(query),
-                "changes" => new ReportChanges(query),
+                ReportType.Statistics => new ReportStatistics(query, userConfig, reportType),
+                ReportType.Rules => new ReportRules(query, userConfig, reportType),
+                ReportType.ResolvedRules => new ReportRules(query, userConfig, reportType),
+                ReportType.ResolvedRulesTech => new ReportRules(query, userConfig, reportType),
+                ReportType.Changes => new ReportChanges(query, userConfig, reportType),
+                ReportType.NatRules => new ReportNatRules(query, userConfig, reportType),
                 _ => throw new NotSupportedException("Report Type is not supported."),
             };
+        }
+
+        public async Task<Management[]> getRelevantImportIds(ApiConnection apiConnection)
+        {
+            Dictionary<string, object> ImpIdQueryVariables = new Dictionary<string, object>();
+            ImpIdQueryVariables["time"] = (Query.ReportTimeString != "" ? Query.ReportTimeString : DateTime.Now.ToString(DynGraphqlQuery.fullTimeFormat));
+            ImpIdQueryVariables["mgmIds"] = Query.RelevantManagementIds;
+            return await apiConnection.SendQueryAsync<Management[]>(ReportQueries.getRelevantImportIdsAtTime, ImpIdQueryVariables);
         }
     }
 }

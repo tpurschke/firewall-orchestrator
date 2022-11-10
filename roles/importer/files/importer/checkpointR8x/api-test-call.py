@@ -1,9 +1,10 @@
 #!/usr/bin/python3
-import logging
-import logging.config
+import logging, logging.config
+import json, argparse
+import sys
+from common import importer_base_dir, set_ssl_verification
+sys.path.append(importer_base_dir)
 import getter
-import common
-import json, argparse, os, sys
 
 logging.config.fileConfig(fname='discovery_logging.conf', disable_existing_loggers=False)
 
@@ -19,10 +20,9 @@ parser.add_argument('-c', '--command', metavar='command', required=False, help='
 parser.add_argument('-u', '--user', metavar='api_user', default='fworch', help='user for connecting to Check Point R8x management server, default=fworch')
 parser.add_argument('-p', '--port', metavar='api_port', default='443', help='port for connecting to Check Point R8x management server, default=443')
 parser.add_argument('-D', '--domain', metavar='api_domain', default='', help='name of Domain in a Multi-Domain Environment')
-parser.add_argument('-x', '--proxy', metavar='proxy_string', default='', help='proxy server string to use, e.g. 1.2.3.4:8080; default=empty')
 parser.add_argument('-s', '--ssl', metavar='ssl_verification_mode', default='', help='[ca]certfile, if value not set, ssl check is off"; default=empty/off')
 parser.add_argument('-l', '--level', metavar='level_of_detail', default='standard', help='[standard|full]')
-parser.add_argument('-i', '--limit', metavar='api_limit', default='500', help='The maximal number of returned results per HTTPS Connection; default=500')
+parser.add_argument('-i', '--limit', metavar='api_limit', default='150', help='The maximal number of returned results per HTTPS Connection; default=150')
 parser.add_argument('-n', '--nolimit', metavar='nolimit', default='off', help='[on|off] Set to on if (generic) command does not understand limit switch')
 parser.add_argument('-d', '--debug', metavar='debug_level', default='0', help='Debug Level: 0(off) 4(DEBUG Console) 41(DEBUG File); default=0')
 parser.add_argument('-V', '--version', metavar='api_version', default='off', help='alternate API version [off|<version number>]; default=off')
@@ -50,15 +50,14 @@ elif args.mode == 'generic':
 else:
     sys.exit("\"" + args.mode +"\" - unknown mode")
 
-proxy_string = { "http"  : args.proxy, "https" : args.proxy }
 offset = 0
 use_object_dictionary = 'false'
 base_url = 'https://' + args.hostname + ':' + args.port + '/web_api/'
-ssl_verification = getter.set_ssl_verification(args.ssl)
+ssl_verification = set_ssl_verification(args.ssl)
 logger = logging.getLogger(__name__)
 
-xsid = getter.login(args.user, args.password, args.hostname, args.port, domain, ssl_verification, proxy_string)
-api_versions = getter.api_call(args.hostname, args.port, base_url, 'show-api-versions', {}, xsid, ssl_verification, proxy_string)
+xsid = getter.login(args.user, args.password, args.hostname, args.port, domain, ssl_verification)
+api_versions = getter.cp_api_call(args.hostname, args.port, base_url, 'show-api-versions', {}, xsid, ssl_verification=ssl_verification)
 
 api_version = api_versions["current-version"]
 api_supported = api_versions["supported-versions"]
@@ -87,7 +86,7 @@ if args.mode == 'generic': # need to divide command string into command and payl
         payload.update({cmd_parts[idx]: cmd_parts[idx+1]})
         idx += 2
 
-result = getter.api_call(args.hostname, args.port, v_url, api_command, payload, xsid, ssl_verification, proxy_string)
+result = getter.cp_api_call(args.hostname, args.port, v_url, api_command, payload, xsid, ssl_verification=ssl_verification)
 
 if args.debug == "1" or args.debug == "3":
     print ("\ndump of result:\n" + json.dumps(result, indent=4))
@@ -113,4 +112,4 @@ if args.mode == 'layers':
 if args.mode == 'generic':
     print (json.dumps(result, indent=3))
 
-logout_result = getter.api_call(args.hostname, args.port, v_url, 'logout', {}, xsid, ssl_verification, proxy_string)
+logout_result = getter.cp_api_call(args.hostname, args.port, v_url, 'logout', {}, xsid, ssl_verification=ssl_verification)

@@ -1,30 +1,23 @@
 ﻿using FWO.Logging;
 using Microsoft.IdentityModel.Tokens;
-using System;
-using System.Collections.Generic;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text.Json;
 using FWO.Api.Data;
-using System.Threading.Tasks;
 
 namespace FWO.Middleware.Server
 {
     public class JwtWriter
     {
-        private const string issuer = "FWO Middleware Module";
-        private const string audience = "FWO";
         private readonly RsaSecurityKey jwtPrivateKey;
-        private readonly int JwtMinutesValid;
 
-        public JwtWriter(RsaSecurityKey jwtPrivateKey, int JwtMinutesValid)
+        public JwtWriter(RsaSecurityKey jwtPrivateKey)
         {
-            this.JwtMinutesValid = JwtMinutesValid;
             this.jwtPrivateKey = jwtPrivateKey;
             JwtSecurityTokenHandler.DefaultInboundClaimTypeMap.Clear();
         }
 
-        public async Task<string> CreateJWT(UiUser user = null)
+        public async Task<string> CreateJWT(UiUser? user = null, TimeSpan? lifetime = null)
         {
             if (user != null)
                 Log.WriteDebug("Jwt generation", $"Generating JWT for user {user.Name} ...");
@@ -33,22 +26,26 @@ namespace FWO.Middleware.Server
 
             JwtSecurityTokenHandler tokenHandler = new JwtSecurityTokenHandler();
 
+            UiUserHandler uiUserHandler = new UiUserHandler(CreateJWTMiddlewareServer());
+            // if lifetime was speciefied use it, otherwise use standard lifetime
+            int jwtMinutesValid = (int)(lifetime?.TotalMinutes ?? await uiUserHandler.GetExpirationTime());
+
             ClaimsIdentity subject;
             if (user != null)
-                subject = GetClaims(await (new UiUserHandler()).handleUiUserAtLogin(user, CreateJWTMiddlewareServer()));
+                subject = GetClaims(await uiUserHandler.HandleUiUserAtLogin(user));
             else
-                subject = GetClaims(new UiUser() { Name = "", Password = "", Dn = "anonymous", Roles = new string[] { "anonymous" } });
+                subject = GetClaims(new UiUser() { Name = "", Password = "", Dn = "anonymous", Roles = new List<string> { "anonymous" } });
             // adding uiuser.uiuser_id as x-hasura-user-id to JWT
 
             // Create JWToken
             JwtSecurityToken token = tokenHandler.CreateJwtSecurityToken
             (
-                issuer: issuer,
-                audience: audience,
+                issuer: JwtConstants.Issuer,
+                audience: JwtConstants.Audience,
                 subject: subject,
                 notBefore: DateTime.UtcNow.AddMinutes(-1), // we currently allow for some deviation in timing of the systems
                 issuedAt: DateTime.UtcNow.AddMinutes(-1),
-                expires: DateTime.UtcNow.AddMinutes(JwtMinutesValid),
+                expires: DateTime.UtcNow.AddMinutes(jwtMinutesValid),
                 signingCredentials: new SigningCredentials(jwtPrivateKey, SecurityAlgorithms.RsaSha256)
             );
 
@@ -75,8 +72,8 @@ namespace FWO.Middleware.Server
 
             JwtSecurityToken token = tokenHandler.CreateJwtSecurityToken
             (
-                issuer: issuer,
-                audience: audience,
+                issuer: JwtConstants.Issuer,
+                audience: JwtConstants.Audience,
                 subject: subject,
                 notBefore: DateTime.UtcNow.AddMinutes(-1), // we currently allow for some deviation in timing of the systems
                 issuedAt: DateTime.UtcNow.AddMinutes(-1),
@@ -84,7 +81,7 @@ namespace FWO.Middleware.Server
                 signingCredentials: new SigningCredentials(jwtPrivateKey, SecurityAlgorithms.RsaSha256)
             );
             string GeneratedToken = tokenHandler.WriteToken(token);
-            Log.WriteInfo("Jwt generation", $"Generated JWT {GeneratedToken} for middleware-server");
+            Log.WriteInfo("Jwt generation", $"Generated JWT {GeneratedToken} for middleware-server.");
             return GeneratedToken;
         }
 
@@ -104,13 +101,10 @@ namespace FWO.Middleware.Server
                 claimsIdentity.AddClaim(new Claim("x-hasura-visible-devices", $"{{ {string.Join(",", user.Tenant.VisibleDevices)} }}"));
             }
 
-            // adding roles
-            string[] roles = user.Roles;
-
             // we need to create an extra list beacause hasura only accepts an array of roles even if there is only one
             List<string> hasuraRolesList = new List<string>();
 
-            foreach (string role in roles)
+            foreach (string role in user.Roles)
             {
                 claimsIdentity.AddClaim(new Claim(ClaimTypes.Role, role)); // Frontend Roles
                 hasuraRolesList.Add(role); // Hasura Roles
@@ -121,18 +115,20 @@ namespace FWO.Middleware.Server
 
             // deciding on default-role
             string defaultRole = "";
-            if (roles != null && roles.Length > 0)
+            if (user.Roles.Count > 0)
             {
                 if (hasuraRolesList.Contains("admin"))
                     defaultRole = "admin";
                 else if (hasuraRolesList.Contains("auditor"))
                     defaultRole = "auditor";
+                else if (hasuraRolesList.Contains("fw-admin"))
+                    defaultRole = "fw-admin";
                 else if (hasuraRolesList.Contains("reporter-viewall"))
                     defaultRole = "reporter-viewall";
                 else if (hasuraRolesList.Contains("reporter"))
                     defaultRole = "reporter";
                 else
-                    defaultRole = roles[0]; // pick first role at random (todo: might need to be changed)
+                    defaultRole = user.Roles[0]; // pick first role at random (todo: might need to be changed)
             }
             else
             {

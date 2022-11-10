@@ -1,0 +1,98 @@
+﻿@using FWO.Ui.Data
+
+@implements IDisposable
+
+<div class="w-100 card @Class">
+    <div class="btn-group w-100">
+        <button class="btn btn-sm btn-@Style" @onclick="ToggleCollapse"> <span class="oi oi-@(show ? "collapse-up" : "collapse-down")"></span> </button>
+        <button class="btn btn-sm btn-block btn-@Style disabled text-left" @ondblclick="ToggleCollapse">
+            @if (UseHtmlTitle)
+                @TitleWithHtml
+             else
+                @Title
+        </button>
+    </div>
+    <div class="@(show ? "collapse.show" : "collapse") p-2">
+        @ChildContent
+    </div>
+</div>
+
+@code
+{
+    [CascadingParameter]
+    public CollapseState collapseState { get; set; } = new CollapseState();
+
+    [Parameter]
+    public string Title { get; set; } = "";
+
+    [Parameter]
+    public bool UseHtmlTitle { get; set; } = false;
+
+    [Parameter]
+    public bool StartToggled { get; set; } = false;
+
+    [Parameter]
+    public string Style { get; set; } = "secondary";
+
+    [Parameter]
+    public string Class { get; set; } = "";
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    [Parameter]
+    public RenderFragment? TitleWithHtml { get; set; }
+
+    [Parameter]
+    public EventCallback<bool> OnOpen { get; set; }
+
+    private bool show;
+    private bool invokeOnOpenAfterRender;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            show = !StartToggled;
+            invokeOnOpenAfterRender = false;
+            if (!StartToggled)
+                invokeOnOpenAfterRender = true;
+            if (collapseState != null)
+            {
+                collapseState.OnCollapseAll += ForceCollapse;
+                collapseState.OnExpandAll += ForceExpand;
+            }
+            StateHasChanged();
+        }
+        if (invokeOnOpenAfterRender)
+        {
+            invokeOnOpenAfterRender = false;
+            await OnOpen.InvokeAsync();
+        }
+    }
+
+    public void ForceCollapse()
+    {
+        this.show = false;
+        StateHasChanged();
+    }
+
+    public void ForceExpand()
+    {
+        this.show = true;
+        invokeOnOpenAfterRender = true;
+    }
+
+    public async Task ToggleCollapse()
+    {
+        show = !show;
+        if (show)
+            invokeOnOpenAfterRender = true;
+    }
+
+    void IDisposable.Dispose()
+    {
+        if (collapseState != null)
+            collapseState.OnCollapseAll -= ForceCollapse;
+    }
+}

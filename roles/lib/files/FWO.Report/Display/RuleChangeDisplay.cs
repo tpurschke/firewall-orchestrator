@@ -1,20 +1,30 @@
 ﻿using FWO.Api.Data;
 using FWO.Logging;
 using System.Linq;
+using System.Collections.Generic;
 using System;
-using System.Text.Json.Serialization;
+using FWO.Config.Api;
 
 namespace FWO.Ui.Display
 {
-    public static class RuleChangeDisplay
+    public class RuleChangeDisplay
     {
         // private static StringBuilder result;
 
-        public static string DisplayChangeTime(this RuleChange ruleChange)
+        private UserConfig userConfig;
+        private RuleDisplayHtml ruleDisplay;
+
+        public RuleChangeDisplay(UserConfig userConfig)
+        {
+            this.userConfig = userConfig;
+            ruleDisplay = new RuleDisplayHtml(userConfig);
+        }
+
+        public string DisplayChangeTime(RuleChange ruleChange)
         {
             return ruleChange.ChangeImport.Time.ToString();
         }
-        public static string DisplayChangeAction(this RuleChange ruleChange)
+        public string DisplayChangeAction(RuleChange ruleChange)
         {
             switch (ruleChange.ChangeAction)
             {
@@ -25,98 +35,99 @@ namespace FWO.Ui.Display
             }
         }
 
-        public static string DisplayName(this RuleChange ruleChange)
+        public string DisplayName(RuleChange ruleChange)
         {
             switch (ruleChange.ChangeAction)
             {
-                case 'D': return ruleChange.OldRule.DisplayName();
-                case 'I': return ruleChange.NewRule.DisplayName();
-                case 'C': return DisplayDiff(ruleChange.OldRule.DisplayName(), ruleChange.NewRule.DisplayName());
+                case 'D': return ruleDisplay.DisplayName(ruleChange.OldRule);
+                case 'I': return ruleDisplay.DisplayName(ruleChange.NewRule);
+                case 'C': return DisplayDiff(ruleDisplay.DisplayName(ruleChange.OldRule), ruleDisplay.DisplayName(ruleChange.NewRule));
                 default: ThrowErrorUnknowChangeAction(ruleChange.ChangeAction); return "";
             }
         }
-        public static string DisplaySourceZone(this RuleChange ruleChange)
+        public string DisplaySourceZone(RuleChange ruleChange)
         {
             switch (ruleChange.ChangeAction)
             {
-                case 'D': return ruleChange.OldRule.DisplaySourceZone();
-                case 'I': return ruleChange.NewRule.DisplaySourceZone();
-                case 'C': return DisplayDiff(ruleChange.OldRule.DisplaySourceZone(), ruleChange.NewRule.DisplaySourceZone());
-                default: ThrowErrorUnknowChangeAction(ruleChange.ChangeAction); return "";
-            }
-        }
-
-        public static string DisplaySource(this RuleChange ruleChange)
-        {
-            switch (ruleChange.ChangeAction)
-            {
-                case 'D': return ruleChange.OldRule.DisplaySource();
-                case 'I': return ruleChange.NewRule.DisplaySource();
-                case 'C': return DisplayDiff(ruleChange.OldRule.DisplaySource(), ruleChange.NewRule.DisplaySource());
+                case 'D': return ruleDisplay.DisplaySourceZone(ruleChange.OldRule);
+                case 'I': return ruleDisplay.DisplaySourceZone(ruleChange.NewRule);
+                case 'C': return DisplayDiff(ruleDisplay.DisplaySourceZone(ruleChange.OldRule), ruleDisplay.DisplaySourceZone(ruleChange.NewRule));
                 default: ThrowErrorUnknowChangeAction(ruleChange.ChangeAction); return "";
             }
         }
 
-        public static string DisplayDestinationZone(this RuleChange ruleChange)
+        public string DisplaySource(RuleChange ruleChange)
         {
             switch (ruleChange.ChangeAction)
             {
-                case 'D': return ruleChange.OldRule.DisplayDestinationZone();
-                case 'I': return ruleChange.NewRule.DisplayDestinationZone();
-                case 'C': return DisplayDiff(ruleChange.OldRule.DisplayDestinationZone(), ruleChange.NewRule.DisplayDestinationZone());
+                case 'D': return ruleDisplay.DisplaySource(ruleChange.OldRule, DisplayStyle(ruleChange));
+                case 'I': return ruleDisplay.DisplaySource(ruleChange.NewRule, DisplayStyle(ruleChange));
+                case 'C': return DisplayDiff(ruleDisplay.DisplaySource(ruleChange.OldRule), ruleDisplay.DisplaySource(ruleChange.NewRule));
                 default: ThrowErrorUnknowChangeAction(ruleChange.ChangeAction); return "";
             }
         }
 
-        public static string DisplayDestination(this RuleChange ruleChange)
+        public string DisplayDestinationZone(RuleChange ruleChange)
         {
             switch (ruleChange.ChangeAction)
             {
-                case 'D': return ruleChange.OldRule.DisplayDestination();
-                case 'I': return ruleChange.NewRule.DisplayDestination();
-                case 'C': return DisplayDiff(ruleChange.OldRule.DisplayDestination(), ruleChange.NewRule.DisplayDestination());
+                case 'D': return ruleDisplay.DisplayDestinationZone(ruleChange.OldRule);
+                case 'I': return ruleDisplay.DisplayDestinationZone(ruleChange.NewRule);
+                case 'C': return DisplayDiff(ruleDisplay.DisplayDestinationZone(ruleChange.OldRule), ruleDisplay.DisplayDestinationZone(ruleChange.NewRule));
                 default: ThrowErrorUnknowChangeAction(ruleChange.ChangeAction); return "";
             }
         }
-        public static string DisplayService(this RuleChange ruleChange)
+
+        public string DisplayDestination(RuleChange ruleChange)
         {
             switch (ruleChange.ChangeAction)
             {
-                case 'D': return ruleChange.OldRule.DisplayService();
-                case 'I': return ruleChange.NewRule.DisplayService();
-                case 'C': return DisplayDiff(ruleChange.OldRule.DisplayService(), ruleChange.NewRule.DisplayService());
+                case 'D': return ruleDisplay.DisplayDestination(ruleChange.OldRule, DisplayStyle(ruleChange));
+                case 'I': return ruleDisplay.DisplayDestination(ruleChange.NewRule, DisplayStyle(ruleChange));
+                case 'C': return DisplayDiff(ruleDisplay.DisplayDestination(ruleChange.OldRule), ruleDisplay.DisplayDestination(ruleChange.NewRule));
                 default: ThrowErrorUnknowChangeAction(ruleChange.ChangeAction); return "";
             }
         }
-        public static string DisplayAction(this RuleChange ruleChange)
+        public string DisplayService(RuleChange ruleChange)
         {
             switch (ruleChange.ChangeAction)
             {
-                case 'D': return ruleChange.OldRule.DisplayAction();
-                case 'I': return ruleChange.NewRule.DisplayAction();
-                case 'C': return DisplayDiff(ruleChange.OldRule.DisplayAction(), ruleChange.NewRule.DisplayAction());
+                case 'D': return ruleDisplay.DisplayService(ruleChange.OldRule, DisplayStyle(ruleChange));
+                case 'I': return ruleDisplay.DisplayService(ruleChange.NewRule, DisplayStyle(ruleChange));
+                // case 'C': return ruleDisplay.DisplayService(ruleChange.OldRule, ruleDisplay.DisplayService(ruleChange.NewRule));
+                case 'C': return DisplayDiff(ruleDisplay.DisplayService(ruleChange.OldRule), ruleDisplay.DisplayService(ruleChange.NewRule));
                 default: ThrowErrorUnknowChangeAction(ruleChange.ChangeAction); return "";
             }
         }
-        public static string DisplayTrack(this RuleChange ruleChange)
+        public string DisplayAction(RuleChange ruleChange)
         {
             switch (ruleChange.ChangeAction)
             {
-                case 'D': return ruleChange.OldRule.DisplayTrack();
-                case 'I': return ruleChange.NewRule.DisplayTrack();
-                case 'C': return DisplayDiff(ruleChange.OldRule.DisplayTrack(), ruleChange.NewRule.DisplayTrack());
+                case 'D': return ruleDisplay.DisplayAction(ruleChange.OldRule);
+                case 'I': return ruleDisplay.DisplayAction(ruleChange.NewRule);
+                case 'C': return DisplayDiff(ruleDisplay.DisplayAction(ruleChange.OldRule), ruleDisplay.DisplayAction(ruleChange.NewRule));
                 default: ThrowErrorUnknowChangeAction(ruleChange.ChangeAction); return "";
             }
         }
-        public static string DisplayEnabled(this RuleChange ruleChange, bool export = false)
+        public string DisplayTrack(RuleChange ruleChange)
+        {
+            switch (ruleChange.ChangeAction)
+            {
+                case 'D': return ruleDisplay.DisplayTrack(ruleChange.OldRule);
+                case 'I': return ruleDisplay.DisplayTrack(ruleChange.NewRule);
+                case 'C': return DisplayDiff(ruleDisplay.DisplayTrack(ruleChange.OldRule), ruleDisplay.DisplayTrack(ruleChange.NewRule));
+                default: ThrowErrorUnknowChangeAction(ruleChange.ChangeAction); return "";
+            }
+        }
+        public string DisplayEnabled(RuleChange ruleChange, bool export = false)
         {
             if (export)
             {
                 switch (ruleChange.ChangeAction)
                 {
-                    case 'D': return ruleChange.OldRule.DisplayEnabled(export: true);
-                    case 'I': return ruleChange.NewRule.DisplayEnabled(export: true);
-                    case 'C': return DisplayDiff(ruleChange.OldRule.DisplayEnabled(export: true), ruleChange.NewRule.DisplayEnabled(export: true));
+                    case 'D': return ruleDisplay.DisplayEnabled(ruleChange.OldRule, export: true);
+                    case 'I': return ruleDisplay.DisplayEnabled(ruleChange.NewRule, export: true);
+                    case 'C': return DisplayDiff(ruleDisplay.DisplayEnabled(ruleChange.OldRule, export: true), ruleDisplay.DisplayEnabled(ruleChange.NewRule, export: true));
                     default: ThrowErrorUnknowChangeAction(ruleChange.ChangeAction); return "";
                 }
             }
@@ -125,31 +136,42 @@ namespace FWO.Ui.Display
             {
                 switch (ruleChange.ChangeAction)
                 {
-                    case 'D': return ruleChange.OldRule.DisplayEnabled();
-                    case 'I': return ruleChange.NewRule.DisplayEnabled();
-                    case 'C': return DisplayDiff(ruleChange.OldRule.DisplayEnabled(), ruleChange.NewRule.DisplayEnabled());
+                    case 'D': return ruleDisplay.DisplayEnabled(ruleChange.OldRule);
+                    case 'I': return ruleDisplay.DisplayEnabled(ruleChange.NewRule);
+                    case 'C': return DisplayDiff(ruleDisplay.DisplayEnabled(ruleChange.OldRule), ruleDisplay.DisplayEnabled(ruleChange.NewRule));
                     default: ThrowErrorUnknowChangeAction(ruleChange.ChangeAction); return "";
                 }
             }
         }
 
-        public static string DisplayUid(this RuleChange ruleChange)
+        public string DisplayUid(RuleChange ruleChange)
         {
             switch (ruleChange.ChangeAction)
             {
-                case 'D': return ruleChange.OldRule.DisplayUid();
-                case 'I': return ruleChange.NewRule.DisplayUid();
-                case 'C': return DisplayDiff(ruleChange.OldRule.DisplayUid(), ruleChange.NewRule.DisplayUid());
+                case 'D': return ruleDisplay.DisplayUid(ruleChange.OldRule);
+                case 'I': return ruleDisplay.DisplayUid(ruleChange.NewRule);
+                case 'C': return DisplayDiff(ruleDisplay.DisplayUid(ruleChange.OldRule), ruleDisplay.DisplayUid(ruleChange.NewRule));
                 default: ThrowErrorUnknowChangeAction(ruleChange.ChangeAction); return "";
             }
         }
-        public static string DisplayComment(this RuleChange ruleChange)
+        public string DisplayComment(RuleChange ruleChange)
         {
             switch (ruleChange.ChangeAction)
             {
-                case 'D': return ruleChange.OldRule.DisplayComment();
-                case 'I': return ruleChange.NewRule.DisplayComment();
-                case 'C': return DisplayDiff(ruleChange.OldRule.DisplayComment(), ruleChange.NewRule.DisplayComment());
+                case 'D': return ruleDisplay.DisplayComment(ruleChange.OldRule);
+                case 'I': return ruleDisplay.DisplayComment(ruleChange.NewRule);
+                case 'C': return DisplayDiff(ruleDisplay.DisplayComment(ruleChange.OldRule), ruleDisplay.DisplayComment(ruleChange.NewRule));
+                default: ThrowErrorUnknowChangeAction(ruleChange.ChangeAction); return "";
+            }
+        }
+
+        public string DisplayStyle(RuleChange ruleChange)
+        {
+            switch (ruleChange.ChangeAction)
+            {
+                case 'D': return "color: red";
+                case 'I': return "color: green";
+                case 'C': return "";
                 default: ThrowErrorUnknowChangeAction(ruleChange.ChangeAction); return "";
             }
         }
@@ -160,7 +182,7 @@ namespace FWO.Ui.Display
         /// <param name="oldElement">the original value of the object</param>
         /// <param name="newElement">the new (changed) value of the object</param>
         /// <returns><paramref name=""/>string diff result</returns>
-        private static string DisplayDiff(string oldElement, string newElement)
+        private string DisplayDiff(string oldElement, string newElement)
         {
             if (oldElement == newElement)
                 return oldElement;
@@ -169,40 +191,36 @@ namespace FWO.Ui.Display
                 string[] separatingStrings = { "<br>" };
                 string[] oldAr = oldElement.Split(separatingStrings, System.StringSplitOptions.RemoveEmptyEntries);
                 string[] newAr = newElement.Split(separatingStrings, System.StringSplitOptions.RemoveEmptyEntries);
-                string[] longerAr;
-                string[] shorterAr;
-                string result = "";
+                List<string> unchanged = new List<string>();
+                List<string> added = new List<string>();
+                List<string> deleted = new List<string>();
 
-                Array.Sort(oldAr);
-                Array.Sort(newAr);
-                if (oldAr.Length > newAr.Length)
+                foreach (var item in oldAr)
                 {
-                    longerAr = oldAr;
-                    shorterAr = newAr;
+                    if (newAr.Contains(item))
+                    {
+                        unchanged.Add(item);
+                    }
+                    else
+                    {
+                        string deletedItem = item;
+                        deletedItem = deletedItem.Replace("<p>", "");
+                        deleted.Add(deletedItem.Replace("style=\"\"", "style=\"color: red\""));
+                    }
                 }
-                else
+                foreach (var item in newAr)
                 {
-                    longerAr = newAr;
-                    shorterAr = oldAr;
+                    if (!oldAr.Contains(item))
+                    {
+                        string newItem = item; 
+                        newItem = newItem.Replace("<p>", "");
+                        added.Add(newItem.Replace("style=\"\"", "style=\"color: green\""));
+                    }
                 }
-                string difference = string.Join("<br>", longerAr.Except(shorterAr));
-                if (oldAr.Length < newAr.Length)
-                    result = string.Join("<br>", shorterAr) + $" + <p style=\"text-decoration: bold;\">{difference}</p>";
-                else if (oldAr.Length > newAr.Length)
-                    result = string.Join("<br>", shorterAr) + $" - <p style=\"text-decoration: line-through;\">{difference}</p>";
-                else // same number of elements - one or more elements were replaced
-                {
-                    // for (int i=0; i<=oldAr.Length; i++) 
-                    // {
-                    //     if (oldAr[i]!=newAr[i])
-                    //         result += $"old:{oldAr[i]}, new: {newAr[i]}<br>";
-                    //     else 
-                    //         result += $"{oldAr[i]}<br>";
-                    // }
-                    if (difference != "")
-                        result = string.Join("<br>", shorterAr) + $"<br> diff: {difference}";
-                }
-                return result;
+
+                return string.Join("<br>", unchanged) 
+                       + (deleted.Count > 0 ? $" {userConfig.GetText("deleted")}: <p style=\"color: red; text-decoration: line-through red;\">{string.Join("<br>", deleted)}</p>" : "")
+                       + (added.Count > 0 ? $" {userConfig.GetText("added")}: <p style=\"color: green; text-decoration: bold;\">{string.Join("<br>", added)}</p>" : "");
             }
         }
         
@@ -212,7 +230,7 @@ namespace FWO.Ui.Display
         /// <param name="oldJsonObject">the original value of the object</param>
         /// <param name="newJsonObject">the new (changed) value of the object</param>
         /// <returns><paramref name=""/> wrapped in <c>Dictionary</c> serialized to Json.</returns>
-        private static string DisplayJsonDiff(string oldJsonObject, string newJsonObject)
+        private string DisplayJsonDiff(string oldJsonObject, string newJsonObject)
         {
             // todo: implement diff
             if (oldJsonObject == newJsonObject)
@@ -220,7 +238,7 @@ namespace FWO.Ui.Display
             else
                 return $"{oldJsonObject} --> {newJsonObject}";
         }
-        private static void ThrowErrorUnknowChangeAction(char action)
+        private void ThrowErrorUnknowChangeAction(char action)
         {
             Log.WriteError("Unknown Change Action", $"found an unexpected change action [{action}]");
         }

@@ -1,0 +1,41 @@
+mutation newManagementWithExistingCredentials(
+  $name: String!
+  $devTypeId: Int!
+  $importCredentialId: Int!
+  $hostname: String!
+  $port: Int!
+  $importDisabled: Boolean!
+  $forceInitialImport: Boolean!
+  $hideInUi: Boolean!
+  $configPath: String
+  $domainUid: String
+  $importerHostname: String
+  $comment: String
+  $tenantId: Int
+  $debugLevel: Int
+  $superManager: Int
+) {
+  insert_management(
+    objects: {
+      mgm_name: $name
+      dev_typ_id: $devTypeId
+      ssh_hostname: $hostname
+      import_credential_id: $importCredentialId
+      config_path: $configPath
+      domain_uid: $domainUid
+      importer_hostname: $importerHostname
+      ssh_port: $port
+      do_not_import: $importDisabled
+      force_initial_import: $forceInitialImport
+      hide_in_gui: $hideInUi
+      mgm_comment: $comment
+      tenant_id: $tenantId
+      debug_level: $debugLevel
+      multi_device_manager_id: $superManager
+    }
+  ) {
+    returning {
+      newId: mgm_id
+    }
+  }
+}

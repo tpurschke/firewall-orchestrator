@@ -33,7 +33,12 @@ Create table "device" -- contains an entry for each firewall gateway
 	"dev_id" SERIAL,
 	"mgm_id" Integer NOT NULL,
 	"dev_name" Varchar,
-	"dev_rulebase" Varchar,
+	"local_rulebase_name" Varchar,
+	"local_rulebase_uid" Varchar,
+	"global_rulebase_name" Varchar,
+	"global_rulebase_uid" Varchar,
+	"package_name" Varchar,
+	"package_uid" Varchar,
 	"dev_typ_id" Integer NOT NULL,
 	"tenant_id" Integer,
 	"dev_active" Boolean NOT NULL Default true,
@@ -56,23 +61,32 @@ Create table "management" -- contains an entry for each firewall management syst
 	"tenant_id" Integer,
 	"mgm_create" Timestamp NOT NULL Default now(),
 	"mgm_update" Timestamp NOT NULL Default now(),
-	"ssh_public_key" Text,
-	"ssh_private_key" Text NOT NULL,
+	"import_credential_id" Integer NOT NULL,
 	"ssh_hostname" Varchar NOT NULL,
 	"ssh_port" Integer NOT NULL Default 22,
-	"ssh_user" Varchar NOT NULL Default 'fworch',
 	"last_import_md5_complete_config" Varchar Default 0,
-	"last_import_md5_rules" Varchar Default 0,
-	"last_import_md5_objects" Varchar Default 0,
-	"last_import_md5_users" Varchar Default 0,
+	"last_import_attempt" Timestamp,
+	"last_import_attempt_successful" Boolean NOT NULL Default false,
 	"do_not_import" Boolean NOT NULL Default FALSE,
 	"clearing_import_ran" Boolean NOT NULL Default false,
 	"force_initial_import" Boolean NOT NULL Default FALSE,
 	"config_path" Varchar,
+	"domain_uid" Varchar,
 	"hide_in_gui" Boolean NOT NULL Default false,
 	"importer_hostname" Varchar,
 	"debug_level" Integer,
+	"multi_device_manager_id" integer,		-- if this manager belongs to another multi_device_manager, then this id points to it
  primary key ("mgm_id")
+);
+
+create table if not exists import_credential
+(
+    id SERIAL PRIMARY KEY,
+    credential_name varchar NOT NULL,
+    is_key_pair BOOLEAN default FALSE,
+    username varchar NOT NULL,
+    secret text NOT NULL,
+	public_key Text
 );
 
 Create table "object"
@@ -158,6 +172,9 @@ Create table "rule"
 	"rule_create" BIGINT NOT NULL,
 	"rule_last_seen" BIGINT NOT NULL,
 	"dev_id" Integer,
+	"access_rule" BOOLEAN Default TRUE,
+	"nat_rule" BOOLEAN Default FALSE,
+	"xlate_rule" BIGINT,
  primary key ("rule_id")
 );
 
@@ -216,30 +233,16 @@ Create table "rule_user_resolved"
 );
 
 Create table "rule_from"
+-- needs separate primary key as user_id can be null
 (
-	"rule_from_id" BIGSERIAL,
-	"rf_create" BIGINT NOT NULL,
-	"rf_last_seen" BIGINT NOT NULL,
+	"rule_from_id" BIGSERIAL PRIMARY KEY,
 	"rule_id" BIGINT NOT NULL,
 	"obj_id" BIGINT NOT NULL,
 	"user_id" BIGINT,
 	"active" Boolean NOT NULL Default TRUE,
 	"negated" Boolean NOT NULL Default FALSE,
- primary key ("rule_from_id")
-);
-
-
--- reference rule_metatdata intead?
-Create table "rule_review"
-(
-	"rule_metadata_id" BIGINT NOT NULL,
-	"tenant_id" Integer NOT NULL,
-	"rr_comment" Text,
-	"rr_approved" Boolean NOT NULL Default true,
-	"rr_visible" Boolean NOT NULL Default true,
-	"rr_create" Timestamp NOT NULL Default now(),
-	"rr_update" Timestamp NOT NULL Default now(),
- primary key ("rule_metadata_id","tenant_id")
+	"rf_create" BIGINT NOT NULL,
+	"rf_last_seen" BIGINT NOT NULL
 );
 
 Create table "rule_service"
@@ -254,14 +257,16 @@ Create table "rule_service"
 );
 
 Create table "rule_to"
+-- needs separate primary key as user_id can be null
 (
+	"rule_to_id" BIGSERIAL PRIMARY KEY,
 	"rule_id" BIGINT NOT NULL,
 	"obj_id" BIGINT NOT NULL,
+	"user_id" BIGINT,
 	"rt_create" BIGINT NOT NULL,
 	"rt_last_seen" BIGINT NOT NULL,
 	"active" Boolean NOT NULL Default TRUE,
-	"negated" Boolean NOT NULL Default FALSE,
- primary key ("rule_id","obj_id")
+	"negated" Boolean NOT NULL Default FALSE
 );
 
 Create table "service"
@@ -408,6 +413,7 @@ Create table "uiuser"
 	"uiuser_last_login" Timestamp with time zone,
 	"uiuser_last_password_change" Timestamp with time zone,
 	"uiuser_pwd_history" Text,
+	"ldap_connection_id" BIGINT,
  primary key ("uiuser_id")
 );
 
@@ -437,15 +443,6 @@ Create table "error"
  primary key ("error_id")
 );
 
-Create table "error_log"
-(
-	"error_log_id" BIGSERIAL,
-	"error_id" Varchar NOT NULL,
-	"error_txt" Text,
-	"error_time" Timestamp NOT NULL Default now(),
- primary key ("error_log_id")
-);
-
 -- tenant -------------------------------------
 Create table "tenant"
 (
@@ -467,13 +464,6 @@ Create table "tenant_to_device"
  primary key ("tenant_id", "device_id")
 );
 
-Create table "tenant_object"
-(
-	"tenant_id" Integer NOT NULL,
-	"obj_id" BIGINT NOT NULL,
- primary key ("tenant_id","obj_id")
-);
-
 Create table "tenant_network"
 (
 	"tenant_net_id" BIGSERIAL,
@@ -484,25 +474,6 @@ Create table "tenant_network"
 	"tenant_net_ip_end" Cidr,
 	"tenant_net_create" Timestamp NOT NULL Default now(),
  primary key ("tenant_net_id")
-);
-
--- unused in 5.0, moved to ldap
-Create table "tenant_user"
-(
-	"user_id" BIGSERIAL,
-	"tenant_id" BIGSERIAL,
- primary key ("user_id","tenant_id")
-);
-
--- unused in 5.0, moved to ldap
-Create table "tenant_username"
-(
-	"tenant_username_id" BIGSERIAL,
-	"tenant_id" Integer,
-	"tenant_username_pattern" Varchar,
-	"tenant_username_comment" Text,
-	"tenant_username_create" Timestamp NOT NULL Default now(),
- primary key ("tenant_username_id")
 );
 
 -- basic static data -------------------------------------
@@ -543,15 +514,9 @@ Create table "stm_dev_typ"
 	"dev_typ_config_file_rules" Varchar,
 	"dev_typ_config_file_basic_objects" Varchar,
 	"dev_typ_config_file_users" Varchar,
+	"dev_typ_is_multi_mgmt" Boolean Default FALSE,
+	"is_pure_routing_device" Boolean Default FALSE,
  primary key ("dev_typ_id")
-);
-
-Create table "stm_nattyp"
-(
-	"nattyp_id" SERIAL,
-	"nattyp_name" Varchar NOT NULL,
-	"nattyp_comment" Text,
- primary key ("nattyp_id")
 );
 
 Create table "stm_obj_typ"
@@ -612,6 +577,25 @@ Create table "import_control"
 	"changes_found" Boolean NOT NULL Default FALSE,
 	"import_errors" Varchar,
  primary key ("control_id")
+);
+
+-- temporary table for storing the fw-relevant config during import
+CREATE TABLE IF NOT EXISTS "import_config" (
+    "import_id" bigint NOT NULL,
+    "mgm_id" integer NOT NULL,
+    "chunk_number" integer,
+    "config" jsonb NOT NULL,
+	"start_import_flag" Boolean NOT NULL Default FALSE,
+	"debug_mode" Boolean Default FALSE
+);
+
+-- todo: move this to git instead
+-- permanent table for storing the full config as an archive
+CREATE TABLE "import_full_config" (
+    "import_id" bigint NOT NULL,
+    "mgm_id" integer NOT NULL,
+    "config" jsonb NOT NULL,
+    PRIMARY KEY ("import_id")
 );
 
 -- temporary import tables -------------------------------------
@@ -723,6 +707,7 @@ Create table "import_rule"
 	"rule_dst_refs" Text,
 	"rule_svc_refs" Text,
 	"parent_rule_uid" Text,
+	"rule_type" Varchar Default 'access',
  primary key ("control_id","rule_id")
 );
 
@@ -733,7 +718,77 @@ Create table "import_zone"
 	"last_change_time" Timestamp
 );
 
--- changelog tables -------------------------------------
+---------------------------------------------------------------------------------------
+-- adding interfaces and routing for path analysis
+-- drop table if exists gw_route;
+-- drop table if exists gw_interface;
+
+create table if not exists gw_interface
+(
+    id SERIAL PRIMARY KEY,
+    routing_device INTEGER NOT NULL,
+    name VARCHAR NOT NULL,
+    ip CIDR,
+    state_up BOOLEAN DEFAULT TRUE,
+    ip_version INTEGER NOT NULL DEFAULT 4,
+    netmask_bits INTEGER NOT NULL
+);
+
+create table if not exists gw_route
+(
+    id SERIAL PRIMARY KEY,
+    routing_device INT NOT NULL,
+    target_gateway CIDR NOT NULL,
+    destination CIDR NOT NULL,
+    source CIDR,
+    interface_id INT,
+    interface VARCHAR,
+    static BOOLEAN DEFAULT TRUE,
+    metric INT,
+    distance INT,
+    ip_version INTEGER NOT NULL DEFAULT 4
+);
+
+-- (change)log tables -------------------------------------
+
+Create table "log_data_issue"
+(
+	"data_issue_id" BIGSERIAL,
+	"import_id" BIGINT,
+	"object_name" Varchar,
+	"object_uid" Varchar,
+	"rule_uid" Varchar,				-- if a rule ref is broken
+	"rule_id" BIGINT,				-- if a rule ref is broken
+	"object_type" Varchar,
+	"suspected_cause" VARCHAR,
+	"description" VARCHAR,
+	"issue_mgm_id" INTEGER,
+	"issue_dev_id" INTEGER,
+	"severity" INTEGER NOT NULL DEFAULT 1,
+	"source" VARCHAR NOT NULL DEFAULT 'import',
+	"issue_timestamp" TIMESTAMP DEFAULT NOW(),
+	"user_id" INTEGER DEFAULT 0,
+ primary key ("data_issue_id")
+);
+
+Create table "alert"
+(
+	"alert_id" BIGSERIAL,
+	"ref_log_id" BIGINT,
+	"ref_alert_id" BIGINT,
+	"source" VARCHAR NOT NULL,
+	"title" VARCHAR,
+	"description" VARCHAR,
+	"alert_mgm_id" INTEGER,
+	"alert_dev_id" INTEGER,
+	"alert_timestamp" TIMESTAMP DEFAULT NOW(),
+	"user_id" INTEGER DEFAULT 0,
+	"ack_by" INTEGER,
+	"ack_timestamp" TIMESTAMP,
+	"json_data" json,
+	"alert_code" INTEGER,
+ primary key ("alert_id")
+);
 
 Create table "import_changelog"
 (
@@ -840,57 +895,6 @@ Create table "changelog_rule"
  primary key ("log_rule_id")
 );
 
--- request handling -------------------------------------------
-
-Create table "request"
-(
-	"request_id" BIGSERIAL,
-	"request_number" Varchar,
-	"request_time" Timestamp,
-	"request_received" Timestamp,
-	"request_submitter" Varchar,
-	"request_approver" Varchar,
-	"tenant_id" Integer,
-	"request_type_id" Integer,
- primary key ("request_id")
-);
-
-Create table "request_object_change"
-(
-	"log_obj_id" BIGINT NOT NULL,
-	"request_id" Integer NOT NULL,
- primary key ("log_obj_id","request_id")
-);
-
-Create table "request_service_change"
-(
-	"log_svc_id" BIGINT NOT NULL,
-	"request_id" Integer NOT NULL,
- primary key ("log_svc_id","request_id")
-);
-
-Create table "request_rule_change"
-(
-	"log_rule_id" BIGINT NOT NULL,
-	"request_id" Integer NOT NULL,
- primary key ("log_rule_id","request_id")
-);
-
-Create table "request_user_change"
-(
-	"log_usr_id" BIGINT NOT NULL,
-	"request_id" Integer NOT NULL,
- primary key ("log_usr_id","request_id")
-);
-
-Create table "request_type"
-(
-	"request_type_id" Integer NOT NULL UNIQUE,
-	"request_type_name" Varchar NOT NULL UNIQUE,
-	"request_type_comment" Varchar,
- primary key ("request_type_id")
-);
-
 Create table "stm_change_type"
 (
 	"change_type_id" SERIAL,
@@ -909,6 +913,7 @@ Create table "report_template"
 	"report_template_create" Timestamp DEFAULT now(),
 	"report_template_owner" Integer, --FK
 	"filterline_history" Boolean Default TRUE, -- every time a filterline is sent, we save it for future usage (auto-deleted every 90 days)
+	"report_parameters" json,
 	primary key ("report_template_id")
 );
 
@@ -938,6 +943,8 @@ Create table "report"
 	"report_name" varchar NOT NULL,
 	"report_owner_id" Integer NOT NULL, --FK to uiuser
 	"tenant_wide_visible" Integer,
+	"report_type" Integer,
+	"description" varchar,
  	primary key ("report_id")
 );
 
@@ -952,14 +959,8 @@ Create table if not exists "report_schedule"
 	"report_schedule_every" Integer Not NULL Default 1, -- x - every x days/weeks/months/years
 	"report_schedule_active" Boolean Default TRUE,
 	"report_schedule_repetitions" Integer,
+	"report_schedule_counter" Integer Not NULL Default 0,
  	primary key ("report_schedule_id")
-);
-
-Create table "report_template_viewable_by_tenant"
-(
-	"report_template_id" Integer NOT NULL,
-	"tenant_id" Integer NOT NULL,
- 	primary key ("tenant_id","report_template_id")
 );
 
 Create table "report_template_viewable_by_user"
@@ -988,6 +989,9 @@ Create table "ldap_connection"
 	"ldap_searchpath_for_groups" Varchar,
 	"ldap_type" Integer NOT NULL Default 0,
 	"ldap_pattern_length" Integer NOT NULL Default 0,
+	"ldap_name" Varchar,
+	"ldap_global_tenant_name" Varchar,
+	"active" Boolean NOT NULL Default TRUE,
 	primary key ("ldap_connection_id")
 );
 
@@ -997,4 +1001,227 @@ Create table "config"
 	"config_value" VARCHAR,
 	"config_user" Integer,
 	primary key ("config_key","config_user")
+);
+
+-- create schema
+create schema if not exists request;
+
+CREATE TYPE rule_field_enum AS ENUM ('source', 'destination', 'service');
+CREATE TYPE action_enum AS ENUM ('create', 'delete', 'modify');
+
+-- create tables
+create table if not exists request.reqtask 
+(
+    id BIGSERIAL PRIMARY KEY,
+    title VARCHAR,
+    ticket_id bigint,
+    task_number int,
+    state_id int NOT NULL,
+    task_type VARCHAR NOT NULL,
+    request_action action_enum NOT NULL,
+    rule_action int,
+    rule_tracking int,
+    start Timestamp,
+    stop Timestamp,
+    svc_grp_id int,
+    nw_obj_grp_id int,
+	user_grp_id int,
+    free_text text,
+    reason text,
+	last_recert_date Timestamp,
+	current_handler int,
+	recent_handler int,
+	assigned_group varchar,
+	target_begin_date Timestamp,
+	target_end_date Timestamp,
+	devices varchar
+);
+
+create table if not exists request.reqelement 
+(
+    id BIGSERIAL PRIMARY KEY,
+    request_action action_enum NOT NULL default 'create',
+    task_id bigint,
+    ip cidr,
+    port int,
+    ip_proto_id int,
+    network_object_id bigint,
+    service_id bigint,
+    field rule_field_enum NOT NULL,
+    user_id bigint,
+    original_nat_id int
+);
+
+create table if not exists request.approval 
+(
+    id BIGSERIAL PRIMARY KEY,
+    task_id bigint,
+    date_opened Timestamp NOT NULL default CURRENT_TIMESTAMP,
+    approver_group Varchar,
+    approval_date Timestamp,
+    approver Varchar,
+	current_handler int,
+	recent_handler int,
+	assigned_group varchar,
+    tenant_id int,
+	initial_approval boolean not null default true,
+	approval_deadline Timestamp,
+	state_id int NOT NULL
+);
+
+create table if not exists request.ticket 
+(
+    id BIGSERIAL PRIMARY KEY,
+    title VARCHAR NOT NULL,
+    date_created Timestamp NOT NULL default CURRENT_TIMESTAMP,
+    date_completed Timestamp,
+    state_id int NOT NULL,
+    requester_id int,
+    requester_dn Varchar,
+    requester_group Varchar,
+	current_handler int,
+	recent_handler int,
+	assigned_group varchar,
+    tenant_id int,
+    reason text,
+	external_ticket_id varchar,
+	external_ticket_source int,
+	ticket_deadline Timestamp,
+	ticket_priority int
+);
+
+create table if not exists request.comment 
+(
+    id BIGSERIAL PRIMARY KEY,
+    ref_id bigint,
+	scope varchar,
+	creation_date Timestamp,
+	creator_id int,
+	comment_text varchar
+);
+
+create table if not exists request.ticket_comment
+(
+    ticket_id bigint,
+    comment_id bigint
+);
+
+create table if not exists request.reqtask_comment
+(
+    task_id bigint,
+    comment_id bigint
+);
+
+create table if not exists request.approval_comment
+(
+    approval_id bigint,
+    comment_id bigint
+);
+
+create table if not exists request.impltask_comment
+(
+    task_id bigint,
+    comment_id bigint
+);
+
+create table if not exists request.state
+(
+    id Integer NOT NULL UNIQUE PRIMARY KEY,
+    name Varchar NOT NULL
+);
+
+create table if not exists request.action
+(
+    id SERIAL PRIMARY KEY,
+    name Varchar NOT NULL,
+	action_type Varchar NOT NULL,
+	scope Varchar,
+	task_type Varchar,
+	phase Varchar,
+	event Varchar,
+	button_text Varchar,
+	external_parameters Varchar
+);
+
+create table if not exists request.state_action
+(
+    state_id int,
+    action_id int
+);
+
+create table if not exists owner
+(
+    id SERIAL PRIMARY KEY,
+    name Varchar NOT NULL,
+    dn Varchar NOT NULL,
+    group_dn Varchar NOT NULL,
+    is_default boolean default false,
+    tenant_id int,
+    recert_interval int,
+	next_recert_date Timestamp,
+    app_id_external varchar not null
+);
+
+create unique index if not exists only_one_default_owner on owner(is_default) 
+where is_default = true;
+
+create table if not exists owner_network
+(
+    id SERIAL PRIMARY KEY,
+    owner_id int,
+    ip cidr NOT NULL,
+    port int,
+    ip_proto_id int
+);
+
+create table if not exists reqtask_owner
+(
+    reqtask_id bigint,
+    owner_id int
+);
+
+create table if not exists rule_owner
+(
+    owner_id int,
+    rule_metadata_id bigint
+);
+
+create table if not exists request.implelement
+(
+    id BIGSERIAL PRIMARY KEY,
+    implementation_action action_enum NOT NULL default 'create',
+    implementation_task_id bigint,
+    ip cidr,
+    port int,
+    ip_proto_id int,
+    network_object_id bigint,
+    service_id bigint,
+    field rule_field_enum NOT NULL,
+    user_id bigint,
+    original_nat_id int
+);
+
+create table if not exists request.impltask
+(
+    id BIGSERIAL PRIMARY KEY,
+	title VARCHAR,
+    reqtask_id bigint,
+    task_number int,
+    state_id int NOT NULL,
+	task_type VARCHAR NOT NULL,
+    device_id int,
+    implementation_action action_enum NOT NULL,
+    rule_action int,
+    rule_tracking int,
+    start timestamp,
+    stop timestamp,
+    svc_grp_id int,
+    nw_obj_grp_id int,
+	user_grp_id int,
+	free_text text,
+	current_handler int,
+	recent_handler int,
+	assigned_group varchar,
+	target_begin_date Timestamp,
+	target_end_date Timestamp
 );
