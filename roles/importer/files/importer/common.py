@@ -385,7 +385,7 @@ def get_config_from_api(importState, full_config_json, config2import, import_tmp
         importState.ErrorString += "  recursion limit reached: mgm_id=" + str(importState.MgmDetails.Id) + ", mgm_name=" + importState.MgmDetails.Name + ", " + e.message
         importState.ErrorCount += 1
         logger.error(importState.ErrorString)
-        fwo_api.delete_import(importState.Jwt) # deleting trace of not even begun import
+        fwo_api.delete_import(importState) # deleting trace of not even begun import
         importState.ErrorCount = fwo_api.complete_import(importState)
         raise ImportRecursionLimitReached(e.message)
     except:
