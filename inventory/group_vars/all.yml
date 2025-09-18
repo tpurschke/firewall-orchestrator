@@ -1,5 +1,5 @@
 ### general settings
-product_version: "8.8.10"
+product_version: "8.9.1"
 ansible_user: "{{ lookup('env', 'USER') }}"
 ansible_become_method: sudo
 ansible_python_interpreter: /usr/bin/python3
@@ -55,8 +55,8 @@ http_proxy_import_parameter: ""
 # http_proxy=http://USERNAME:PASSWORD@1.2.3.4:8080/
 
 # OS 
-debian_testing_version: "12"
-  # should actually be 13 but microsoft does not yet provide https://packages.microsoft.com/config/debian/13
+debian_testing_version: "13"
+  # should actually be 14 but microsoft does not yet provide https://packages.microsoft.com/config/debian/14
 debian_testing_release_name: trixie
 arch: x86_64
 redhat_major_version: "8"
@@ -135,11 +135,6 @@ fworch_api_importer_lockfile: "{{ fworch_log_lock_dir }}/importer_api_log.lock"
 webserver_package_name: apache2
 http_conf_dir: /etc/{{ webserver_package_name }}/sites-available/
 wsgi_package_name: libapache2-mod-wsgi
-
-############# wkhtmltopdf #########################
-
-# wkhtmltopdf_version: "0.12.6.1-3"
-
 
 ################# testing #########################
 fworchtest_user: "{{ product_name }}test"

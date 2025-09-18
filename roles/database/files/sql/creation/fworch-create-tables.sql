@@ -42,8 +42,8 @@ Create table "device" -- contains an entry for each firewall gateway
 	"dev_typ_id" Integer NOT NULL,
 	"dev_active" Boolean NOT NULL Default true,
 	"dev_comment" Text,
-	"dev_create" Timestamp NOT NULL Default now(),
-	"dev_update" Timestamp NOT NULL Default now(),
+	"dev_create" Timestamp with time zone NOT NULL Default now(),
+	"dev_update" Timestamp with time zone NOT NULL Default now(),
 	"do_not_import" Boolean NOT NULL Default FALSE,
 	"clearing_import_ran" Boolean NOT NULL Default FALSE,
 	"force_initial_import" Boolean NOT NULL Default FALSE,
@@ -59,13 +59,13 @@ Create table "management" -- contains an entry for each firewall management syst
 	"mgm_comment" Text,
  	"cloud_tenant_id" VARCHAR,
 	"cloud_subscription_id" VARCHAR,	
-	"mgm_create" Timestamp NOT NULL Default now(),
-	"mgm_update" Timestamp NOT NULL Default now(),
+	"mgm_create" Timestamp with time zone NOT NULL Default now(),
+	"mgm_update" Timestamp with time zone NOT NULL Default now(),
 	"import_credential_id" Integer NOT NULL,
 	"ssh_hostname" Varchar NOT NULL,
 	"ssh_port" Integer NOT NULL Default 22,
 	"last_import_md5_complete_config" Varchar Default 0,
-	"last_import_attempt" Timestamp,
+	"last_import_attempt" Timestamp with time zone,
 	"last_import_attempt_successful" Boolean NOT NULL Default false,
 	"do_not_import" Boolean NOT NULL Default FALSE,
 	"clearing_import_ran" Boolean NOT NULL Default false,
@@ -188,19 +188,19 @@ Create table "rule_metadata"
 	"rule_metadata_id" BIGSERIAL,
 	"dev_id" Integer NOT NULL,
 	"rule_uid" Text NOT NULL,
-	"rule_created" Timestamp NOT NULL Default now(),
-	"rule_last_modified" Timestamp NOT NULL Default now(),
-	"rule_first_hit" Timestamp,
-	"rule_last_hit" Timestamp,
+	"rule_created" Timestamp with time zone NOT NULL Default now(),
+	"rule_last_modified" Timestamp with time zone NOT NULL Default now(),
+	"rule_first_hit" Timestamp with time zone,
+	"rule_last_hit" Timestamp with time zone,
 	"rule_hit_counter" BIGINT,
-	"rule_last_certified" Timestamp,
+	"rule_last_certified" Timestamp with time zone,
 	"rule_last_certifier" Integer,
 	"rule_last_certifier_dn" VARCHAR,
 	"rule_owner" Integer, -- points to a uiuser (not an owner)
 	"rule_owner_dn" Varchar, -- distinguished name pointing to ldap group, path or user
 	"rule_to_be_removed" Boolean NOT NULL Default FALSE,
 	"last_change_admin" Integer,
-	"rule_decert_date" Timestamp,
+	"rule_decert_date" Timestamp with time zone,
 	"rule_recertification_comment" Varchar,
  primary key ("rule_metadata_id")
 );
@@ -465,7 +465,7 @@ Create table "tenant"
 	"tenant_report" Boolean Default true,
 	"tenant_can_view_all_devices" Boolean NOT NULL Default false,
 	"tenant_is_superadmin" Boolean NOT NULL default false,	
-	"tenant_create" Timestamp NOT NULL Default now(),
+	"tenant_create" Timestamp with time zone NOT NULL Default now(),
  primary key ("tenant_id")
 );
 
@@ -493,7 +493,7 @@ Create table "tenant_network"
 	"tenant_net_comment" Text,
 	"tenant_net_ip" Cidr NOT NULL,
 	"tenant_net_ip_end" Cidr NOT NULL,
-	"tenant_net_create" Timestamp NOT NULL Default now(),
+	"tenant_net_create" Timestamp with time zone NOT NULL Default now(),
  primary key ("tenant_net_id")
 );
 
@@ -585,15 +585,15 @@ Create table "stm_usr_typ"
 Create table "import_control"
 (
 	"control_id" BIGSERIAL,
-	"start_time" Timestamp NOT NULL Default now(),
-	"stop_time" Timestamp,
+	"start_time" Timestamp with time zone NOT NULL Default now(),
+	"stop_time" Timestamp with time zone,
 	"is_initial_import" Boolean NOT NULL Default FALSE,
 	"delimiter_group" Varchar(3) NOT NULL Default '|',
 	"delimiter_zone" Varchar(3) Default '%',
 	"delimiter_user" Varchar(3) Default '@',
 	"delimiter_list" Varchar(3) Default '|',
 	"mgm_id" Integer NOT NULL,
-	"last_change_in_config" Timestamp,
+	"last_change_in_config" Timestamp with time zone,
 	"successful_import" Boolean NOT NULL Default FALSE,
 	"any_changes_found" Boolean NOT NULL Default FALSE,
 	"rule_changes_found" Boolean NOT NULL Default FALSE,
@@ -645,7 +645,7 @@ Create table "import_service"
 	"svc_member_names" Text,
 	"svc_member_refs" Text,
 	"last_change_admin" Varchar,
-	"last_change_time" Timestamp,
+	"last_change_time" Timestamp with time zone,
 	"svc_scope" Varchar,
  primary key ("svc_id","control_id")
 );
@@ -668,7 +668,7 @@ Create table "import_object"
 	"control_id" BIGINT NOT NULL,
 	"obj_uid" Text,
 	"last_change_admin" Varchar,
-	"last_change_time" Timestamp,
+	"last_change_time" Timestamp with time zone,
 	"obj_scope" Varchar,
  primary key ("obj_id","control_id")
 );
@@ -693,7 +693,7 @@ Create table "import_user"
 	"dst_restrict" Text,
 	"time_restrict" Text,
 	"last_change_admin" Varchar,
-	"last_change_time" Timestamp,
+	"last_change_time" Timestamp with time zone,
 	"user_scope" Varchar,
  primary key ("user_id","control_id")
 );
@@ -725,14 +725,14 @@ Create table "import_rule"
 	"rule_comment" Text,
 	"rule_head_text" Text,
 	"last_change_admin" Varchar,
-	"last_change_time" Timestamp,
+	"last_change_time" Timestamp with time zone,
 	"rule_scope" Varchar,
 	"rule_src_refs" Text,
 	"rule_dst_refs" Text,
 	"rule_svc_refs" Text,
 	"parent_rule_uid" Text,
 	"rule_type" Varchar Default 'access',
-	"last_hit" Timestamp,
+	"last_hit" Timestamp with time zone,
 	"rule_custom_fields" JSONB,
  primary key ("control_id","rule_id")
 );
@@ -741,7 +741,7 @@ Create table "import_zone"
 (
 	"control_id" BIGINT NOT NULL,
 	"zone_name" Text NOT NULL,
-	"last_change_time" Timestamp
+	"last_change_time" Timestamp with time zone
 );
 
 ---------------------------------------------------------------------------------------
@@ -792,7 +792,7 @@ Create table "log_data_issue"
 	"issue_dev_id" INTEGER,
 	"severity" INTEGER NOT NULL DEFAULT 1,
 	"source" VARCHAR NOT NULL DEFAULT 'import',
-	"issue_timestamp" TIMESTAMP DEFAULT NOW(),
+	"issue_timestamp" Timestamp with time zone DEFAULT NOW(),
 	"user_id" INTEGER DEFAULT 0,
  primary key ("data_issue_id")
 );
@@ -807,10 +807,10 @@ Create table "alert"
 	"description" VARCHAR,
 	"alert_mgm_id" INTEGER,
 	"alert_dev_id" INTEGER,
-	"alert_timestamp" TIMESTAMP DEFAULT NOW(),
+	"alert_timestamp" Timestamp with time zone DEFAULT NOW(),
 	"user_id" INTEGER DEFAULT 0,
 	"ack_by" INTEGER,
-	"ack_timestamp" TIMESTAMP,
+	"ack_timestamp" Timestamp with time zone,
 	"json_data" json,
 	"alert_code" INTEGER,
  primary key ("alert_id")
@@ -818,7 +818,7 @@ Create table "alert"
 
 Create table "import_changelog"
 (
-	"change_time" Timestamp,
+	"change_time" Timestamp with time zone,
 	"management_name" Varchar,
 	"changed_object_name" Varchar,
 	"changed_object_uid" Varchar,
@@ -843,12 +843,12 @@ Create table "changelog_object"
 	"change_action" Char(1) NOT NULL,
 	"changelog_obj_comment" Text,
 	"documented" Boolean NOT NULL Default FALSE,
-	"docu_time" Timestamp,
+	"docu_time" Timestamp with time zone,
 	"mgm_id" Integer NOT NULL,
 	"change_type_id" Integer NOT NULL Default 3,
 	"security_relevant" Boolean NOT NULL Default TRUE,
 	"change_request_info" Varchar,
-	"change_time" Timestamp,
+	"change_time" Timestamp with time zone,
 	"unique_name" Varchar,
  primary key ("log_obj_id")
 );
@@ -865,12 +865,12 @@ Create table "changelog_service"
 	"change_action" Char(1) NOT NULL,
 	"changelog_svc_comment" Text,
 	"documented" Boolean NOT NULL Default FALSE,
-	"docu_time" Timestamp,
+	"docu_time" Timestamp with time zone,
 	"mgm_id" Integer NOT NULL,
 	"change_type_id" Integer NOT NULL Default 3,
 	"security_relevant" Boolean NOT NULL Default TRUE,
 	"change_request_info" Varchar,
-	"change_time" Timestamp,
+	"change_time" Timestamp with time zone,
 	"unique_name" Varchar,
  primary key ("log_svc_id")
 );
@@ -887,12 +887,12 @@ Create table "changelog_user"
 	"change_action" Char(1) NOT NULL,
 	"changelog_user_comment" Text,
 	"documented" Boolean NOT NULL Default FALSE,
-	"docu_time" Timestamp,
+	"docu_time" Timestamp with time zone,
 	"mgm_id" Integer NOT NULL,
 	"change_type_id" Integer NOT NULL Default 3,
 	"security_relevant" Boolean NOT NULL Default TRUE,
 	"change_request_info" Varchar,
-	"change_time" Timestamp,
+	"change_time" Timestamp with time zone,
 	"unique_name" Varchar,
  primary key ("log_usr_id")
 );
@@ -910,13 +910,13 @@ Create table "changelog_rule"
 	"change_action" Char(1) NOT NULL,
 	"changelog_rule_comment" Text,
 	"documented" Boolean NOT NULL Default FALSE,
-	"docu_time" Timestamp,
+	"docu_time" Timestamp with time zone,
 	"mgm_id" Integer NOT NULL,
 	"dev_id" Integer NOT NULL,
 	"change_type_id" Integer NOT NULL Default 3,
 	"security_relevant" Boolean NOT NULL Default TRUE,
 	"change_request_info" Varchar,
-	"change_time" Timestamp,
+	"change_time" Timestamp with time zone,
 	"unique_name" Varchar,
  primary key ("log_rule_id")
 );
@@ -936,7 +936,7 @@ Create table "report_template"
 	"report_filter" Varchar,
 	"report_template_name" Varchar, --  NOT NULL Default "Report_"|"report_id"::VARCHAR,  -- user given name of a report
 	"report_template_comment" TEXT,
-	"report_template_create" Timestamp DEFAULT now(),
+	"report_template_create" Timestamp with time zone DEFAULT now(),
 	"report_template_owner" Integer, --FK
 	"filterline_history" Boolean Default TRUE, -- every time a filterline is sent, we save it for future usage (auto-deleted every 90 days)
 	"report_parameters" json,
@@ -960,8 +960,8 @@ Create table "report"
 (
 	"report_id" BIGSERIAL,
 	"report_template_id" Integer,
-	"report_start_time" Timestamp,
-	"report_end_time" Timestamp,
+	"report_start_time" Timestamp with time zone,
+	"report_end_time" Timestamp with time zone,
 	"report_json" json NOT NULL,
 	"report_pdf" text,
 	"report_csv" text,
@@ -981,7 +981,7 @@ Create table "report_schedule"
 	"report_schedule_name" Varchar, --  NOT NULL Default "Report_"|"report_id"::VARCHAR,  -- user given name of a report
 	"report_template_id" Integer, --FK
 	"report_schedule_owner" Integer NOT NULL, --FK
-	"report_schedule_start_time" Timestamp NOT NULL,  -- if day is bigger than 28, simply use the 1st of the next month, 00:00 am
+	"report_schedule_start_time" Timestamp with time zone NOT NULL,  -- if day is bigger than 28, simply use the 1st of the next month, 00:00 am
 	"report_schedule_repeat" Integer Not NULL Default 0, -- 0 do not repeat, 1 daily, 2 weekly, 3 monthly, 4 yearly 
 	"report_schedule_every" Integer Not NULL Default 1, -- x - every x days/weeks/months/years
 	"report_schedule_active" Boolean Default TRUE,
@@ -1016,7 +1016,7 @@ create table notification
 	repeat_interval_after_deadline int,
 	repeat_offset_after_deadline int,
 	repetitions_after_deadline int,
-	last_sent Timestamp
+	last_sent Timestamp with time zone
 );
 
 -- configuration
@@ -1065,16 +1065,16 @@ create table owner
     tenant_id int,
     recert_interval int,
     app_id_external varchar UNIQUE,
-    last_recert_check Timestamp,
+    last_recert_check Timestamp with time zone,
     recert_check_params Varchar,
 	criticality Varchar,
 	active boolean default true,
 	import_source Varchar,
 	common_service_possible boolean default false,
-	last_recertified Timestamp,
+	last_recertified Timestamp with time zone,
 	last_recertifier int,
 	last_recertifier_dn Varchar,
-	next_recert_date Timestamp
+	next_recert_date Timestamp with time zone
 );
 
 create table owner_network
@@ -1113,9 +1113,9 @@ create table recertification
     owner_id int,
 	user_dn varchar,
 	recertified boolean default false,
-	recert_date Timestamp,
+	recert_date Timestamp with time zone,
 	comment varchar,
-	next_recert_date Timestamp
+	next_recert_date Timestamp with time zone
 );
 
 create table owner_recertification
@@ -1124,9 +1124,9 @@ create table owner_recertification
     owner_id int NOT NULL,
 	user_dn varchar,
 	recertified boolean default false,
-	recert_date Timestamp,
+	recert_date Timestamp with time zone,
 	comment varchar,
-	next_recert_date Timestamp
+	next_recert_date Timestamp with time zone
 );
 
 create table owner_ticket
@@ -1149,8 +1149,8 @@ create table ext_request
 	ext_ticket_id varchar,
 	last_creation_response varchar,
 	last_processing_response varchar,
-	create_date Timestamp default now(),
-	finish_date Timestamp,
+	create_date Timestamp with time zone default now(),
+	finish_date Timestamp with time zone,
 	wait_cycles int default 0,
 	attempts int default 0,
 	locked boolean default false
@@ -1176,19 +1176,19 @@ create table request.reqtask
     request_action action_enum NOT NULL,
     rule_action int,
     rule_tracking int,
-    start Timestamp,
-    stop Timestamp,
+    start Timestamp with time zone,
+    stop Timestamp with time zone,
     svc_grp_id int,
     nw_obj_grp_id int,
 	user_grp_id int,
     free_text text,
     reason text,
-	last_recert_date Timestamp,
+	last_recert_date Timestamp with time zone,
 	current_handler int,
 	recent_handler int,
 	assigned_group varchar,
-	target_begin_date Timestamp,
-	target_end_date Timestamp,
+	target_begin_date Timestamp with time zone,
+	target_end_date Timestamp with time zone,
 	devices varchar,
 	additional_info varchar,
 	mgm_id int
@@ -1219,16 +1219,16 @@ create table request.approval
 (
     id BIGSERIAL PRIMARY KEY,
     task_id bigint,
-    date_opened Timestamp NOT NULL default CURRENT_TIMESTAMP,
+    date_opened Timestamp with time zone NOT NULL default CURRENT_TIMESTAMP,
     approver_group Varchar,
-    approval_date Timestamp,
+    approval_date Timestamp with time zone,
     approver Varchar,
 	current_handler int,
 	recent_handler int,
 	assigned_group varchar,
     tenant_id int,
 	initial_approval boolean not null default true,
-	approval_deadline Timestamp,
+	approval_deadline Timestamp with time zone,
 	state_id int NOT NULL
 );
 
@@ -1236,8 +1236,8 @@ create table request.ticket
 (
     id BIGSERIAL PRIMARY KEY,
     title VARCHAR NOT NULL,
-    date_created Timestamp NOT NULL default CURRENT_TIMESTAMP,
-    date_completed Timestamp,
+    date_created Timestamp with time zone NOT NULL default CURRENT_TIMESTAMP,
+    date_completed Timestamp with time zone,
     state_id int NOT NULL,
     requester_id int,
     requester_dn Varchar,
@@ -1249,7 +1249,7 @@ create table request.ticket
     reason text,
 	external_ticket_id varchar,
 	external_ticket_source int,
-	ticket_deadline Timestamp,
+	ticket_deadline Timestamp with time zone,
 	ticket_priority int
 );
 
@@ -1258,7 +1258,7 @@ create table request.comment
     id BIGSERIAL PRIMARY KEY,
     ref_id bigint,
 	scope varchar,
-	creation_date Timestamp,
+	creation_date Timestamp with time zone,
 	creator_id int,
 	comment_text varchar
 );
@@ -1351,8 +1351,8 @@ create table request.impltask
     implementation_action action_enum NOT NULL,
     rule_action int,
     rule_tracking int,
-    start timestamp,
-    stop timestamp,
+    start Timestamp with time zone,
+    stop Timestamp with time zone,
     svc_grp_id int,
     nw_obj_grp_id int,
 	user_grp_id int,
@@ -1360,8 +1360,8 @@ create table request.impltask
 	current_handler int,
 	recent_handler int,
 	assigned_group varchar,
-	target_begin_date Timestamp,
-	target_end_date Timestamp
+	target_begin_date Timestamp with time zone,
+	target_end_date Timestamp with time zone
 );
 
 
@@ -1405,7 +1405,7 @@ create table modelling.nwgroup
 	group_type int,
 	is_deleted boolean default false,
 	creator Varchar,
-	creation_date timestamp default now()
+	creation_date Timestamp with time zone default now()
 );
 
 create table modelling.connection
@@ -1422,12 +1422,12 @@ create table modelling.connection
 	common_service boolean default false,
 	is_published boolean default false,
 	creator Varchar,
-	creation_date timestamp default now(),
+	creation_date Timestamp with time zone default now(),
 	conn_prop Varchar,
 	extra_params Varchar,
 	requested_on_fw boolean default false,
 	removed boolean default false,
-	removal_date timestamp
+	removal_date Timestamp with time zone
 );
 
 create table modelling.selected_objects
@@ -1486,7 +1486,7 @@ create table modelling.service_group
 	is_global boolean default false,
 	comment Varchar,
 	creator Varchar,
-	creation_date timestamp default now()
+	creation_date Timestamp with time zone default now()
 );
 
 create table modelling.service_service_group
@@ -1519,6 +1519,6 @@ create table modelling.change_history
     object_id bigint,
 	change_text Varchar,
 	changer Varchar,
-	change_time Timestamp default now(),
+	change_time Timestamp with time zone default now(),
 	change_source Varchar default 'manual'
 );
