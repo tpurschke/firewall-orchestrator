@@ -172,7 +172,7 @@ namespace FWO.Middleware.Server.Controllers
         /// </summary>
         /// <param name="request">Refresh token request</param>
         /// <returns>New token pair if refresh token is valid</returns>
-        [HttpPost("AuthenticationToken/Refresh")]
+        [HttpPost("Refresh")]
         public async Task<ActionResult<TokenPair>> RefreshToken([FromBody] RefreshTokenRequest request)
         {
             try
@@ -575,7 +575,6 @@ namespace FWO.Middleware.Server.Controllers
                 $userId: Int!, 
                 $tokenHash: String!, 
                 $expiresAt: timestamptz!, 
-                $deviceInfo: String!,
                 $createdAt: timestamptz!
             ) {
                 insert_refresh_token(object: {
