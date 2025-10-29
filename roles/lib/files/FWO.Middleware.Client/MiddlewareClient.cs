@@ -1,4 +1,4 @@
-﻿using FWO.Api.Client;
+using FWO.Api.Client;
 using FWO.Data.Middleware;
 using RestSharp;
 
@@ -231,6 +231,30 @@ namespace FWO.Middleware.Client
             RestRequest request = new ("Report", Method.Post);
             request.AddJsonBody(parameters);
             return await restClient.ExecuteAsync<string>(request);
+        }
+
+        /// <summary>
+        /// Get a new token pair
+        /// </summary>
+        /// <param name="parameters"></param>
+        /// <returns></returns>
+        public async Task<RestResponse<TokenPair>> RefreshToken(RefreshTokenRequest parameters)
+        {
+            RestRequest request = new("AuthenticationToken/Refresh", Method.Post);
+            request.AddJsonBody(parameters);
+            return await restClient.ExecuteAsync<TokenPair>(request);
+        }
+
+        /// <summary>
+        /// Revoke a refresh token
+        /// </summary>
+        /// <param name="parameters"></param>
+        /// <returns></returns>
+        public async Task<RestResponse> RevokeRefreshToken(RefreshTokenRequest parameters)
+        {
+            RestRequest request = new("AuthenticationToken/Revoke", Method.Post);
+            request.AddJsonBody(parameters);
+            return await restClient.ExecuteAsync(request);
         }
 
         protected virtual void Dispose(bool disposing)
