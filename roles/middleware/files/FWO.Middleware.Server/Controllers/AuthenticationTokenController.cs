@@ -151,12 +151,8 @@ namespace FWO.Middleware.Server.Controllers
 
                 await authManager.AuthorizeUserAsync(user, validatePassword: true);
 
+                // Creates access and refresh token and stores the access token hash in DB
                 TokenPair tokenPair = await authManager.CreateTokenPair(user);
-
-                if(user != null)
-                {
-                    await authManager.StoreRefreshToken(user.DbId, tokenPair.RefreshToken, tokenPair.RefreshTokenExpires);
-                }
 
                 return Ok(tokenPair);
             }
@@ -529,20 +525,7 @@ namespace FWO.Middleware.Server.Controllers
                     currentTime = DateTime.UtcNow
                 };
 
-                string query = @"
-            query getRefreshToken($tokenHash: String!, $currentTime: timestamptz!) {
-                refresh_token(where: {
-                    token_hash: {_eq: $tokenHash}, 
-                    expires_at: {_gt: $currentTime}, 
-                    revoked_at: {_is_null: true}
-                }) {
-                    user_id
-                    expires_at
-                    device_info
-                }
-            }";
-
-                RefreshTokenInfo[] result = await apiConnection.SendQueryAsync<RefreshTokenInfo[]>(query, queryVariables);
+                RefreshTokenInfo[] result = await apiConnection.SendQueryAsync<RefreshTokenInfo[]>(AuthQueries.getRefreshToken, queryVariables);
 
                 return result?.FirstOrDefault();
             }
@@ -570,25 +553,7 @@ namespace FWO.Middleware.Server.Controllers
                     createdAt = DateTime.UtcNow
                 };
 
-                string mutation = @"
-            mutation storeRefreshToken(
-                $userId: Int!, 
-                $tokenHash: String!, 
-                $expiresAt: timestamptz!, 
-                $createdAt: timestamptz!
-            ) {
-                insert_refresh_token(object: {
-                    user_id: $userId,
-                    token_hash: $tokenHash,
-                    expires_at: $expiresAt,
-                    device_info: $deviceInfo,
-                    created_at: $createdAt
-                }) {
-                    id
-                }
-            }";
-
-                await apiConnection.SendQueryAsync<object>(mutation, mutationVariables);
+                await apiConnection.SendQueryAsync<object>(AuthQueries.storeRefreshToken, mutationVariables);
             }
             catch(Exception ex)
             {
@@ -612,17 +577,7 @@ namespace FWO.Middleware.Server.Controllers
                     revokedAt = DateTime.UtcNow
                 };
 
-                string mutation = @"
-            mutation revokeRefreshToken($tokenHash: String!, $revokedAt: timestamptz!) {
-                update_refresh_token(
-                    where: {token_hash: {_eq: $tokenHash}}, 
-                    _set: {revoked_at: $revokedAt}
-                ) {
-                    affected_rows
-                }
-            }";
-
-                await apiConnection.SendQueryAsync<object>(mutation, mutationVariables);
+                await apiConnection.SendQueryAsync<object>(AuthQueries.revokeRefreshToken, mutationVariables);
             }
             catch(Exception ex)
             {

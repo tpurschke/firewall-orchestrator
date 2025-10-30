@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using FWO.Logging;
 
@@ -42,6 +42,11 @@ namespace FWO.Api.Client.Queries
         public static readonly string updateLdapConnection;
         public static readonly string deleteLdapConnection;
 
+        // Refresh Token Queries
+        public static readonly string storeRefreshToken;
+        public static readonly string getRefreshToken;
+        public static readonly string revokeRefreshToken;
+
         static AuthQueries()
         {
             try
@@ -81,6 +86,11 @@ namespace FWO.Api.Client.Queries
                 newLdapConnection = File.ReadAllText(QueryPath + "auth/newLdapConnection.graphql");
                 updateLdapConnection = File.ReadAllText(QueryPath + "auth/updateLdapConnection.graphql");
                 deleteLdapConnection = File.ReadAllText(QueryPath + "auth/deleteLdapConnection.graphql");
+
+                // Refresh Token Queries
+                storeRefreshToken = File.ReadAllText(Path.Combine(QueryPath, "auth", "storeRefreshToken.graphql"));
+                getRefreshToken = File.ReadAllText(Path.Combine(QueryPath, "auth", "getRefreshToken.graphql"));
+                revokeRefreshToken = File.ReadAllText(Path.Combine(QueryPath, "auth", "revokeRefreshToken.graphql"));
             }
             catch (Exception exception)
             {
