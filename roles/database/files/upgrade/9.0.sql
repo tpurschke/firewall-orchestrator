@@ -1632,3 +1632,209 @@ insert into stm_dev_typ (dev_typ_id,dev_typ_name,dev_typ_version,dev_typ_manufac
 insert into stm_dev_typ (dev_typ_id,dev_typ_name,dev_typ_version,dev_typ_manufacturer,dev_typ_predef_svc,dev_typ_is_multi_mgmt,dev_typ_is_mgmt,is_pure_routing_device)
     VALUES (29,'Cisco Asa on FirePower','9','Cisco','',false,true,false)
     ON CONFLICT (dev_typ_id) DO NOTHING;
+
+
+
+----------------------------------------------------
+-- changing all timestamps with time zone:
+
+drop view if exists view_object_changes cascade;
+drop view if exists view_svc_changes cascade;
+drop view if exists view_user_changes cascade;
+drop view if exists view_rule_changes cascade;
+
+-- need to add views later
+
+DO $$
+DECLARE
+  v_assumed_tz text := 'Europe/Berlin';
+  r record;
+BEGIN
+  -- 1) Convert TIMESTAMP WITHOUT TIME ZONE -> TIMESTAMPTZ
+  FOR r IN
+    SELECT c.table_schema, c.table_name, c.column_name
+    FROM information_schema.columns c
+    JOIN information_schema.tables t
+      ON t.table_schema = c.table_schema
+     AND t.table_name   = c.table_name
+    WHERE t.table_type = 'BASE TABLE'
+      AND c.is_generated = 'NEVER'
+      AND c.data_type = 'timestamp without time zone'
+      AND c.table_schema NOT IN ('pg_catalog','information_schema')
+    ORDER BY c.table_schema, c.table_name, c.ordinal_position
+  LOOP
+    BEGIN
+      EXECUTE format(
+        'ALTER TABLE %I.%I
+           ALTER COLUMN %I
+           TYPE timestamptz
+           USING %I AT TIME ZONE %L',
+        r.table_schema, r.table_name, r.column_name, r.column_name, v_assumed_tz
+      );
+      RAISE NOTICE 'Converted %.%.% (timestamp) -> timestamptz (assumed %)',
+                   r.table_schema, r.table_name, r.column_name, v_assumed_tz;
+    EXCEPTION WHEN others THEN
+      RAISE NOTICE 'Skipped %.%.% (timestamp): %',
+                   r.table_schema, r.table_name, r.column_name, SQLERRM;
+    END;
+  END LOOP;
+
+  -- 2) Convert DATE -> TIMESTAMPTZ (midnight in Europe/Berlin)
+  FOR r IN
+    SELECT c.table_schema, c.table_name, c.column_name
+    FROM information_schema.columns c
+    JOIN information_schema.tables t
+      ON t.table_schema = c.table_schema
+     AND t.table_name   = c.table_name
+    WHERE t.table_type = 'BASE TABLE'
+      AND c.is_generated = 'NEVER'
+      AND c.data_type = 'date'
+      AND c.table_schema NOT IN ('pg_catalog','information_schema')
+    ORDER BY c.table_schema, c.table_name, c.ordinal_position
+  LOOP
+    BEGIN
+      EXECUTE format(
+        'ALTER TABLE %I.%I
+           ALTER COLUMN %I
+           TYPE timestamptz
+           USING %I::timestamp AT TIME ZONE %L',
+        r.table_schema, r.table_name, r.column_name, r.column_name, v_assumed_tz
+      );
+      RAISE NOTICE 'Converted %.%.% (date) -> timestamptz at midnight (%).',
+                   r.table_schema, r.table_name, r.column_name, v_assumed_tz;
+    EXCEPTION WHEN others THEN
+      RAISE NOTICE 'Skipped %.%.% (date): %',
+                   r.table_schema, r.table_name, r.column_name, SQLERRM;
+    END;
+  END LOOP;
+END
+$$ LANGUAGE plpgsql;
+----------------------------------------------------
+
+
+-- ALTER table "device" modify column "dev_create" Timestamp with time zone;
+-- -- NOT NULL Default now(),
+-- ALTER table "device" modify column "dev_update" Timestamp with time zone;
+-- -- NOT NULL Default now(),
+
+-- Create table "management" -- contains an entry for each firewall management system
+-- 	"mgm_create" Timestamp with time zone NOT NULL Default now(),
+-- 	"mgm_update" Timestamp with time zone NOT NULL Default now(),
+
+
+-- Create table "rule_metadata"
+-- 	"rule_created" Timestamp with time zone NOT NULL Default now(),
+-- 	"rule_last_modified" Timestamp with time zone NOT NULL Default now(),
+-- 	"rule_first_hit" Timestamp with time zone,
+-- 	"rule_last_hit" Timestamp with time zone,
+-- 	"rule_last_certified" Timestamp with time zone,
+-- 	"rule_decert_date" Timestamp with time zone,
+
+
+-- Create table "tenant"
+-- 	"tenant_create" Timestamp with time zone NOT NULL Default now(),
+
+-- Create table "tenant_network"
+-- 	"tenant_net_create" Timestamp with time zone NOT NULL Default now(),
+
+-- Create table "import_control"
+-- 	"start_time" Timestamp with time zone NOT NULL Default now(),
+-- 	"stop_time" Timestamp with time zone,
+-- 	"last_change_in_config" Timestamp with time zone,
+
+
+-- Create table "log_data_issue"
+-- 	"issue_timestamp" Timestamp with time zone DEFAULT NOW(),
+
+-- Create table "alert"
+-- 	"alert_timestamp" Timestamp with time zone DEFAULT NOW(),
+-- 	"ack_timestamp" Timestamp with time zone,
+
+-- Create table "import_changelog"
+-- 	"change_time" Timestamp with time zone,
+
+-- Create table "changelog_object"
+-- 	"docu_time" Timestamp with time zone,
+-- 	"change_time" Timestamp with time zone,
+
+-- Create table "changelog_service"
+-- 	"docu_time" Timestamp with time zone,
+-- 	"change_time" Timestamp with time zone,
+
+-- Create table "changelog_user"
+-- 	"docu_time" Timestamp with time zone,
+-- 	"change_time" Timestamp with time zone,
+
+-- Create table "changelog_rule"
+-- 	"docu_time" Timestamp with time zone,
+-- 	"change_time" Timestamp with time zone,
+
+-- Create table "report_template"
+-- 	"report_template_create" Timestamp with time zone DEFAULT now(),
+
+-- Create table "report"
+-- 	"report_start_time" Timestamp with time zone,
+-- 	"report_end_time" Timestamp with time zone,
+
+-- Create table "report_schedule"
+-- 	"report_schedule_start_time" Timestamp with time zone NOT NULL,  -- if day is bigger than 28, simply use the 1st of the next month, 00:00 am
+
+-- create table notification
+-- 	last_sent Timestamp with time zone
+
+-- create table owner
+--     last_recert_check Timestamp with time zone,
+-- 	last_recertified Timestamp with time zone,
+-- 	next_recert_date Timestamp with time zone
+
+-- create table recertification
+-- 	recert_date Timestamp with time zone,
+-- 	next_recert_date Timestamp with time zone
+
+-- create table owner_recertification
+-- 	recert_date Timestamp with time zone,
+-- 	next_recert_date Timestamp with time zone
+
+-- create table ext_request
+-- 	create_date Timestamp with time zone default now(),
+-- 	finish_date Timestamp with time zone,
+
+-- create table request.reqtask 
+--     start Timestamp with time zone,
+--     stop Timestamp with time zone,
+-- 	last_recert_date Timestamp with time zone,
+-- 	target_begin_date Timestamp with time zone,
+-- 	target_end_date Timestamp with time zone,
+
+-- create table request.approval 
+--     date_opened Timestamp with time zone NOT NULL default CURRENT_TIMESTAMP,
+--     approval_date Timestamp with time zone,
+-- 	approval_deadline Timestamp with time zone,
+
+-- create table request.ticket 
+--     date_created Timestamp with time zone NOT NULL default CURRENT_TIMESTAMP,
+--     date_completed Timestamp with time zone,
+-- 	ticket_deadline Timestamp with time zone,
+
+-- create table request.comment 
+-- 	creation_date Timestamp with time zone,
+
+-- create table request.impltask
+--     start Timestamp with time zone,
+--     stop Timestamp with time zone,
+-- 	target_begin_date Timestamp with time zone,
+-- 	target_end_date Timestamp with time zone
+
+-- create table modelling.nwgroup
+-- 	creation_date Timestamp with time zone default now()
+
+-- create table modelling.connection
+-- 	creation_date Timestamp with time zone default now(),
+-- 	removal_date Timestamp with time zone
+
+
+-- create table modelling.service_group
+-- 	creation_date Timestamp with time zone default now()
+
+-- create table modelling.change_history
+-- 	change_time Timestamp with time zone default now(),
