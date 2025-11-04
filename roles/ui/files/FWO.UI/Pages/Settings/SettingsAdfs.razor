@@ -1,0 +1,248 @@
+@using FWO.Encryption
+
+@page "/settings/adfs"
+@attribute [Authorize(Roles = $"{Roles.Admin}, {Roles.Auditor}")]
+
+@inject ApiConnection apiConnection
+@inject GlobalConfig globalConfig
+@inject UserConfig userConfig
+
+<div class="input-group">
+    <h3>ADFS Single Sign-On</h3>
+    <HelpLink Page="settings/adfs" />
+</div>
+<hr />
+
+@if (editableConfig is null)
+{
+    <p>@(userConfig.GetText("loading"))...</p>
+}
+else
+{
+    <div class="form-group row" data-toggle="tooltip" title="Enable or disable automatic sign-on via ADFS.">
+        <label class="col-sm-3 col-form-label col-form-label-sm">Enable ADFS SSO:</label>
+        <div class="col-sm-1">
+            <input type="checkbox" @bind="adfsSettings.Enabled" />
+        </div>
+    </div>
+
+    <div class="form-group row mt-2" data-toggle="tooltip" title="Automatically redirect Windows clients to ADFS when no session is present.">
+        <label class="col-sm-3 col-form-label col-form-label-sm">Auto Redirect:</label>
+        <div class="col-sm-1">
+            <input type="checkbox" @bind="adfsSettings.AutoRedirect" />
+        </div>
+    </div>
+
+    <div class="form-group row mt-3" data-toggle="tooltip" title="Base URL of the ADFS server (e.g. https://adfs.example.com/adfs).">
+        <label class="col-sm-3 col-form-label col-form-label-sm">Authority:</label>
+        <div class="col-sm-8">
+            <input type="text" class="form-control form-control-sm" @bind="adfsSettings.Authority" />
+        </div>
+    </div>
+
+    <div class="form-group row mt-3" data-toggle="tooltip" title="Optional explicit metadata discovery URL.">
+        <label class="col-sm-3 col-form-label col-form-label-sm">Metadata Address:</label>
+        <div class="col-sm-8">
+            <input type="text" class="form-control form-control-sm" @bind="adfsSettings.MetadataAddress" />
+        </div>
+    </div>
+
+    <div class="form-group row mt-3" data-toggle="tooltip" title="Client identifier of the FWO application in ADFS.">
+        <label class="col-sm-3 col-form-label col-form-label-sm">Client Id:</label>
+        <div class="col-sm-8">
+            <input type="text" class="form-control form-control-sm" @bind="adfsSettings.ClientId" />
+        </div>
+    </div>
+
+    <div class="form-group row mt-3" data-toggle="tooltip" title="Client secret used for the authorization code flow. Leave empty to remove.">
+        <label class="col-sm-3 col-form-label col-form-label-sm">Client Secret:</label>
+        <div class="col-sm-8">
+            <input type="password" class="form-control form-control-sm" @bind="adfsSettings.ClientSecret" />
+            <small class="form-text text-muted">Leave empty to clear the stored secret.</small>
+        </div>
+    </div>
+
+    <div class="form-group row mt-3" data-toggle="tooltip" title="Relative callback path handled by the UI (default /signin-adfs).">
+        <label class="col-sm-3 col-form-label col-form-label-sm">Callback Path:</label>
+        <div class="col-sm-8">
+            <input type="text" class="form-control form-control-sm" @bind="adfsSettings.CallbackPath" />
+        </div>
+    </div>
+
+    <div class="form-group row mt-3" data-toggle="tooltip" title="Relative sign-out callback path (default /signout-callback-adfs).">
+        <label class="col-sm-3 col-form-label col-form-label-sm">Sign-out Callback:</label>
+        <div class="col-sm-8">
+            <input type="text" class="form-control form-control-sm" @bind="adfsSettings.SignedOutCallbackPath" />
+        </div>
+    </div>
+
+    <div class="form-group row mt-3" data-toggle="tooltip" title="Claim type used to resolve the UI user (e.g. http://schemas.xmlsoap.org/ws/2005/05/identity/claims/upn).">
+        <label class="col-sm-3 col-form-label col-form-label-sm">User Id Claim:</label>
+        <div class="col-sm-8">
+            <input type="text" class="form-control form-control-sm" @bind="adfsSettings.UserIdClaim" />
+        </div>
+    </div>
+
+    <div class="form-group row mt-3" data-toggle="tooltip" title="Space separated list of scopes requested from ADFS.">
+        <label class="col-sm-3 col-form-label col-form-label-sm">Scopes:</label>
+        <div class="col-sm-8">
+            <textarea class="form-control form-control-sm" rows="2" @bind="adfsSettings.Scopes"></textarea>
+        </div>
+    </div>
+
+    <hr />
+    <div class="btn-group">
+        <AuthorizeView Roles="@Roles.Admin">
+            <Authorized>
+                <button type="button" class="btn btn-sm btn-primary" @onclick="Save">@(userConfig.GetText("save"))</button>
+            </Authorized>
+            <NotAuthorized>
+                <button type="button" class="btn btn-sm btn-primary" disabled>@(userConfig.GetText("save"))</button>
+            </NotAuthorized>
+        </AuthorizeView>
+    </div>
+}
+
+@code
+{
+    [CascadingParameter]
+    Action<Exception?, string, string, bool> DisplayMessageInUi { get; set; } = DefaultInit.DoNothing;
+
+    private ConfigData? editableConfig;
+    private AdfsSettingsForm adfsSettings = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            editableConfig = await globalConfig.GetEditableConfig();
+            adfsSettings = new AdfsSettingsForm(editableConfig);
+        }
+        catch (Exception exception)
+        {
+            DisplayMessageInUi(exception, userConfig.GetText("read_config"), userConfig.GetText("E5301"), true);
+        }
+    }
+
+    private async Task Save()
+    {
+        if (editableConfig == null)
+        {
+            return;
+        }
+
+        if (!Validate())
+        {
+            return;
+        }
+
+        try
+        {
+            adfsSettings.ApplyTo(editableConfig);
+            await globalConfig.WriteToDatabase(editableConfig, apiConnection);
+            DisplayMessageInUi(null, userConfig.GetText("change_default"), userConfig.GetText("U5301"), false);
+        }
+        catch (Exception exception)
+        {
+            DisplayMessageInUi(exception, userConfig.GetText("change_default"), "", true);
+        }
+    }
+
+    private bool Validate()
+    {
+        if (!adfsSettings.Enabled)
+        {
+            return true;
+        }
+
+        if (string.IsNullOrWhiteSpace(adfsSettings.Authority))
+        {
+            DisplayMessageInUi(null, userConfig.GetText("change_default"), "Authority is required when ADFS SSO is enabled.", true);
+            return false;
+        }
+
+        if (!Uri.TryCreate(adfsSettings.Authority, UriKind.Absolute, out Uri? authorityUri) ||
+            (authorityUri.Scheme != Uri.UriSchemeHttp && authorityUri.Scheme != Uri.UriSchemeHttps))
+        {
+            DisplayMessageInUi(null, userConfig.GetText("change_default"), "Authority must be a valid HTTP or HTTPS URL.", true);
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(adfsSettings.ClientId))
+        {
+            DisplayMessageInUi(null, userConfig.GetText("change_default"), "Client Id is required when ADFS SSO is enabled.", true);
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(adfsSettings.CallbackPath) && !adfsSettings.CallbackPath!.StartsWith('/'))
+        {
+            DisplayMessageInUi(null, userConfig.GetText("change_default"), "Callback path must start with '/'.", true);
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(adfsSettings.SignedOutCallbackPath) && !adfsSettings.SignedOutCallbackPath!.StartsWith('/'))
+        {
+            DisplayMessageInUi(null, userConfig.GetText("change_default"), "Sign-out callback must start with '/'.", true);
+            return false;
+        }
+
+        return true;
+    }
+
+    private class AdfsSettingsForm
+    {
+        public bool Enabled { get; set; }
+        public bool AutoRedirect { get; set; }
+        public string? Authority { get; set; }
+        public string? MetadataAddress { get; set; }
+        public string? ClientId { get; set; }
+        public string? ClientSecret { get; set; }
+        public string? CallbackPath { get; set; }
+        public string? SignedOutCallbackPath { get; set; }
+        public string? UserIdClaim { get; set; }
+        public string? Scopes { get; set; }
+
+        public AdfsSettingsForm() { }
+
+        public AdfsSettingsForm(ConfigData config)
+        {
+            Enabled = config.AdfsEnabled;
+            AutoRedirect = config.AdfsAutoRedirect;
+            Authority = config.AdfsAuthority;
+            MetadataAddress = config.AdfsMetadataAddress;
+            ClientId = config.AdfsClientId;
+            ClientSecret = AesEnc.TryDecrypt(config.AdfsClientSecret ?? "", true);
+            CallbackPath = config.AdfsCallbackPath;
+            SignedOutCallbackPath = config.AdfsSignedOutCallbackPath;
+            UserIdClaim = config.AdfsUserIdClaim;
+            Scopes = config.AdfsScopes;
+        }
+
+        public void ApplyTo(ConfigData config)
+        {
+            config.AdfsEnabled = Enabled;
+            config.AdfsAutoRedirect = AutoRedirect;
+            config.AdfsAuthority = (Authority ?? "").Trim().TrimEnd('/');
+            config.AdfsMetadataAddress = (MetadataAddress ?? "").Trim();
+            config.AdfsClientId = (ClientId ?? "").Trim();
+            config.AdfsClientSecret = string.IsNullOrWhiteSpace(ClientSecret)
+                ? ""
+                : AesEnc.TryEncrypt(ClientSecret.Trim());
+            config.AdfsCallbackPath = NormalizePath(CallbackPath, "/signin-adfs");
+            config.AdfsSignedOutCallbackPath = NormalizePath(SignedOutCallbackPath, "/signout-callback-adfs");
+            config.AdfsUserIdClaim = (UserIdClaim ?? "").Trim();
+            config.AdfsScopes = string.Join(' ', (Scopes ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+        }
+
+        private static string NormalizePath(string? path, string defaultValue)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return defaultValue;
+            }
+
+            string trimmed = path.Trim();
+            return trimmed.StartsWith('/') ? trimmed : $"/{trimmed}";
+        }
+    }
+}

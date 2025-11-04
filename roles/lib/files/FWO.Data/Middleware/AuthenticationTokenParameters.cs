@@ -14,4 +14,10 @@
         public string TargetUserDn { get; set; } = "";
         public string TargetUserName { get; set; } = "";
     }
+
+    public class AuthenticationTokenGetViaAdfsParameters
+    {
+        public string IdToken { get; set; } = "";
+        public string? AccessToken { get; set; }
+    }
 }

@@ -43,6 +43,22 @@ namespace FWO.Ui.Auth
 			return apiAuthResponse;
 		}
 
+		public async Task<RestResponse<string>> AuthenticateViaAdfs(string idToken, ApiConnection apiConnection, MiddlewareClient middlewareClient,
+			GlobalConfig globalConfig, UserConfig userConfig, CircuitHandlerService circuitHandler, ProtectedSessionStorage sessionStorage)
+		{
+			AuthenticationTokenGetViaAdfsParameters authenticationParameters = new() { IdToken = idToken };
+			RestResponse<string> apiAuthResponse = await middlewareClient.AuthenticateUserViaAdfs(authenticationParameters);
+
+			if (apiAuthResponse.StatusCode == HttpStatusCode.OK)
+			{
+				string jwtString = apiAuthResponse.Data ?? throw new ArgumentException("no response data");
+				await Authenticate(jwtString, apiConnection, middlewareClient, globalConfig, userConfig, circuitHandler, sessionStorage);
+				Log.WriteAudit("AuthenticateViaAdfs", "user successfully authenticated via ADFS SSO");
+			}
+
+			return apiAuthResponse;
+		}
+
 		public async Task Authenticate(string jwtString, ApiConnection apiConnection, MiddlewareClient middlewareClient,
 			GlobalConfig globalConfig, UserConfig userConfig, CircuitHandlerService circuitHandler, ProtectedSessionStorage sessionStorage)
 		{
@@ -228,4 +244,3 @@ namespace FWO.Ui.Auth
 		}
 	}
 }
-

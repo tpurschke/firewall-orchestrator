@@ -8,6 +8,8 @@ using Microsoft.AspNetCore.Mvc;
 using Novell.Directory.Ldap;
 using System.Data;
 using System.Security.Authentication;
+using System.Security.Claims;
+using Microsoft.IdentityModel.Tokens;
 
 namespace FWO.Middleware.Server.Controllers
 {
@@ -64,6 +66,47 @@ namespace FWO.Middleware.Server.Controllers
                 string jwt = await authManager.AuthorizeUserAsync(user, validatePassword: true);
 
                 return Ok(jwt);
+            }
+            catch (Exception e)
+            {
+                return BadRequest(e.Message);
+            }
+        }
+
+        /// <summary>
+        /// Generates an authentication token based on an ADFS issued id_token.
+        /// </summary>
+        /// <param name="parameters">ADFS token payload</param>
+        /// <param name="tokenValidator">Validator resolving the user identity from the token</param>
+        /// <returns>Jwt if token is valid and mapped user exists.</returns>
+        [HttpPost("GetViaAdfs")]
+        public async Task<ActionResult<string>> GetViaAdfsAsync(
+            [FromBody] AuthenticationTokenGetViaAdfsParameters parameters,
+            [FromServices] AdfsTokenValidator tokenValidator)
+        {
+            try
+            {
+                if (parameters == null || string.IsNullOrWhiteSpace(parameters.IdToken))
+                {
+                    throw new AuthenticationException("ADFS id_token is missing.");
+                }
+
+                ClaimsPrincipal principal = await tokenValidator.ValidateIdTokenAsync(parameters.IdToken);
+                string? externalUser = tokenValidator.GetUserIdentifier(principal);
+
+                if (string.IsNullOrWhiteSpace(externalUser))
+                {
+                    throw new AuthenticationException("Could not resolve user identity from ADFS token.");
+                }
+
+                AuthManager authManager = new(jwtWriter, ldaps, apiConnection);
+                UiUser user = new() { Name = externalUser };
+                string jwt = await authManager.AuthorizeUserAsync(user, validatePassword: false);
+                return Ok(jwt);
+            }
+            catch (SecurityTokenException tokenException)
+            {
+                return BadRequest($"Invalid ADFS token: {tokenException.Message}");
             }
             catch (Exception e)
             {

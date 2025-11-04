@@ -1,11 +1,14 @@
 @using FWO.Config.Api
 @using FWO.Config.File;
 @using FWO.Data.Middleware
+@using FWO.Logging
 @using FWO.Middleware.Client
 @using FWO.Ui.Auth
 @using FWO.Ui.Services
+@using Microsoft.AspNetCore.Authentication
 @using Microsoft.AspNetCore.Components.Server.Circuits;
 @using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage
+@using Microsoft.AspNetCore.Http
 @using RestSharp
 @using System.Net
 @using System.Security.Authentication
@@ -18,6 +21,9 @@
 @inject UserConfig userConfig
 @inject GlobalConfig globalConfig
 @inject CircuitHandler circuitHandler
+@inject NavigationManager NavigationManager
+@inject IHttpContextAccessor HttpContextAccessor
+@inject AdfsRuntimeOptions adfsOptions
 
 @if (showLoginForm)
 {    
@@ -44,7 +50,14 @@
                     </div>
                     @if (loginInProgress == false)
                     {
-                        <button type="submit" class="btn btn-block btn-primary mt-3" @onclick:preventDefault="true" @onclick="LoginSubmit">@(globalConfig.GetText("login"))</button>
+                        @if (adfsOptions.IsConfigured)
+                        {
+                            <button type="button" class="btn btn-block btn-secondary mt-3" @onclick="StartSsoLogin">Sign in with Single Sign-On</button>
+                            <div class="text-center text-muted small mt-2 mb-1">or continue with your username and password</div>
+                        }
+                        <button type="submit" class="btn btn-block btn-primary mt-2" @onclick:preventDefault="true" @onclick="LoginSubmit">
+                            @(globalConfig.GetText("login"))
+                        </button>
                         @* <button type="submit" class="btn btn-block btn-primary" @onclick:preventDefault="true" @onclick="LoginSubmit"><div class="@Icons.Login"></div></button> *@
                     }
                     else
@@ -128,9 +141,84 @@
     private string newPassword1 = "";
     private string newPassword2 = "";
     private string chgPwErrorMessage = "";
+    private bool ssoAttempted;
+    private bool ssoRedirectInitiated;
 
     private bool ShowWelcomeMessage { get; set; }
     private string SanitizedWelcomeMessage { get; set; } = "";
+
+    private async Task<bool> TryAuthenticateViaSsoAsync()
+    {
+        if (!adfsOptions.IsConfigured)
+        {
+            return false;
+        }
+
+        HttpContext? httpContext = HttpContextAccessor.HttpContext;
+        if (httpContext?.User?.Identity?.IsAuthenticated != true)
+        {
+            return false;
+        }
+
+        if (ssoAttempted)
+        {
+            return false;
+        }
+
+        ssoAttempted = true;
+
+        try
+        {
+            loginInProgress = true;
+            string? idToken = await httpContext.GetTokenAsync("id_token");
+            if (string.IsNullOrWhiteSpace(idToken))
+            {
+                idToken = await httpContext.GetTokenAsync("access_token");
+            }
+
+            if (string.IsNullOrWhiteSpace(idToken))
+            {
+                Log.WriteWarning("ADFS Login", "Authenticated session did not provide an id_token or access token.");
+                return false;
+            }
+
+            RestResponse<string> authResponse = await ((AuthStateProvider)AuthService)
+                .AuthenticateViaAdfs(idToken, ApiConnection, middlewareClient, globalConfig, userConfig, (CircuitHandlerService)circuitHandler, sessionStorage);
+
+            if (authResponse.StatusCode == HttpStatusCode.OK)
+            {
+                loginInProgress = false;
+                StateHasChanged();
+                if (userConfig.User.PasswordMustBeChanged)
+                {
+                    showPasswordChangeForm = true;
+                    showLoginForm = false;
+                    StateHasChanged();
+                }
+                return true;
+            }
+
+            string responseMessage = authResponse.Data ?? authResponse.ErrorMessage ?? authResponse.StatusDescription ?? "Automatic sign-in failed. Please log in manually.";
+            errorMessage = responseMessage;
+            Log.WriteWarning("ADFS Login", $"Automatic login failed: {responseMessage}");
+        }
+        catch (Exception exception)
+        {
+            errorMessage = "Automatic sign-in failed. Please log in manually.";
+            Log.WriteError("ADFS Login", "Automatic login via ADFS failed.", exception);
+        }
+        finally
+        {
+            loginInProgress = false;
+        }
+
+        return false;
+    }
+
+    private void StartSsoLogin()
+    {
+        NavigationManager.NavigateTo("/authentication/login?returnUrl=/login", true);
+    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -158,6 +246,26 @@
                 SanitizedWelcomeMessage = globalConfig.WelcomeMessage.StripDangerousHtmlTags().Replace("\n", "<br>");
                 ShowWelcomeMessage = true;
             }            
+
+            if (adfsOptions.IsConfigured)
+            {
+                bool authenticated = await TryAuthenticateViaSsoAsync();
+                if (authenticated)
+                {
+                    return;
+                }
+
+                if (globalConfig.AdfsSettings.AutoRedirect && adfsOptions.IsConfigured && !ssoRedirectInitiated)
+                {
+                    HttpContext? httpContext = HttpContextAccessor.HttpContext;
+                    if (httpContext?.User?.Identity?.IsAuthenticated != true)
+                    {
+                        ssoRedirectInitiated = true;
+                        NavigationManager.NavigateTo("/authentication/login?returnUrl=/login", true);
+                        return;
+                    }
+                }
+            }
 
             // else no reconnect / reconnect unsuccessful
             showLoginForm = true;

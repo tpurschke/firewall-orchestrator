@@ -18,6 +18,13 @@ namespace FWO.Middleware.Client
             return await restClient.ExecuteAsync<string>(request);
         }
 
+        public async Task<RestResponse<string>> AuthenticateUserViaAdfs(AuthenticationTokenGetViaAdfsParameters parameters)
+        {
+            RestRequest request = new("AuthenticationToken/GetViaAdfs", Method.Post);
+            request.AddJsonBody(parameters);
+            return await restClient.ExecuteAsync<string>(request);
+        }
+
         public async Task<RestResponse<string>> CreateInitialJWT()
         {
             RestRequest request = new ("AuthenticationToken/Get", Method.Post);

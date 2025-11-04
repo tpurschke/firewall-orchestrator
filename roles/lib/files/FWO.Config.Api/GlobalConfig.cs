@@ -19,6 +19,7 @@ namespace FWO.Config.Api
         public Language[] UiLanguages { get; set; }
         public Dictionary<string, Dictionary<string, string>> LangDict { get; set; }
         public Dictionary<string, Dictionary<string, string>> OverDict { get; set; }
+        public AdfsSettings AdfsSettings { get; private set; }
 
 
         /// <summary>
@@ -78,6 +79,8 @@ namespace FWO.Config.Api
             UiLanguages = [];
             LangDict = [];
             OverDict = [];
+            AdfsSettings = AdfsSettings.FromConfig(this);
+            OnChange += UpdateDerivedSettings;
         }
 
         private GlobalConfig(ApiConnection apiConnection, string productVersion, Language[] uiLanguages,
@@ -88,6 +91,8 @@ namespace FWO.Config.Api
             UiLanguages = uiLanguages;
             LangDict = langDict;
             OverDict = overDict;
+            AdfsSettings = AdfsSettings.FromConfig(this);
+            OnChange += UpdateDerivedSettings;
         }
 
         public override string GetText(string key) 
@@ -109,6 +114,13 @@ namespace FWO.Config.Api
                 dict.Add(text.Id, text.Txt); // add "word" to dictionary
             }
             return dict;
+        }
+
+        private void UpdateDerivedSettings(Config config, ConfigItem[] _) => UpdateDerivedSettings();
+
+        private void UpdateDerivedSettings()
+        {
+            AdfsSettings = AdfsSettings.FromConfig(this);
         }
     }
 }

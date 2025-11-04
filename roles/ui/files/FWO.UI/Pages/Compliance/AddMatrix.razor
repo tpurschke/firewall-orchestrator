@@ -6,8 +6,9 @@
 @inject ApiConnection apiConnection
 
 <PopUp Title="@(userConfig.GetText("add_matrix"))" Size=PopupSize.Small Show="@Display" OnClose="Cancel">
+
     <Body>
-        @if(Display)
+        @if (Display)
         {
             <div class="col-sm-11">
                 <label class="col-sm-3 col-form-label col-form-label-sm">@(userConfig.GetText("name"))*:</label>
@@ -19,13 +20,15 @@
         <div class="btn-group">
             <AuthorizeView Roles="@($"{Roles.Admin}, {Roles.FwAdmin}")">
                 <Authorized>
-                    <button type="button" class="btn btn-sm btn-danger" @onclick="Save">@(userConfig.GetText("add"))</button>
+                    <button type="button" class="btn btn-sm btn-danger"
+                        @onclick="Save">@(userConfig.GetText("add"))</button>
                 </Authorized>
                 <NotAuthorized>
                     <button type="button" class="btn btn-sm btn-danger" disabled>@(userConfig.GetText("add"))</button>
-                </NotAuthorized> 
+                </NotAuthorized>
             </AuthorizeView>
-            <button type="button" class="btn btn-sm btn-secondary" @onclick="Cancel">@(userConfig.GetText("cancel"))</button>
+            <button type="button" class="btn btn-sm btn-secondary"
+                @onclick="Cancel">@(userConfig.GetText("cancel"))</button>
         </div>
     </Footer>
 </PopUp>
@@ -61,12 +64,23 @@
             {
                 DisplayMessageInUi(null, userConfig.GetText("save"), userConfig.GetText("U0001"), true);
             }
-            else if(MatrixName != "")
+            else if (MatrixName != "")
             {
-                ReturnId[]? returnIds = (await apiConnection.SendQueryAsync<ReturnIdWrapper>(ComplianceQueries.addCriterion, new { name = MatrixName, criterionType = CriterionType.Matrix.ToString() })).ReturnIds;
-                if(returnIds != null && returnIds.Length > 0)
+                ReturnId[]? returnIds = (await apiConnection.SendQueryAsync<ReturnIdWrapper>(ComplianceQueries.addCriterion, new
                 {
-                    RefreshParent(new(){ Id = returnIds[0].InsertedId, Name = MatrixName, CriterionType = CriterionType.Matrix.ToString() });
+                    name
+                = MatrixName,
+                    criterionType = CriterionType.Matrix.ToString()
+                })).ReturnIds;
+                if (returnIds != null && returnIds.Length > 0)
+                {
+                    await RefreshParent(new()
+                    {
+                        Id = returnIds[0].InsertedId,
+                        Name = MatrixName,
+                        CriterionType =
+                    CriterionType.Matrix.ToString()
+                    });
                 }
                 Close();
             }

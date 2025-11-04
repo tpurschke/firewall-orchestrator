@@ -104,7 +104,7 @@ namespace FWO.Middleware.Server
             if (Type == (int)LdapType.ActiveDirectory)
             {
                 userFilter = "(&(objectclass=user)(!(objectclass=computer)))";
-                searchFilter = $"(|(cn={searchPattern})(sAMAccountName={searchPattern}))";
+                searchFilter = $"(|(cn={searchPattern})(sAMAccountName={searchPattern})(userPrincipalName={searchPattern}))";
             }
             else if (Type == (int)LdapType.OpenLdap)
             {

@@ -39,6 +39,36 @@ namespace FWO.Config.Api.Data
         [JsonProperty("availableModules"), JsonPropertyName("availableModules")]
         public string AvailableModules { get; set; } = "";
 
+        [JsonProperty("adfsEnabled"), JsonPropertyName("adfsEnabled")]
+        public bool AdfsEnabled { get; set; } = false;
+
+        [JsonProperty("adfsAutoRedirect"), JsonPropertyName("adfsAutoRedirect")]
+        public bool AdfsAutoRedirect { get; set; } = true;
+
+        [JsonProperty("adfsAuthority"), JsonPropertyName("adfsAuthority")]
+        public string AdfsAuthority { get; set; } = "";
+
+        [JsonProperty("adfsMetadataAddress"), JsonPropertyName("adfsMetadataAddress")]
+        public string AdfsMetadataAddress { get; set; } = "";
+
+        [JsonProperty("adfsClientId"), JsonPropertyName("adfsClientId")]
+        public string AdfsClientId { get; set; } = "";
+
+        [JsonProperty("adfsClientSecret"), JsonPropertyName("adfsClientSecret")]
+        public string AdfsClientSecret { get; set; } = "";
+
+        [JsonProperty("adfsCallbackPath"), JsonPropertyName("adfsCallbackPath")]
+        public string AdfsCallbackPath { get; set; } = "/signin-adfs";
+
+        [JsonProperty("adfsSignedOutCallbackPath"), JsonPropertyName("adfsSignedOutCallbackPath")]
+        public string AdfsSignedOutCallbackPath { get; set; } = "/signout-callback-adfs";
+
+        [JsonProperty("adfsUserIdClaim"), JsonPropertyName("adfsUserIdClaim")]
+        public string AdfsUserIdClaim { get; set; } = "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/upn";
+
+        [JsonProperty("adfsScopes"), JsonPropertyName("adfsScopes")]
+        public string AdfsScopes { get; set; } = "openid profile email";
+
         [JsonProperty("maxMessages"), JsonPropertyName("maxMessages"), UserConfigData]
         public int MaxMessages { get; set; } = 3;
 

@@ -1,5 +1,6 @@
 using FWO.Api.Client;
 using FWO.Api.Client.Queries;
+using FWO.Config.Api;
 using FWO.Config.File;
 using FWO.Logging;
 using FWO.Middleware.Server;
@@ -32,6 +33,8 @@ JwtWriter jwtWriter = new(ConfigFile.JwtPrivateKey);
 
 // Create JWT for middleware-server API calls (relevant part is the role middleware-server) and add it to the Api connection header. 
 ApiConnection apiConnection = new GraphQlApiConnection(ConfigFile.ApiServerUri ?? throw new ArgumentException("Missing api server url on startup."), jwtWriter.CreateJWTMiddlewareServer());
+
+GlobalConfig globalConfig = Task.Run(async () => await GlobalConfig.ConstructAsync(apiConnection, loadLanguageData: false, withSubscription: true)).Result;
 
 // Fetch all connectedLdaps via API (blocking).
 List<Ldap> connectedLdaps = [];
@@ -120,6 +123,8 @@ builder.Services.AddControllers()
 
 builder.Services.AddSingleton<JwtWriter>(jwtWriter);
 builder.Services.AddSingleton<List<Ldap>>(connectedLdaps);
+builder.Services.AddSingleton(globalConfig);
+builder.Services.AddSingleton<AdfsTokenValidator>();
 builder.Services.AddScoped<ApiConnection>(_ => new GraphQlApiConnection(ConfigFile.ApiServerUri, jwtWriter.CreateJWTMiddlewareServer()));
 
 builder.Services.AddAuthentication(confOptions =>

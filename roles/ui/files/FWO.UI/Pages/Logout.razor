@@ -1,6 +1,7 @@
-﻿@using FWO.Middleware.Client;
+﻿@using FWO.Config.Api
+@using FWO.Middleware.Client;
 @using Microsoft.AspNetCore.Components.Server.Circuits;
-@using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage
+@using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage;
 @using FWO.Ui.Services
 @using FWO.Ui.Auth
 
@@ -11,6 +12,8 @@
 @inject CircuitHandler circuitHandler
 @inject ApiConnection apiConnection
 @inject MiddlewareClient middlewareClient
+@inject GlobalConfig globalConfig
+@inject AdfsRuntimeOptions adfsRuntimeOptions
 
 @page "/logout"
 
@@ -34,7 +37,15 @@
         Log.WriteAudit($"Logout", $"User \"{user.Name}\" with DN: \"{user.Dn}\" logged out.");
         ((CircuitHandlerService)circuitHandler).User = null;
 
-        // Navigate to login page and force a reload to clear the current session
-        NavigationManager.NavigateTo("", forceLoad: true);
+        string returnUrl = "/login";
+        if (adfsRuntimeOptions.IsConfigured)
+        {
+            NavigationManager.NavigateTo($"/authentication/logout?returnUrl={Uri.EscapeDataString(returnUrl)}", true);
+        }
+        else
+        {
+            // Navigate to login page and force a reload to clear the current session
+            NavigationManager.NavigateTo(returnUrl, forceLoad: true);
+        }
     }
 }
