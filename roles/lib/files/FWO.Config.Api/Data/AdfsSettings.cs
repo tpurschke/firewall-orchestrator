@@ -8,12 +8,14 @@ namespace FWO.Config.Api.Data
         public bool AutoRedirect { get; init; }
         public string Authority { get; init; } = "";
         public string MetadataAddress { get; init; } = "";
+        public string MetadataFileUrl { get; init; } = "";
         public string ClientId { get; init; } = "";
         public string ClientSecret { get; init; } = "";
         public string CallbackPath { get; init; } = "";
         public string SignedOutCallbackPath { get; init; } = "";
         public string UserIdClaim { get; init; } = "";
         public string[] Scopes { get; init; } = [];
+        public bool HasMetadataFile => !string.IsNullOrWhiteSpace(MetadataFileUrl);
 
         public static AdfsSettings FromConfig(ConfigData config)
         {
@@ -31,6 +33,7 @@ namespace FWO.Config.Api.Data
                 AutoRedirect = config.AdfsAutoRedirect,
                 Authority = config.AdfsAuthority,
                 MetadataAddress = metadataAddress,
+                MetadataFileUrl = config.AdfsMetadataFileUrl,
                 ClientId = config.AdfsClientId,
                 ClientSecret = AesEnc.TryDecrypt(config.AdfsClientSecret ?? "", true),
                 CallbackPath = config.AdfsCallbackPath,

@@ -20,11 +20,10 @@ using Microsoft.AspNetCore.Components.Server.Circuits;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.IdentityModel.Protocols;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using RestSharp;
 using System;
-using System.Net;
-using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -145,7 +144,7 @@ static bool ConfigureAuthentication(IServiceCollection services, GlobalConfig gl
 
     bool openIdConfigured = false;
     Uri? authorityUri = null;
-    Uri? metadataUri = null;
+    AdfsMetadataSource? metadataSource = null;
 
     if (adfsSettings.Enabled)
     {
@@ -155,18 +154,29 @@ static bool ConfigureAuthentication(IServiceCollection services, GlobalConfig gl
         }
         else
         {
-            metadataUri = TryGetAbsoluteUri(adfsSettings.MetadataAddress, "metadata address");
-
-            if (!TryEnsureHostResolvable(authorityUri, "authority"))
+            if (!AdfsMetadataHelper.TryEnsureHostResolvable(authorityUri, out string? authorityResolutionError))
             {
+                Log.WriteError("ADFS Configuration", authorityResolutionError ?? $"Failed to resolve authority host '{authorityUri}'. Single sign-on is disabled.");
                 authorityUri = null;
             }
-            else if (metadataUri is not null && !TryEnsureHostResolvable(metadataUri, "metadata address"))
+            else
             {
-                metadataUri = null;
+                string baseDirectory = AppContext.BaseDirectory ?? Directory.GetCurrentDirectory();
+                if (!AdfsMetadataHelper.TryCreateMetadataSource(adfsSettings, authorityUri, baseDirectory, out metadataSource, out string? metadataError))
+                {
+                    Log.WriteError("ADFS Configuration", metadataError ?? "Unable to resolve the metadata location. Single sign-on is disabled.");
+                }
+                else if (!AdfsMetadataHelper.TryEnsureHostResolvable(metadataSource.MetadataUri, out string? metadataResolutionError))
+                {
+                    if (metadataSource.MetadataUri.Scheme == Uri.UriSchemeHttp || metadataSource.MetadataUri.Scheme == Uri.UriSchemeHttps)
+                    {
+                        Log.WriteError("ADFS Configuration", $"{metadataResolutionError} Single sign-on is disabled.");
+                        metadataSource = null;
+                    }
+                }
             }
 
-            openIdConfigured = authorityUri is not null;
+            openIdConfigured = authorityUri is not null && metadataSource is not null;
         }
     }
 
@@ -180,26 +190,25 @@ static bool ConfigureAuthentication(IServiceCollection services, GlobalConfig gl
 
     authenticationBuilder.AddCookie();
 
-    if (!openIdConfigured || authorityUri is null)
+    if (!openIdConfigured || authorityUri is null || metadataSource is null)
     {
         return false;
     }
 
-    bool requireHttpsMetadata = ShouldRequireHttpsMetadata(authorityUri!, metadataUri);
-
-    authenticationBuilder.AddOpenIdConnect(options => ConfigureOpenIdConnectOptions(options, adfsSettings, authorityUri!, metadataUri, requireHttpsMetadata));
+    authenticationBuilder.AddOpenIdConnect(options => ConfigureOpenIdConnectOptions(options, adfsSettings, authorityUri!, metadataSource));
     return true;
 }
 
-static void ConfigureOpenIdConnectOptions(OpenIdConnectOptions options, AdfsSettings adfsSettings, Uri authorityUri, Uri? metadataUri, bool requireHttpsMetadata)
+static void ConfigureOpenIdConnectOptions(OpenIdConnectOptions options, AdfsSettings adfsSettings, Uri authorityUri, AdfsMetadataSource metadataSource)
 {
-    options.RequireHttpsMetadata = requireHttpsMetadata;
+    options.RequireHttpsMetadata = metadataSource.RequireHttpsMetadata;
     options.Authority = authorityUri.AbsoluteUri;
 
-    if (metadataUri is not null)
-    {
-        options.MetadataAddress = metadataUri.AbsoluteUri;
-    }
+    options.MetadataAddress = metadataSource.MetadataUri.AbsoluteUri;
+    options.ConfigurationManager = new ConfigurationManager<OpenIdConnectConfiguration>(
+        metadataSource.MetadataUri.AbsoluteUri,
+        new OpenIdConnectConfigurationRetriever(),
+        metadataSource.DocumentRetriever);
 
     options.ClientId = adfsSettings.ClientId;
 
@@ -237,52 +246,6 @@ static void ConfigureOpenIdConnectOptions(OpenIdConnectOptions options, AdfsSett
     foreach (string scope in adfsSettings.Scopes)
     {
         options.Scope.Add(scope);
-    }
-}
-
-static Uri? TryGetAbsoluteUri(string? candidate, string description)
-{
-    if (string.IsNullOrWhiteSpace(candidate))
-    {
-        return null;
-    }
-
-    if (Uri.TryCreate(candidate, UriKind.Absolute, out Uri? uri))
-    {
-        return uri;
-    }
-
-    Log.WriteWarning("ADFS Configuration", $"The {description} '{candidate}' is not a valid absolute URI and will be ignored.");
-    return null;
-}
-
-static bool ShouldRequireHttpsMetadata(Uri authorityUri, Uri? metadataUri)
-{
-    if (!string.Equals(authorityUri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
-    {
-        return false;
-    }
-
-    if (metadataUri is not null &&
-        !string.Equals(metadataUri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
-    {
-        return false;
-    }
-
-    return true;
-}
-
-static bool TryEnsureHostResolvable(Uri uri, string description)
-{
-    try
-    {
-        _ = Dns.GetHostEntry(uri.Host);
-        return true;
-    }
-    catch (SocketException exception)
-    {
-        Log.WriteWarning("ADFS Configuration", $"Host resolution failed for {description} '{uri}'. Single sign-on is disabled. ({exception.Message})");
-        return false;
     }
 }
 

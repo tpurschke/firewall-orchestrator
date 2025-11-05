@@ -51,6 +51,9 @@ namespace FWO.Config.Api.Data
         [JsonProperty("adfsMetadataAddress"), JsonPropertyName("adfsMetadataAddress")]
         public string AdfsMetadataAddress { get; set; } = "";
 
+        [JsonProperty("adfsMetadataFileUrl"), JsonPropertyName("adfsMetadataFileUrl")]
+        public string AdfsMetadataFileUrl { get; set; } = "";
+
         [JsonProperty("adfsClientId"), JsonPropertyName("adfsClientId")]
         public string AdfsClientId { get; set; } = "";
 

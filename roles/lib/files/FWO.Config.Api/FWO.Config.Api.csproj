@@ -14,4 +14,8 @@
     <ProjectReference Include="..\FWO.Mail\FWO.Mail.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Microsoft.IdentityModel.Protocols" Version="7.6.0" />
+  </ItemGroup>
+
 </Project>

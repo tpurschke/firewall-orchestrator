@@ -47,6 +47,14 @@ else
         </div>
     </div>
 
+    <div class="form-group row mt-3" data-toggle="tooltip" title="Optional path or URL to a static metadata document. When provided, this source is used instead of the discovery URL.">
+        <label class="col-sm-3 col-form-label col-form-label-sm">Metadata File (HTTP/HTTPS or file path):</label>
+        <div class="col-sm-8">
+            <input type="text" class="form-control form-control-sm" @bind="adfsSettings.MetadataFileUrl" />
+            <small class="form-text text-muted">Leave empty to use automatic discovery.</small>
+        </div>
+    </div>
+
     <div class="form-group row mt-3" data-toggle="tooltip" title="Client identifier of the FWO application in ADFS.">
         <label class="col-sm-3 col-form-label col-form-label-sm">Client Id:</label>
         <div class="col-sm-8">
@@ -195,6 +203,7 @@ else
         public bool AutoRedirect { get; set; }
         public string? Authority { get; set; }
         public string? MetadataAddress { get; set; }
+        public string? MetadataFileUrl { get; set; }
         public string? ClientId { get; set; }
         public string? ClientSecret { get; set; }
         public string? CallbackPath { get; set; }
@@ -210,6 +219,7 @@ else
             AutoRedirect = config.AdfsAutoRedirect;
             Authority = config.AdfsAuthority;
             MetadataAddress = config.AdfsMetadataAddress;
+            MetadataFileUrl = config.AdfsMetadataFileUrl;
             ClientId = config.AdfsClientId;
             ClientSecret = AesEnc.TryDecrypt(config.AdfsClientSecret ?? "", true);
             CallbackPath = config.AdfsCallbackPath;
@@ -224,6 +234,7 @@ else
             config.AdfsAutoRedirect = AutoRedirect;
             config.AdfsAuthority = (Authority ?? "").Trim().TrimEnd('/');
             config.AdfsMetadataAddress = (MetadataAddress ?? "").Trim();
+            config.AdfsMetadataFileUrl = (MetadataFileUrl ?? "").Trim();
             config.AdfsClientId = (ClientId ?? "").Trim();
             config.AdfsClientSecret = string.IsNullOrWhiteSpace(ClientSecret)
                 ? ""
