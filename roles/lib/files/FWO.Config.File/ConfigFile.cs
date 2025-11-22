@@ -73,6 +73,15 @@ namespace FWO.Config.File
             }
         }
 
+        private static string? jwtPublicKeyPem = null;
+        public static string JwtPublicKeyPem
+        {
+            get
+            {
+                return CriticalConfigValueLoaded(jwtPublicKeyPem);
+            }
+        }
+
         public static string ApiServerUri
         {
             get
@@ -133,12 +142,18 @@ namespace FWO.Config.File
                 // Reset all keys
                 jwtPrivateKey = null;
                 jwtPublicKey = null;
+                jwtPublicKeyPem = null;
 
                 // Try to read jwt private key
                 IgnoreExceptions(() => jwtPrivateKey = KeyImporter.ExtractKeyFromPem(System.IO.File.ReadAllText(privateKeyFilePath), isPrivateKey: true));
 
                 // Try to read jwt public key
-                IgnoreExceptions(() => jwtPublicKey = KeyImporter.ExtractKeyFromPem(System.IO.File.ReadAllText(publicKeyFilePath), isPrivateKey: false));
+                IgnoreExceptions(() =>
+                {
+                    string publicKeyContent = System.IO.File.ReadAllText(publicKeyFilePath).Trim();
+                    jwtPublicKeyPem = publicKeyContent;
+                    jwtPublicKey = KeyImporter.ExtractKeyFromPem(publicKeyContent, isPrivateKey: false);
+                });
 
             }
             catch (Exception configFileReadException)

@@ -140,6 +140,13 @@ z2cAR6HkNFB63sh2qZwtC0utP3i3yXlDSxD8lQ7A7NYlifRszw==
         }
 
         [Test]
+        public void PublicKeyPemAccessible()
+        {
+            CreateAndReadConfigFile(7, correctConfigFile, "", correctPublicKey);
+            ClassicAssert.AreEqual(correctPublicKey.Trim(), ConfigFile.JwtPublicKeyPem);
+        }
+
+        [Test]
         public void CorrectPrivateKey()
         {
             CreateAndReadConfigFile(4, correctConfigFile, correctPrivateKey, "");
@@ -163,7 +170,7 @@ z2cAR6HkNFB63sh2qZwtC0utP3i3yXlDSxD8lQ7A7NYlifRszw==
         [OneTimeTearDown]
         public void OnFinish()
         {
-            for (int uniqueId = 0; uniqueId < 7; uniqueId++)
+            for (int uniqueId = 0; uniqueId < 8; uniqueId++)
             {
                 File.Delete(configFileTestPath + uniqueId);
                 File.Delete(privateKeyTestPath + uniqueId);

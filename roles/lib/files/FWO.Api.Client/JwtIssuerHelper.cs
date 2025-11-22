@@ -88,7 +88,15 @@ public static class JwtIssuerHelper
 
         if (!issuerMap.ContainsKey(FWO.Basics.JwtConstants.Issuer))
         {
-            issuerMap[FWO.Basics.JwtConstants.Issuer] = new TrustedIssuer { Issuer = FWO.Basics.JwtConstants.Issuer, PublicKey = "" };
+            issuerMap[FWO.Basics.JwtConstants.Issuer] = new TrustedIssuer
+            {
+                Issuer = FWO.Basics.JwtConstants.Issuer,
+                PublicKey = ConfigFile.JwtPublicKeyPem
+            };
+        }
+        else if (string.IsNullOrWhiteSpace(issuerMap[FWO.Basics.JwtConstants.Issuer].PublicKey))
+        {
+            issuerMap[FWO.Basics.JwtConstants.Issuer].PublicKey = ConfigFile.JwtPublicKeyPem;
         }
 
         return issuerMap.Values.ToList();
