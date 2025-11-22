@@ -43,7 +43,7 @@ namespace FWO.Config.Api.Data
         public string AvailableModules { get; set; } = "";
 
         [JsonProperty("trustedJwtIssuers"), JsonPropertyName("trustedJwtIssuers")]
-        public string TrustedJwtIssuers { get; set; } = JsonSerializer.Serialize(new List<FWO.Api.Client.TrustedIssuer> { new() { Issuer = JwtConstants.Issuer, PublicKey = "" } });
+        public string TrustedJwtIssuers { get; set; } = JsonSerializer.Serialize(new List<FWO.Api.Client.TrustedIssuer> { new() { Issuer = FwoJwtConstants.Issuer, PublicKey = "" } });
 
         [JsonProperty("maxMessages"), JsonPropertyName("maxMessages"), UserConfigData]
         public int MaxMessages { get; set; } = 3;
@@ -300,7 +300,7 @@ namespace FWO.Config.Api.Data
 
         [JsonProperty("ownerLdapGroupNames"), JsonPropertyName("ownerLdapGroupNames")]
         public string OwnerLdapGroupNames { get; set; } = GlobalConst.kLdapGroupPattern;
-        
+
         [JsonProperty("importSubnetDataPath"), JsonPropertyName("importSubnetDataPath")]
         public string ImportSubnetDataPath { get; set; } = "";
 
@@ -444,13 +444,13 @@ namespace FWO.Config.Api.Data
 
         [JsonProperty("complianceCheckMaxPrintedViolations"), JsonPropertyName("complianceCheckMaxPrintedViolations")]
         public int ComplianceCheckMaxPrintedViolations { get; set; } = 0;
-        
+
         [JsonProperty("complianceCheckSortMatrixByID"), JsonPropertyName("complianceCheckSortMatrixByID")]
         public bool ComplianceCheckSortMatrixByID { get; set; } = false;
 
         [JsonProperty("complianceCheckRelevantManagements"), JsonPropertyName("complianceCheckRelevantManagements")]
         public string ComplianceCheckRelevantManagements { get; set; } = "";
-        
+
         [JsonProperty("reportSchedulerConfig"), JsonPropertyName("reportSchedulerConfig")]
         public string ReportSchedulerConfig { get; set; } = "";
 
@@ -519,7 +519,7 @@ namespace FWO.Config.Api.Data
 
         [JsonProperty("showShortColumnsInComplianceReports"), JsonPropertyName("showShortColumnsInComplianceReports")]
         public bool ShowShortColumnsInComplianceReports { get; set; } = true;
-        
+
         [JsonProperty("importedMatrixReadOnly"), JsonPropertyName("importedMatrixReadOnly")]
         public bool ImportedMatrixReadOnly { get; set; } = true;
 

@@ -105,7 +105,7 @@ else
     Action<Exception?, string, string, bool> DisplayMessageInUi { get; set; } = DefaultInit.DoNothing;
 
     private ConfigData? configData;
-    private readonly string defaultIssuer = JwtConstants.Issuer;
+    private readonly string defaultIssuer = FwoJwtConstants.Issuer;
     private List<TrustedIssuer> issuers = new();
     private string newIssuer = "";
     private string newPublicKey = "";
