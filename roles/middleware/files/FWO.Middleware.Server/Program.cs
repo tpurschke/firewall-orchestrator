@@ -33,6 +33,9 @@ JwtWriter jwtWriter = new(ConfigFile.JwtPrivateKey);
 // Create JWT for middleware-server API calls (relevant part is the role middleware-server) and add it to the Api connection header. 
 ApiConnection apiConnection = new GraphQlApiConnection(ConfigFile.ApiServerUri ?? throw new ArgumentException("Missing api server url on startup."), jwtWriter.CreateJWTMiddlewareServer());
 
+List<TrustedIssuer> trustedJwtIssuers = await JwtIssuerHelper.FetchIssuers(apiConnection);
+TrustedIssuerValidation issuerValidation = JwtIssuerHelper.BuildValidationData(trustedJwtIssuers, ConfigFile.JwtPublicKey);
+
 // Fetch all connectedLdaps via API (blocking).
 List<Ldap> connectedLdaps = [];
 int connectionAttemptsCount = 1;
@@ -136,10 +139,20 @@ builder.Services.AddAuthentication(confOptions =>
         ValidateAudience = true,
         ValidAudiences = [FWO.Basics.JwtConstants.Audience],
         ValidateIssuer = true,
-        ValidIssuers = [FWO.Basics.JwtConstants.Issuer],
+        ValidIssuers = issuerValidation.Issuers,
         ValidateLifetime = true,
         RoleClaimType = "role",
-        IssuerSigningKey = ConfigFile.JwtPublicKey
+        IssuerSigningKeyResolver = (token, securityToken, kid, validationParameters) =>
+        {
+            try
+            {
+                return [JwtIssuerHelper.ResolveSigningKey(token, issuerValidation)];
+            }
+            catch
+            {
+                return [ConfigFile.JwtPublicKey];
+            }
+        }
     };
 });
 builder.Services.AddSwaggerGen(c =>

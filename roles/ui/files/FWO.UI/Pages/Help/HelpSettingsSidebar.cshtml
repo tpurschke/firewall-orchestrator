@@ -27,6 +27,9 @@
                 <a class="nav-link" href="/help/settings/tenants/?lang=@($"{userConfig.GetUserLanguage()}")">
                     <span class="@Icons.Tenant"></span> @(userConfig.GetText("tenants"))
                 </a>
+                <a class="nav-link" href="/help/settings/jwtissuers/?lang=@($"{userConfig.GetUserLanguage()}")">
+                    <span class="@Icons.Settings"></span> @(userConfig.GetText("trusted_jwt_issuers"))
+                </a>
                 <a class="nav-link" href="/help/settings/users/?lang=@($"{userConfig.GetUserLanguage()}")">
                     <span class="@Icons.User"></span> @(userConfig.GetText("users"))
                 </a>

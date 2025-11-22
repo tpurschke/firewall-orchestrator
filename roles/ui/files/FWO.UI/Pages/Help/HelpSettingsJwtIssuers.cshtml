@@ -1,0 +1,18 @@
+﻿@page "/help/settings/jwtissuers"
+@model FWO.Ui.Pages.Help.MainModel
+@{
+    Layout = "HelpLayout";
+}
+@section sidebar{
+    @{ 
+        await Html.RenderPartialAsync("HelpSettingsSidebar.cshtml"); 
+    }
+}
+@using FWO.Config.Api
+@inject UserConfig userConfig
+
+<div class="p-2">
+    <h3>@userConfig.GetText("trusted_jwt_issuers")</h3>
+    <p>@userConfig.GetText("jwt_issuer_hint")</p>
+    <p>@userConfig.GetText("jwt_issuer_publickey_placeholder")</p>
+</div>

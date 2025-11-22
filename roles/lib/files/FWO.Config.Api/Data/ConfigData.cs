@@ -1,6 +1,9 @@
+using System;
 using Newtonsoft.Json;
-using System.Text.Json;
+using System.Collections.Generic;
+using JsonSerializer = System.Text.Json.JsonSerializer;
 using System.Text.Json.Serialization;
+using FWO.Api.Client;
 using FWO.Basics;
 using FWO.Data;
 using FWO.Data.Workflow;
@@ -38,6 +41,9 @@ namespace FWO.Config.Api.Data
 
         [JsonProperty("availableModules"), JsonPropertyName("availableModules")]
         public string AvailableModules { get; set; } = "";
+
+        [JsonProperty("trustedJwtIssuers"), JsonPropertyName("trustedJwtIssuers")]
+        public string TrustedJwtIssuers { get; set; } = JsonSerializer.Serialize(new List<FWO.Api.Client.TrustedIssuer> { new() { Issuer = JwtConstants.Issuer, PublicKey = "" } });
 
         [JsonProperty("maxMessages"), JsonPropertyName("maxMessages"), UserConfigData]
         public int MaxMessages { get; set; } = 3;

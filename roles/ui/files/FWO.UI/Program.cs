@@ -82,6 +82,7 @@ apiConn.SetAuthHeader(jwt);
 
 // Get all non-confidential configuration settings and add to a global service (for all users)
 GlobalConfig globalConfig = Task.Run(async () => await GlobalConfig.ConstructAsync(jwt, true, true)).Result;
+ConfigureJwtIssuers(globalConfig);
 builder.Services.AddSingleton<GlobalConfig>(_ => globalConfig);
 builder.Services.AddSingleton<IUrlSanitizer, UrlSanitizer>();
 
@@ -142,3 +143,21 @@ app.MapFallbackToPage("/_Host");
 #endregion
 
 app.Run();
+
+static void ConfigureJwtIssuers(GlobalConfig globalConfig)
+{
+    void SetIssuers()
+    {
+        List<TrustedIssuer> issuers = JwtIssuerHelper.ParseIssuers(globalConfig.TrustedJwtIssuers);
+        JwtReader.SetTrustedIssuers(issuers);
+    }
+
+    SetIssuers();
+    globalConfig.OnChange += (config, items) =>
+    {
+        if (items.Any(item => item.Key == JwtIssuerHelper.ConfigKey))
+        {
+            SetIssuers();
+        }
+    };
+}

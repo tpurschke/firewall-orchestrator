@@ -1,4 +1,5 @@
-﻿using FWO.Config.File;
+﻿using FWO.Api.Client;
+using FWO.Config.File;
 using FWO.Logging;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
@@ -15,6 +16,8 @@ namespace FWO.Middleware.Client
 		private readonly string JwtValidation = "Jwt Validation";
 		private readonly string JwtNotValidated = "Jwt was not validated yet.";
 
+		private static List<string> validIssuers = [FWO.Basics.JwtConstants.Issuer];
+		private static Dictionary<string, SecurityKey> issuerSigningKeys = new(StringComparer.Ordinal);
 
 		public JwtReader(string jwtString)
 		{
@@ -67,8 +70,20 @@ namespace FWO.Middleware.Client
 					ValidateAudience = true,
                     ValidAudiences = [FWO.Basics.JwtConstants.Audience],
 					ValidateIssuer = true,
-					ValidIssuer = FWO.Basics.JwtConstants.Issuer,
-					IssuerSigningKey = jwtPublicKey,
+					ValidIssuers = validIssuers,
+					IssuerSigningKeyResolver = (token, securityToken, kid, validationParameters) =>
+					{
+						try
+						{
+							string issuer = new JsonWebToken(token).Issuer;
+							if (issuerSigningKeys.TryGetValue(issuer, out SecurityKey? key))
+							{
+								return [key];
+							}
+						}
+						catch { }
+						return [jwtPublicKey];
+					},
 				};
 
 				JsonWebTokenHandler handler = new ();
@@ -132,5 +147,12 @@ namespace FWO.Middleware.Client
 				throw new ArgumentException(nameof(jwt), JwtNotValidated);
 			return jwt.Claims.FirstOrDefault(claim => claim.Type == "role")?.Value ?? "";
 		}
-	}
+
+		public static void SetTrustedIssuers(IEnumerable<TrustedIssuer> issuers)
+		{
+			var validationData = JwtIssuerHelper.BuildValidationData(issuers, ConfigFile.JwtPublicKey);
+			validIssuers = validationData.Issuers;
+			issuerSigningKeys = validationData.SigningKeys;
+		}
+}
 }

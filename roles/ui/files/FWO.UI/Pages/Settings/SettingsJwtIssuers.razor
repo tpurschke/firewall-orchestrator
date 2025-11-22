@@ -1,0 +1,180 @@
+﻿@page "/settings/jwtissuers"
+@attribute [Authorize(Roles = $"{Roles.Admin}, {Roles.Auditor}, {Roles.FwAdmin}")]
+@using System
+@using System.Text.Json
+@using FWO.Middleware.Client
+@using FWO.Api.Client
+
+@inject ApiConnection apiConnection
+@inject GlobalConfig globalConfig
+@inject UserConfig userConfig
+
+<div class="input-group">
+    <h3>@(userConfig.GetText("trusted_jwt_issuers"))</h3>
+    <HelpLink Page="settings/jwtissuers" />
+</div>
+@(userConfig.GetText("jwt_issuer_hint"))
+<hr />
+
+@if (configData != null)
+{
+    <EditForm Model="configData">
+        <div class="row g-2 mb-3">
+            <div class="col-md-4">
+                <label for="issuerInput" class="form-label form-label-sm" data-toggle="tooltip" title="@userConfig.GetText("jwt_issuer_hint")">@userConfig.GetText("issuer")</label>
+                <input id="issuerInput" class="form-control form-control-sm" @bind="newIssuer" placeholder="@userConfig.GetText("jwt_issuer_placeholder")" />
+            </div>
+            <div class="col-md-6">
+                <label for="pubKeyInput" class="form-label form-label-sm" data-toggle="tooltip" title="@userConfig.GetText("jwt_issuer_publickey_placeholder")">@userConfig.GetText("public_key")</label>
+                <textarea id="pubKeyInput" class="form-control form-control-sm" rows="3" @bind="newPublicKey" placeholder="@userConfig.GetText("jwt_issuer_publickey_placeholder")"></textarea>
+            </div>
+            <div class="col-md-2 align-self-end">
+                <AuthorizeView Roles="@($"{Roles.Admin}, {Roles.Auditor}, {Roles.FwAdmin}")">
+                    <Authorized Context="authCtx">
+                        <button type="button" class="btn btn-sm btn-success" @onclick="AddIssuer" disabled="@string.IsNullOrWhiteSpace(newIssuer)">
+                            @userConfig.GetText("add_issuer")
+                        </button>
+                    </Authorized>
+                    <NotAuthorized Context="authCtx">
+                        <button type="button" class="btn btn-sm btn-success" disabled>@userConfig.GetText("add_issuer")</button>
+                    </NotAuthorized>
+                </AuthorizeView>
+            </div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-bordered table-striped">
+                <thead class="table-light">
+                    <tr>
+                        <th>@userConfig.GetText("issuer")</th>
+                        <th>@userConfig.GetText("public_key")</th>
+                        <th class="text-center">@userConfig.GetText("action")</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var issuer in issuers)
+                    {
+                        bool isDefault = string.Equals(issuer.Issuer, defaultIssuer, StringComparison.Ordinal);
+                        <tr>
+                            <td>
+                                <input class="form-control form-control-sm" @bind="issuer.Issuer" disabled="@isDefault" />
+                                @if (isDefault)
+                                {
+                                    <span class="badge bg-secondary ms-2">@userConfig.GetText("default_issuer")</span>
+                                }
+                            </td>
+                            <td>
+                                <textarea class="form-control form-control-sm" rows="4" @bind="issuer.PublicKey" placeholder="@userConfig.GetText("jwt_issuer_publickey_placeholder")" disabled="@isDefault"></textarea>
+                            </td>
+                            <td class="text-center">
+                                <AuthorizeView Roles="@($"{Roles.Admin}, {Roles.Auditor}, {Roles.FwAdmin}")">
+                                    <Authorized Context="authCtx">
+                                        <button type="button" class="btn btn-sm btn-danger" disabled="@isDefault" @onclick="@(() => RemoveIssuer(issuer))">
+                                            @userConfig.GetText("delete")
+                                        </button>
+                                    </Authorized>
+                                    <NotAuthorized Context="authCtx">
+                                        <button type="button" class="btn btn-sm btn-danger" disabled>@userConfig.GetText("delete")</button>
+                                    </NotAuthorized>
+                                </AuthorizeView>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <AuthorizeView Roles="@($"{Roles.Admin}, {Roles.Auditor}, {Roles.FwAdmin}")">
+            <Authorized Context="authCtx">
+                <button type="button" class="btn btn-sm btn-primary" @onclick="Save">@userConfig.GetText("save")</button>
+            </Authorized>
+            <NotAuthorized Context="authCtx">
+                <button type="button" class="btn btn-sm btn-primary" disabled>@userConfig.GetText("save")</button>
+            </NotAuthorized>
+        </AuthorizeView>
+    </EditForm>
+}
+else
+{
+    <Loading />
+}
+
+
+@code {
+    [CascadingParameter]
+    Action<Exception?, string, string, bool> DisplayMessageInUi { get; set; } = DefaultInit.DoNothing;
+
+    private ConfigData? configData;
+    private readonly string defaultIssuer = JwtConstants.Issuer;
+    private List<TrustedIssuer> issuers = new();
+    private string newIssuer = "";
+    private string newPublicKey = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            configData = await globalConfig.GetEditableConfig();
+            issuers = JwtIssuerHelper.ParseIssuers(configData.TrustedJwtIssuers);
+        }
+        catch (Exception exception)
+        {
+            DisplayMessageInUi(exception, userConfig.GetText("trusted_jwt_issuers"), userConfig.GetText("jwt_issuer_load_error"), true);
+        }
+    }
+
+    private void AddIssuer()
+    {
+        string issuerToAdd = newIssuer.Trim();
+        string pubKeyToAdd = newPublicKey.Trim();
+        newIssuer = "";
+        newPublicKey = "";
+        if (issuerToAdd == "")
+        {
+            DisplayMessageInUi(null, userConfig.GetText("trusted_jwt_issuers"), userConfig.GetText("jwt_issuer_publickey_placeholder"), false);
+            return;
+        }
+
+        if (!issuers.Any(i => string.Equals(i.Issuer, issuerToAdd, StringComparison.Ordinal)))
+        {
+            issuers.Add(new TrustedIssuer { Issuer = issuerToAdd, PublicKey = pubKeyToAdd });
+        }
+        StateHasChanged();
+    }
+
+    private void RemoveIssuer(TrustedIssuer issuer)
+    {
+        if (string.Equals(issuer.Issuer, defaultIssuer, StringComparison.Ordinal))
+        {
+            return;
+        }
+        issuers.RemoveAll(i => string.Equals(i.Issuer, issuer.Issuer, StringComparison.Ordinal));
+    }
+
+    private async Task Save()
+    {
+        try
+        {
+            if (configData == null)
+            {
+                throw new InvalidOperationException("Config not loaded");
+            }
+
+            List<TrustedIssuer> cleaned = issuers
+                .Where(i => !string.IsNullOrWhiteSpace(i.Issuer))
+                .Select(i => new TrustedIssuer { Issuer = i.Issuer.Trim(), PublicKey = i.PublicKey?.Trim() ?? "" })
+                .ToList();
+
+            cleaned = JwtIssuerHelper.ParseIssuers(cleaned);
+            configData.TrustedJwtIssuers = JsonSerializer.Serialize(cleaned);
+
+            await globalConfig.WriteToDatabase(configData, apiConnection);
+            JwtReader.SetTrustedIssuers(cleaned);
+            DisplayMessageInUi(null, userConfig.GetText("trusted_jwt_issuers"), userConfig.GetText("jwt_issuer_saved"), false);
+        }
+        catch (Exception exception)
+        {
+            DisplayMessageInUi(exception, userConfig.GetText("trusted_jwt_issuers"), userConfig.GetText("jwt_issuer_save_error"), true);
+        }
+    }
+}
