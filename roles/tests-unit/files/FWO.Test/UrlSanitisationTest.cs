@@ -103,6 +103,16 @@ namespace FWO.Test
             Assert.That(normalized, Does.Not.Match("(?i)\\b(set\\.constructor|Function\\(|eval\\()"), "JS constructor/eval patterns found");
         }
 
+        [TestCase("https://server1/test/reporting/filter/?lang=aaaabbbb%22/%3E%3Ca%20href=%22aaaa%22%3EMalicious%20URL%3C/a%3E%3Cimg%20src=%22")]
+        [TestCase("<a href=\"https://attacker.invalid\">Malicious</a>")]
+        [TestCase("<img src=\"x\" onerror=\"alert('xss')\" />")]
+        [TestCase("https://server1//help/reporting/ filter/?lang=aaaabbbb%22/%3E%3Ca%20href=%22aaaa %22%3EMalicious%20URL%3C/a%3E%3Cim")]
+        public void Clean_RejectsHtmlTags(string input)
+        {
+            var result = _sut.Clean(input);
+            Assert.That(result, Is.Null, "Inputs containing HTML tags are rejected for security reasons.");
+        }
+
         [TestCase("file:///etc/passwd")]
         [TestCase("ftp://example.com/resource")]
         [TestCase("<IMG SRC =# onmouseover=\"alert('xxs')\">")]
@@ -122,7 +132,7 @@ namespace FWO.Test
             // Normalize: decode entities and %xx, collapse whitespace/control chars
             var normalized = WebUtility.HtmlDecode(result);
             try { normalized = Uri.UnescapeDataString(normalized); } catch { /* Skip malformed URL escape sequences */ }
-            normalized = MyRegex().Replace(normalized, " ").Trim();
+            normalized = WhitespaceAndControlCharsRegex().Replace(normalized, " ").Trim();
 
             // Must be a valid URL or a relative URL
             Assert.That(Uri.TryCreate(normalized, UriKind.RelativeOrAbsolute, out var uri), "Invalid URI after cleaning.");
@@ -145,6 +155,24 @@ namespace FWO.Test
         [TestCase("not a url")]
         [TestCase("://missing-scheme.com")]
         public void Clean_InvalidInput_ReturnsNull(string input)
+        {
+            var result = _sut.Clean(input);
+            Assert.That(result, Is.Null);
+        }
+
+        [Test]
+        public void Clean_AllowsHelpPathWithWhitelistedChars()
+        {
+            var input = "https://example.com/help/API/?lang=en-US&topic=reports_1";
+            var result = _sut.Clean(input);
+
+            Assert.That(result, Is.Not.Null);
+            Assert.That(result, Does.Contain("/help/API"));
+        }
+
+        [TestCase("https://example.com/help/?lang=en%20US")]
+        [TestCase("https://example.com/help/?lang=en_US\"")]
+        public void Clean_BlocksHelpPathWithNonWhitelistedChars(string input)
         {
             var result = _sut.Clean(input);
             Assert.That(result, Is.Null);
@@ -188,7 +216,7 @@ namespace FWO.Test
         [Test]
         public void Filter_InvokesSanitizer_ForUrlParameter()
         {
-            var sanitizerMock = new Mock<IUrlSanitizer>();
+            var sanitizerMock = new Moq.Mock<IUrlSanitizer>();
             sanitizerMock.Setup(s => s.Clean(It.IsAny<string>())).Returns("https://safe.test/");
 
             var filter = new SanitizeUrlFilter(sanitizerMock.Object);
@@ -199,7 +227,7 @@ namespace FWO.Test
 
             var actionContext = new ActionContext(httpContext, new Microsoft.AspNetCore.Routing.RouteData(), new ActionDescriptor());
             var actionArguments = new Dictionary<string, object> { { "url", "http://evil.com" } };
-            var mockController = new Mock<Controller>();
+            var mockController = new Moq.Mock<Controller>();
             var ctx = new ActionExecutingContext(actionContext, new List<IFilterMetadata>(), (IDictionary<string, object?>)actionArguments, mockController.Object);
 
             filter.OnActionExecuting(ctx);
@@ -208,6 +236,6 @@ namespace FWO.Test
         }
 
         [GeneratedRegex(@"[\s\x00-\x1F]+")]
-        private static partial Regex MyRegex();
+        private static partial Regex WhitespaceAndControlCharsRegex();
     }
 }

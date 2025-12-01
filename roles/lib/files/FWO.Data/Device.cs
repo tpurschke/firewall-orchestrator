@@ -1,7 +1,6 @@
 using System.Text.Json.Serialization;
 using FWO.Basics;
 using Newtonsoft.Json;
-using FWO.Basics;
 
 namespace FWO.Data
 {
@@ -27,6 +26,9 @@ namespace FWO.Data
 
         [JsonProperty("global_rulebase_name"), JsonPropertyName("global_rulebase_name")]
         public string? GlobalRulebase { get; set; }
+
+        [JsonProperty("global_rulebase_uid"), JsonPropertyName("global_rulebase_uid")]
+        public string? GlobalRulebaseUid { get; set; }
 
         [JsonProperty("package_name"), JsonPropertyName("package_name")]
         public string? Package { get; set; }

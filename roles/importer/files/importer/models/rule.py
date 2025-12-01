@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from models.caseinsensitiveenum import CaseInsensitiveEnum
+from fwo_const import list_delimiter
 
 
 class RuleType(CaseInsensitiveEnum):
@@ -47,10 +48,10 @@ class RuleNormalized(BaseModel):
     rule_svc_refs: str
     rule_action: RuleAction
     rule_track: RuleTrack
-    rule_installon: str
-    rule_time: str
+    rule_installon: str|None = None
+    rule_time: str|None = None
     rule_name: str|None = None
-    rule_uid: str
+    rule_uid: str|None = None
     rule_custom_fields: str|None = None
     rule_implied: bool
     rule_type: RuleType = RuleType.SECTIONHEADER
@@ -65,10 +66,12 @@ class RuleNormalized(BaseModel):
     def __eq__(self, other):
         if not isinstance(other, RuleNormalized):
             return NotImplemented
-        # Compare all fields except 'last_hit' and 'rule_num'
-        exclude = {"last_hit", "rule_num"}
-        self_dict = self.dict(exclude=exclude)
-        other_dict = other.dict(exclude=exclude)
+        # Compare all fields except 'last_hit' and 'rule_num' and zones
+        # Zones are excluded because they are currently not written to the rule directly,
+        #  only linked through rule_from_zone and rule_to_zone tables (similar to _resolved tables)
+        exclude = {"last_hit", "rule_num", "rule_src_zone", "rule_dst_zone"}
+        self_dict = self.model_dump(exclude=exclude)
+        other_dict = other.model_dump(exclude=exclude)
         return self_dict == other_dict
     
 """
@@ -150,11 +153,11 @@ class Rule(BaseModel):
     rule_svc: str
     rule_svc_neg: bool
     rule_svc_refs: str
-    rule_time: str
+    rule_time: str|None = None
     rule_to_zone: int|None = None
     track_id: int
     xlate_rule: int|None = None
     rule_track: str
-    rule_uid: str
-    rulebase_id: int|None # = None
+    rule_uid: str|None = None
+    rulebase_id: int|None = None
 

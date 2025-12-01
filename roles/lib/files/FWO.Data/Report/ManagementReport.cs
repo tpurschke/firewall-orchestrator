@@ -28,6 +28,15 @@ namespace FWO.Data.Report
 
         public long? RelevantImportId { get; set; }
 
+        [JsonProperty("is_super_manager"), JsonPropertyName("is_super_manager")]
+        public bool IsSuperManager { get; set; }
+
+        [JsonProperty("multi_device_manager_id"), JsonPropertyName("multi_device_manager_id")]
+        public int? SuperManagerId { get; set; }
+
+        [JsonProperty("management"), JsonPropertyName("management")]
+        public Management? SuperManager { get; set; }
+
         [JsonProperty("managementByMultiDeviceManagerId"), JsonPropertyName("managementByMultiDeviceManagerId")]
         public List<Management> SubManagements { get; set; } = [];
 
@@ -79,7 +88,9 @@ namespace FWO.Data.Report
         public bool[] Detailed = [false, false, false]; // nobj, nsrv, user
 
         public ManagementReport()
-        { }
+        {
+            Uid = string.Empty;
+        }
 
 
         public string NameAndDeviceNames(string separator = ", ")
@@ -103,6 +114,16 @@ namespace FWO.Data.Report
             }
         }
 
+        public RulebaseReport? GetNextRulebase(RulebaseLink? currentRbLink)
+        {
+            if (currentRbLink == null)
+            {
+                return null;
+            }
+            return Rulebases
+                .FirstOrDefault(rb => rb.Id == currentRbLink.NextRulebaseId);
+        }
+        
     }
     public static class ManagementUtility
     {

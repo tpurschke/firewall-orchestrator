@@ -74,7 +74,7 @@
                 })).ReturnIds;
                 if (returnIds != null && returnIds.Length > 0)
                 {
-                    await RefreshParent(new()
+                    _ = RefreshParent(new()
                     {
                         Id = returnIds[0].InsertedId,
                         Name = MatrixName,

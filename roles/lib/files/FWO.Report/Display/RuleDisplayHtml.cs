@@ -1,4 +1,4 @@
-﻿using FWO.Basics;
+using FWO.Basics;
 using FWO.Data;
 using FWO.Config.Api;
 using System.Text;
@@ -8,17 +8,17 @@ namespace FWO.Ui.Display
 {
     public class RuleDisplayHtml(UserConfig userConfig) : RuleDisplayBase(userConfig)
     {
-        public string DisplaySource(Rule rule, OutputLocation location, ReportType reportType, int chapterNumber = 0, string style = "")
+        public string DisplaySource(Rule rule, OutputLocation location, ReportType reportType, int chapterNumber = 0, string style = "", bool overwriteIsResolvedReport = false)
         {
-            return DisplaySourceOrDestination(rule, chapterNumber, location, reportType, style, true);
+            return DisplaySourceOrDestination(rule, chapterNumber, location, reportType, style, true, overwriteIsResolvedReport);
         }
 
-        public string DisplayDestination(Rule rule, OutputLocation location, ReportType reportType, int chapterNumber = 0, string style = "")
+        public string DisplayDestination(Rule rule, OutputLocation location, ReportType reportType, int chapterNumber = 0, string style = "", bool overwriteIsResolvedReport = false)
         {
-            return DisplaySourceOrDestination(rule, chapterNumber, location, reportType, style, false);
+            return DisplaySourceOrDestination(rule, chapterNumber, location, reportType, style, false, overwriteIsResolvedReport);
         }
 
-        public string DisplayServices(Rule rule, OutputLocation location, ReportType reportType, int chapterNumber = 0, string style = "")
+        public string DisplayServices(Rule rule, OutputLocation location, ReportType reportType, int chapterNumber = 0, string style = "", bool overwriteIsResolvedReport = false)
         {
             StringBuilder result = new();
             if (rule.ServiceNegated)
@@ -26,7 +26,7 @@ namespace FWO.Ui.Display
                 result.AppendLine(userConfig.GetText("negated") + "<br>");
             }
 
-            if (reportType.IsResolvedReport())
+            if (!overwriteIsResolvedReport && reportType.IsResolvedReport())
             {
                 NetworkService[] services = GetNetworkServices(rule.Services).ToArray();
                 result.AppendJoin("<br>", Array.ConvertAll(services, service => ServiceToHtml(service, rule.MgmtId, chapterNumber, location, style, reportType)));
@@ -50,37 +50,37 @@ namespace FWO.Ui.Display
             return $"<tr><td class=\"bg-gray\" colspan=\"{ColumnCount}\"><b>{rule.SectionHeader}</b></td></tr>";
         }
 
-        public static string DisplayNextRecert(RuleMetadata rule)
+        public static string DisplayNextRecert(RuleMetadata ruleMetadata)
         {
             int count = 0;
-            return string.Join("", Array.ConvertAll<Recertification, string>(rule.RuleRecertification.ToArray(), recert => GetNextRecertDateString(CountString(rule.RuleRecertification.Count > 1, ++count), recert).ToString()));
+            return string.Join("", Array.ConvertAll<Recertification, string>(ruleMetadata.RuleRecertification.ToArray(), recert => GetNextRecertDateString(CountString(ruleMetadata.RuleRecertification.Count > 1, ++count), recert).ToString()));
         }
 
-        public static string DisplayOwner(RuleMetadata rule)
+        public static string DisplayOwner(RuleMetadata ruleMetadata)
         {
             int count = 0;
-            return string.Join("", Array.ConvertAll<Recertification, string>(rule.RuleRecertification.ToArray(), recert => GetOwnerDisplayString(CountString(rule.RuleRecertification.Count > 1, ++count), recert).ToString()));
+            return string.Join("", Array.ConvertAll<Recertification, string>(ruleMetadata.RuleRecertification.ToArray(), recert => GetOwnerDisplayString(CountString(ruleMetadata.RuleRecertification.Count > 1, ++count), recert).ToString()));
         }
 
-        public static string DisplayRecertIpMatches(RuleMetadata rule)
+        public static string DisplayRecertIpMatches(RuleMetadata ruleMetadata)
         {
             int count = 0;
-            return string.Join("", Array.ConvertAll<Recertification, string>(rule.RuleRecertification.ToArray(), recert => GetIpMatchDisplayString(CountString(rule.RuleRecertification.Count > 1, ++count), recert).ToString()));
+            return string.Join("", Array.ConvertAll<Recertification, string>(ruleMetadata.RuleRecertification.ToArray(), recert => GetIpMatchDisplayString(CountString(ruleMetadata.RuleRecertification.Count > 1, ++count), recert).ToString()));
         }
 
-        public static string DisplayLastHit(RuleMetadata rule)
+        public static string DisplayLastHit(RuleMetadata ruleMetadata)
         {
-            if (rule.LastHit == null)
+            if (ruleMetadata.LastHit == null)
                 return "";
             else
-                return DateOnly.FromDateTime((DateTime)rule.LastHit).ToString("yyyy-MM-dd");  //rule.Metadata.LastHit.ToString("yyyy-MM-dd");
+                return DateOnly.FromDateTime((DateTime)ruleMetadata.LastHit).ToString("yyyy-MM-dd");
         }
 
-        public static string DisplayLastRecertifier(RuleMetadata rule)
+        public static string DisplayLastRecertifier(RuleMetadata ruleMetadata)
         {
             int count = 0;
-            return string.Join("", Array.ConvertAll<Recertification, string>(rule.RuleRecertification.ToArray(),
-                recert => GetLastRecertifierDisplayString(CountString(rule.RuleRecertification.Count > 1, ++count), recert).ToString()));
+            return string.Join("", Array.ConvertAll<Recertification, string>(ruleMetadata.RuleRecertification.ToArray(),
+                recert => GetLastRecertifierDisplayString(CountString(ruleMetadata.RuleRecertification.Count > 1, ++count), recert).ToString()));
         }
 
         protected static string NetworkLocationToHtml(NetworkLocation networkLocation, int mgmtId, int chapterNumber, OutputLocation location, string style, ReportType reportType)
@@ -126,10 +126,10 @@ namespace FWO.Ui.Display
             string gwLink = ReportDevicesBase.GetReportDevicesLinkAddress(location, mgmtId, ObjCatString.NwObj, chapterNumber, gateway.Id, reportType);
 
             return DisplayGateway(gateway, reportType, reportType.IsResolvedReport() ? null :
-                ReportBase.ConstructLink(ReportBase.GetIconClass(ObjCategory.nsrv, "Gateway"), gateway.Name, style, gwLink)).ToString();
+                ReportBase.ConstructLink(ReportBase.GetIconClass(ObjCategory.nsrv, "Gateway"), gateway.Name ?? string.Empty, style, gwLink)).ToString();
         }
 
-        private string DisplaySourceOrDestination(Rule rule, int chapterNumber, OutputLocation location, ReportType reportType, string style, bool isSource)
+        private string DisplaySourceOrDestination(Rule rule, int chapterNumber, OutputLocation location, ReportType reportType, string style, bool isSource, bool overwriteIsResolvedReport = false)
         {
             StringBuilder result = new();
             if ((isSource && rule.SourceNegated) || (!isSource && rule.DestinationNegated))
@@ -138,7 +138,7 @@ namespace FWO.Ui.Display
             }
             string highlightedStyle = style + (reportType == ReportType.AppRules ? " " + GlobalConst.kStyleHighlightedRed : "");
 
-            if (reportType.IsResolvedReport())
+            if (!overwriteIsResolvedReport && reportType.IsResolvedReport())
             {
                 NetworkLocation[] userNwObjects = [.. GetResolvedNetworkLocations(isSource ? rule.Froms : rule.Tos)];
                 result.AppendJoin("<br>", Array.ConvertAll(userNwObjects,

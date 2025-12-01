@@ -538,6 +538,25 @@ namespace FWO.Config.Api.Data
         [JsonProperty("internalZoneRange_198_18_0_0_15"), JsonPropertyName("internalZoneRange_198_18_0_0_15")]
         public bool InternalZoneRange_198_18_0_0_15 { get; set; } = true;
 
+        [JsonProperty("autoCalculatedZonesAtTheEnd"), JsonPropertyName("autoCalculatedZonesAtTheEnd")]
+        public bool AutoCalculatedZonesAtTheEnd { get; set; } = true;
+
+        [JsonProperty("treatDynamicAndDomainObjectsAsInternet"), JsonPropertyName("treatDynamicAndDomainObjectsAsInternet")]
+        public bool TreatDynamicAndDomainObjectsAsInternet { get; set; } = true;
+
+        [JsonProperty("showShortColumnsInComplianceReports"), JsonPropertyName("showShortColumnsInComplianceReports")]
+        public bool ShowShortColumnsInComplianceReports { get; set; } = true;
+
+        [JsonProperty("importedMatrixReadOnly"), JsonPropertyName("importedMatrixReadOnly")]
+        public bool ImportedMatrixReadOnly { get; set; } = true;
+
+        [JsonProperty("complianceCheckElementsPerFetch"), JsonPropertyName("complianceCheckElementsPerFetch")]
+        public int ComplianceCheckElementsPerFetch { get; set; } = 500;
+
+        [JsonProperty("complianceCheckAvailableProcessors"), JsonPropertyName("complianceCheckAvailableProcessors")]
+        public int ComplianceCheckAvailableProcessors { get; set; } = 4;
+
+
         public ConfigData(bool editable = false)
         {
             Editable = editable;

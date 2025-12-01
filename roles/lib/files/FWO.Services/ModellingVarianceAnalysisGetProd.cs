@@ -74,7 +74,7 @@ namespace FWO.Services
         private void IdentifyModelledRules(Management mgt, List<Rule> rulesByMgt)
         {
             // get all rulebase links for this management
-            List<RulebaseLink> rulebaseLinks = mgt.Devices.Cast<DeviceReport>().SelectMany(d => d.RulebaseLinks.Where(rl => rl.Removed != null)).ToList();
+            List<RulebaseLink> rulebaseLinks = mgt.Devices.SelectMany(d => d.RulebaseLinks.Where(rl => rl.Removed != null)).ToList();
             allModelledRules.Add(mgt.Id, []);
             foreach (var rule in rulesByMgt)
             {
@@ -267,8 +267,14 @@ namespace FWO.Services
                     time = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
                     mgmIds = mgtId
                 };
-                return (await apiConnection.SendQueryAsync<List<Management>>(ReportQueries.getRelevantImportIdsAtTime,
-                    Variables))?[0].Import.ImportAggregate.ImportAggregateMax.RelevantImportId;
+                List<Management> managements = (await apiConnection.SendQueryAsync<List<Management>>(ReportQueries.getRelevantImportIdsAtTime, Variables))!;
+                if (managements.Count == 0)
+                {
+                    Log.WriteError("GetRelevantImportId", $"No management data found for management ID {mgtId}.");
+                    return null;
+                }
+                // we may get multiple results if this management is a submanagement of a multi device manager
+                return managements.Select(m => m.Import.ImportAggregate.ImportAggregateMax.RelevantImportId ?? -1).Max();
             }
             catch (Exception exception)
             {

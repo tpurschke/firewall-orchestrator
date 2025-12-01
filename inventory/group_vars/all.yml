@@ -36,6 +36,7 @@ fworch_parent_dir: "/usr/local"
 fworch_home: "{{ fworch_parent_dir }}/{{ product_name }}"
 fworch_conf_dir: "{{ fworch_home }}/etc"
 fworch_conf_file: "{{ fworch_conf_dir }}/fworch.json"
+last_commit_id_file_path: "{{ fworch_conf_dir }}/last_commit_id.txt"
 fworch_secrets_dir: "{{ fworch_conf_dir }}/secrets"
 importer_venv_dir: "{{ fworch_home }}/importer/importer-venv"
 
@@ -61,6 +62,7 @@ debian_testing_version: "12"
   # should actually be 13 but microsoft does not yet provide https://packages.microsoft.com/config/debian/13
 debian_testing_release_name: trixie
 arch: x86_64
+linux_architecture: amd64
 redhat_major_version: "8"
 redhat_arch: "{{ redhat_major_version }}-{{ arch }}"
 

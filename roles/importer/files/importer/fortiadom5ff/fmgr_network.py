@@ -2,14 +2,15 @@ from asyncio.log import logger
 import ipaddress
 from fwo_log import getFwoLogger
 from fwo_const import list_delimiter, nat_postfix
-from fmgr_zone import add_zone_if_missing
+from fmgr_zone import find_zones_in_normalized_config
 from fwo_config import readConfig
 from model_controllers.import_state_controller import ImportStateController
 from copy import deepcopy
 from fwo_exceptions import FwoImporterErrorInconsistencies
+from fwo_base import sort_and_join_refs
 
 
-def normalize_network_objects(import_state: ImportStateController, native_config, native_config_global, normalized_config, normalized_config_global, nw_obj_types):
+def normalize_network_objects(native_config, normalized_config_adom, normalized_config_global, nw_obj_types):
     nw_objects = []
     
     if 'objects' not in native_config:
@@ -19,7 +20,7 @@ def normalize_network_objects(import_state: ImportStateController, native_config
         if not(current_obj_type in nw_obj_types and 'data' in native_config['objects'][current_obj_type]):
             continue
         for obj_orig in native_config['objects'][current_obj_type]['data']:
-            normalize_network_object(obj_orig, nw_objects, normalized_config, native_config['objects'], current_obj_type)
+            normalize_network_object(obj_orig, nw_objects, normalized_config_adom, normalized_config_global, native_config['objects'], current_obj_type)
 
     if native_config.get('is-super-manager',False):
         # finally add "Original" network object for natting (only in global domain)
@@ -28,7 +29,7 @@ def normalize_network_objects(import_state: ImportStateController, native_config
         nw_objects.append(create_network_object(name=original_obj_name, type='network', ip='0.0.0.0', ip_end='255.255.255.255',\
             uid=original_obj_uid, zone='global', color='black', comment='"original" network object created by FWO importer for NAT purposes'))
 
-    normalized_config.update({'network_objects': nw_objects})
+    normalized_config_adom.update({'network_objects': nw_objects})
 
 def get_obj_member_refs_list(obj_orig, native_config_objects, current_obj_type):
     obj_member_refs_list = []
@@ -52,8 +53,7 @@ def exclude_object_types_in_member_ref_search(obj_type, current_obj_type):
             skip_member_ref_loop = True
     return skip_member_ref_loop
 
-def normalize_network_object(obj_orig, nw_objects, normalized_config, native_config_objects, current_obj_type):
-    obj_zone = 'global'
+def normalize_network_object(obj_orig, nw_objects, normalized_config_adom, normalized_config_global, native_config_objects, current_obj_type):
     obj = {}
     obj.update({'obj_name': obj_orig['name']})
     if 'subnet' in obj_orig: # ipv4 object
@@ -61,9 +61,12 @@ def normalize_network_object(obj_orig, nw_objects, normalized_config, native_con
     elif 'ip6' in obj_orig: # ipv6 object
         normalize_network_object_ipv6(obj_orig, obj)
     elif 'member' in obj_orig: # addrgrp4, TODO for addrgrp6 change obj_typ to 'group_v6' and adjust obj_member_refs
+        member_name_list: list[str] = obj_orig['member']
+        member_ref_list: list[str] = get_obj_member_refs_list(obj_orig, native_config_objects, current_obj_type)
+        sorted_member_refs, sorted_member_names = sort_and_join_refs(list(zip(member_ref_list, member_name_list)))
         obj.update({ 'obj_typ': 'group' })
-        obj.update({ 'obj_member_names' : list_delimiter.join(obj_orig['member']) })
-        obj.update({ 'obj_member_refs' : list_delimiter.join(get_obj_member_refs_list(obj_orig, native_config_objects, current_obj_type))})
+        obj.update({ 'obj_member_names' : sorted_member_names })
+        obj.update({ 'obj_member_refs' : sorted_member_refs })
     elif 'startip' in obj_orig: # ippool object
         obj.update({ 'obj_typ': 'ip_range' })
         obj.update({ 'obj_ip': obj_orig['startip'] })
@@ -98,16 +101,11 @@ def normalize_network_object(obj_orig, nw_objects, normalized_config, native_con
 
     obj.update({'obj_uid': obj_orig.get('uuid', obj_orig['name'])})  # using name as fallback, but this should not happen
 
-    # here only picking first associated interface as zone:
-    if 'associated-interface' in obj_orig and len(obj_orig['associated-interface'])>0: # and obj_orig['associated-interface'][0] != 'any':
-        obj_zone = deepcopy(obj_orig['associated-interface'][0])
-        # adding zone if it not yet exists
-        obj_zone = add_zone_if_missing (normalized_config, obj_zone)
-    obj.update({'obj_zone': obj_zone })
+    associated_interfaces = find_zones_in_normalized_config(
+        obj_orig.get('associated-interface', []), normalized_config_adom, normalized_config_global)
+    obj.update({'obj_zone': list_delimiter.join(associated_interfaces)})
     
-    #obj.update({'control_id': import_state.ImportId})
     nw_objects.append(obj)
-
 
 def _parse_subnet (obj, obj_orig):
     ipa = ipaddress.ip_network(str(obj_orig['subnet'][0]) + '/' + str(obj_orig['subnet'][1]))

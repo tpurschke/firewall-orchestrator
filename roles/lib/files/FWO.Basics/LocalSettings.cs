@@ -1,12 +1,12 @@
-using System.IO;
 using System.Text.Json;
-
 
 namespace FWO.Basics
 {
     public static class LocalSettings
     {
-        public static bool CSharpUnitTestsVerbose { get; private set; } = false;
+        public static bool CSharpUnitTestsVerbose { get; set; } = false;
+
+        public static bool ComplianceCheckVerbose { get; set; } = true;
 
         /// <summary>
         /// Static constructor to load local settings from a JSON file specified by the
@@ -17,6 +17,11 @@ namespace FWO.Basics
         /// </summary>
         static LocalSettings()
         {
+            TryGetLocalSettings();
+        }
+
+        public static void TryGetLocalSettings()
+        {
             string? localSettings = Environment.GetEnvironmentVariable("FWORCH_LOCAL_SETTINGS_PATH");
 
             if (File.Exists(localSettings))
@@ -26,9 +31,14 @@ namespace FWO.Basics
                     using FileStream s = File.OpenRead(localSettings);
                     JsonDocument json = JsonDocument.Parse(s);
 
-                    if (json.RootElement.TryGetProperty("test.unittests.csharp.verbose", out var val))
+                    if (json.RootElement.TryGetProperty("test.unittests.csharp.verbose", out var testUnitTestsCSharpVerbose))
                     {
-                        CSharpUnitTestsVerbose = val.GetBoolean();
+                        CSharpUnitTestsVerbose = testUnitTestsCSharpVerbose.GetBoolean();
+                    }
+
+                    if (json.RootElement.TryGetProperty("log.compliancecheck.verbose", out var logComplianceCheckVerbose))
+                    {
+                        ComplianceCheckVerbose = logComplianceCheckVerbose.GetBoolean();
                     }
 
                 }
@@ -36,7 +46,7 @@ namespace FWO.Basics
                 {
                     Console.WriteLine($"Reading local settings from {localSettings} failed. Using default settings.");
                 }
-            }
+            }            
         }
     }    
 }
