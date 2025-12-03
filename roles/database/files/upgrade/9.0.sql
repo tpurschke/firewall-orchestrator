@@ -445,7 +445,6 @@ CREATE TRIGGER import_config_insert
 ALTER TABLE management ADD COLUMN IF NOT EXISTS "mgm_uid" Varchar NOT NULL DEFAULT '';
 ALTER TABLE management ADD COLUMN IF NOT EXISTS "rulebase_name" Varchar NOT NULL DEFAULT '';
 ALTER TABLE management ADD COLUMN IF NOT EXISTS "rulebase_uid" Varchar NOT NULL DEFAULT '';
--- Alter table rule_metadata add column if not exists rulebase_id integer; -- not null;
 
 ALTER TABLE device ADD COLUMN IF NOT EXISTS "dev_uid" Varchar NOT NULL DEFAULT '';
 
@@ -576,10 +575,6 @@ ALTER table "svcgrp_flat" ALTER COLUMN "import_last_seen" TYPE BIGINT;
 ALTER TABLE "rule" DROP CONSTRAINT IF EXISTS "fk_rule_rulebase_id" CASCADE;
 ALTER TABLE "rule" ADD CONSTRAINT fk_rule_rulebase_id FOREIGN KEY ("rulebase_id") REFERENCES "rulebase" ("id") ON UPDATE RESTRICT ON DELETE CASCADE;
 
--- Alter Table "rule_metadata" ADD Constraint "rule_metadata_alt_key" UNIQUE ("rule_uid", "dev_id", "rulebase_id");
--- TODO: this needs to analysed (as dev_id will be removed from rule):
--- Alter table "rule" add constraint "rule_metadata_dev_id_rule_uid_f_key"
---   foreign key ("dev_id", "rule_uid", "rulebase_id") references "rule_metadata" ("dev_id", "rule_uid", "rulebase_id") on update restrict on delete cascade;
 
 -- Create table IF NOT EXISTS "rule_hit" 
 -- (
@@ -605,29 +600,11 @@ ALTER TABLE "rule" ADD CONSTRAINT fk_rule_rulebase_id FOREIGN KEY ("rulebase_id"
 
 Alter table "rule" drop constraint IF EXISTS "rule_metadata_dev_id_rule_uid_f_key";
 Alter Table "rule_metadata" drop Constraint IF EXISTS "rule_metadata_alt_key";
-
-    -- TODO: fix this:
-    --     ALTER TABLE rule_metadata DROP Constraint IF EXISTS "rule_metadata_rule_uid_unique";
-    --     ALTER TABLE rule_metadata ADD Constraint "rule_metadata_rule_uid_unique" unique ("rule_uid");
-    -- causes error:
-    --     None: FEHLER:  kann Constraint rule_metadata_rule_uid_unique für Tabelle rule_metadata nicht löschen, weil andere Objekte davon abhängen\nDETAIL:  
-    --     Constraint rule_metadata_rule_uid_f_key für Tabelle rule hängt von Index rule_metadata_rule_uid_unique ab\nHINT:  Verwenden Sie DROP ... CASCADE, um die abhängigen Objekte ebenfalls zu löschen.\n"}
-
 ALTER TABLE rule_metadata DROP Constraint IF EXISTS "rule_metadata_rule_uid_unique" CASCADE;
 ALTER TABLE rule_metadata ADD Constraint "rule_metadata_rule_uid_unique" unique ("rule_uid");
 Alter table "rule" DROP constraint IF EXISTS "rule_rule_metadata_rule_uid_f_key";
-
--- wenn es regeln mit derselben uid gibt, funktioniert der folgende constraint nicht
--- koennen wir dafuer sorgen, dass jede rule_uid nur exakt 1x in der datenbank steht?
--- brauchen wir zusaetzlich die einschraenkung auf das mgm?
--- mindestens gibt es ein Problem mit den (implicit) NAT Regeln: CP_default_Office_Mode_addresses_pool
---  rule_id | last_change_admin | rule_name | mgm_id | parent_rule_id | parent_rule_type | active | rule_num | rule_num_numeric | rule_ruleid |               rule_uid               | rule_disabled | rule_src_neg | rule_dst_neg | rule_svc_neg | action_id | track_id |               rule_src                | rule_dst | rule_svc |            rule_src_refs             |            rule_dst_refs             |            rule_svc_refs             | rule_from_zone | rule_to_zone | rule_action | rule_track | rule_installon | rule_time | rule_comment | rule_head_text | rule_implied | rule_create | rule_last_seen | dev_id | rule_custom_fields | access_rule | nat_rule | xlate_rule
------------+-------------------+-----------+--------+----------------+------------------+--------+----------+------------------+-------------+--------------------------------------+---------------+--------------+--------------+--------------+-----------+----------+---------------------------------------+----------+----------+--------------------------------------+--------------------------------------+--------------------------------------+----------------+--------------+-------------+------------+----------------+-----------+--------------+----------------+--------------+-------------+----------------+--------+--------------------+-------------+----------+------------
---     274 |                   |           |     19 |                |                  | t      |       10 |   17000.00000000 |             | dc1a7110-e431-4f56-a84a-31b17acf7ee7 | f             | f            | f            | f            |         2 |        2 | CP_default_Office_Mode_addresses_pool | Any      | Any      | e7c5a3b6-e20f-4756-bb56-f2b394baf7a9 | 97aeb369-9aea-11d5-bd16-0090272ccb30 | 97aeb369-9aea-11d5-bd16-0090272ccb30 |                |              | drop        | None       | Policy Targets | Any       |              |                | f            |          19 |             19 |     19 |                    | f           | t        |        261
-
 Alter table "rule" add constraint "rule_rule_metadata_rule_uid_f_key"
   foreign key ("rule_uid") references "rule_metadata" ("rule_uid") on update restrict on delete cascade;
-
 
 CREATE OR REPLACE VIEW v_rule_with_rule_owner AS
 	SELECT r.rule_id, ow.id as owner_id, ow.name as owner_name, 'rule' AS matches,
@@ -1072,12 +1049,7 @@ $function$;
 -- drop only after migration
 
 ALTER TABLE rule DROP CONSTRAINT IF EXISTS rule_dev_id_fkey;
-
 ALTER TABLE "rule_metadata" DROP CONSTRAINT IF EXISTS "rule_metadata_rulebase_id_f_key" CASCADE;
--- Alter table "rule_metadata" add constraint "rule_metadata_rulebase_id_f_key"
---   foreign key ("rulebase_id") references "rulebase" ("id") on update restrict on delete cascade;
--- ALTER TABLE "rule_metadata" DROP CONSTRAINT IF EXISTS "rule_metadata_alt_key" CASCADE;
--- Alter Table "rule_metadata" add Constraint "rule_metadata_alt_key" UNIQUE ("rule_uid","dev_id","rulebase_id");
 
 -- reverse last_seen / removed logic for objects
 ALTER TABLE "object" ADD COLUMN IF NOT EXISTS "removed" BIGINT;
@@ -1895,7 +1867,7 @@ BEGIN
     WHERE r.rule_uid IS NULL;
 
     IF missing_uids IS NOT NULL THEN
-        RAISE EXCEPTION 'Missing rule(s): %', missing_uids;
+        RAISE EXCEPTION 'rule_metadata entries without rule entries, use the command "delete from rule_metadata rm where not exists (select 1 from rule r where r.rule_uid=rm.rule_uid);" to delete them %', missing_uids;
     END IF;
 	
 	
