@@ -17,14 +17,6 @@ sample_config_user: fworchsample
 sample_config_user_home: "/home/{{ sample_config_user }}"
 ```
 
-- The only role defined in all is iso-common
-- The tasks of iso-common include
-
-  - creating {{ fworch_parent_dir }}/fworch
-  - creating user fworch
-  - adding file iso.conf to {{ fworch_parent_dir }}/fworch/etc
-  - creating logs
-  
 ## hosts: backends
 
 - By default, this is localhost for demo purposes
