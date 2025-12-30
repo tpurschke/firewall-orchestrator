@@ -1,0 +1,92 @@
+{
+  "source": "F5 Big-IP",
+  "generated_at": "2025-12-29T10:30:00Z",
+  "gateways": [
+    {
+      "id": "f5-bigip-gw1",
+      "name": "f5-bigip-gw1",
+      "type": "bigip",
+      "virtual_servers": [
+        {
+          "name": "vs_app1_https",
+          "destination": "203.0.113.10:443",
+          "ip_protocol": "tcp",
+          "pool": "pool_app1_https",
+          "profiles": [
+            "tcp",
+            "clientssl"
+          ],
+          "snat": "automap"
+        },
+        {
+          "name": "vs_app1_http",
+          "destination": "203.0.113.10:80",
+          "ip_protocol": "tcp",
+          "pool": "pool_app1_http",
+          "profiles": [
+            "tcp",
+            "http"
+          ]
+        }
+      ],
+      "pools": [
+        {
+          "name": "pool_app1_https",
+          "members": [
+            "10.0.10.11:8443",
+            "10.0.10.12:8443"
+          ],
+          "monitor": "https"
+        },
+        {
+          "name": "pool_app1_http",
+          "members": [
+            "10.0.10.11:8080",
+            "10.0.10.12:8080"
+          ],
+          "monitor": "http"
+        }
+      ],
+      "irules": [
+        {
+          "name": "irule_redirect_https",
+          "description": "Redirect HTTP to HTTPS"
+        }
+      ]
+    },
+    {
+      "id": "f5-bigip-gw2",
+      "name": "f5-bigip-gw2",
+      "type": "bigip",
+      "virtual_servers": [
+        {
+          "name": "vs_api_https",
+          "destination": "198.51.100.20:443",
+          "ip_protocol": "tcp",
+          "pool": "pool_api_https",
+          "profiles": [
+            "tcp",
+            "clientssl"
+          ],
+          "snat": "automap"
+        }
+      ],
+      "pools": [
+        {
+          "name": "pool_api_https",
+          "members": [
+            "10.0.20.21:9443",
+            "10.0.20.22:9443"
+          ],
+          "monitor": "https"
+        }
+      ],
+      "irules": [
+        {
+          "name": "irule_add_header",
+          "description": "Inject X-Forwarded-Proto header"
+        }
+      ]
+    }
+  ]
+}

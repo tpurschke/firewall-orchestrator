@@ -1,0 +1,40 @@
+@using FWO.Data.Proxy
+
+@inject UserConfig userConfig
+
+@if (Overview.Count == 0)
+{
+    <b>@(userConfig.GetText("E4002"))</b>
+}
+else
+{
+    @foreach (var owner in Overview)
+    {
+        <h5>@owner.OwnerName</h5>
+        <table class="table table-bordered table-sm th-bg-secondary table-responsive overflow-auto sticky-header">
+            <thead>
+                <tr>
+                    <th>@(userConfig.GetText("next_recert_date"))</th>
+                    <th>@(userConfig.GetText("id"))</th>
+                    <th>@(userConfig.GetText("name"))</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var rule in owner.RulesDue)
+                {
+                    <tr>
+                        <td>@(rule.NextRecertDate?.ToString("dd.MM.yyyy") ?? "")</td>
+                        <td>@rule.Id</td>
+                        <td>@rule.Name</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+}
+
+@code
+{
+    [Parameter]
+    public List<ProxyRecertOwnerOverview> Overview { get; set; } = [];
+}

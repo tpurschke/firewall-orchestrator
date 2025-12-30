@@ -21,7 +21,9 @@ namespace FWO.Basics
         RecertificationEvent = 25,
         RecertEventReport = 26,
         ComplianceReport = 31,
-        ComplianceDiffReport = 32
+        ComplianceDiffReport = 32,
+        ProxyRules = 33,
+        ProxyRuleRecertOverview = 34
 
     }
 
@@ -80,7 +82,11 @@ namespace FWO.Basics
 
         public static bool IsDeviceRelatedReport(this ReportType reportType)
         {
-            return reportType.IsRuleReport() || reportType.IsChangeReport() || reportType == ReportType.Statistics;
+            return reportType.IsRuleReport()
+                || reportType.IsChangeReport()
+                || reportType == ReportType.Statistics
+                || reportType == ReportType.ProxyRules
+                || reportType == ReportType.ProxyRuleRecertOverview;
         }
 
         public static bool IsConnectionRelatedReport(this ReportType reportType)
@@ -146,6 +152,7 @@ namespace FWO.Basics
                 ReportType.Undefined,
                 ReportType.RecertificationEvent,
                 ReportType.Rules, ReportType.ResolvedRules, ReportType.ResolvedRulesTech, ReportType.UnusedRules, ReportType.NatRules,
+                ReportType.ProxyRules, ReportType.ProxyRuleRecertOverview,
                 ReportType.Changes, ReportType.ResolvedChanges, ReportType.ResolvedChangesTech,
                 ReportType.Statistics,
                 ReportType.Connections,

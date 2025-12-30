@@ -13,7 +13,7 @@ namespace FWO.Report
 
         public override string ExportToJson()
         {
-            return JsonSerializer.Serialize(ReportData.OwnerData, new JsonSerializerOptions { WriteIndented = true });
+            return System.Text.Json.JsonSerializer.Serialize(ReportData.OwnerData, new JsonSerializerOptions { WriteIndented = true });
         }
 
         public override string ExportToCsv()

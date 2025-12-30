@@ -460,6 +460,22 @@
             "processId": "${command:pickProcess}"
         },
         {
+            "name": "c#-Generic Importer",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build_generic_importer",
+            "program": "${workspaceFolder}/roles/importer/files/proxy-importer/FWO.ProxyImporter/bin/Debug/net8.0/FWO.ProxyImporter.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/roles/importer/files/proxy-importer/FWO.ProxyImporter",
+            "stopAtEntry": false,
+            "requireExactSource": false,
+            "console": "integratedTerminal",
+            "env": {
+                "ASPNETCORE_ENVIRONMENT": "Development",
+                "ASPNETCORE_URLS": "http://localhost:8890/"
+            }
+        },
+        {
             "name": "Create mock_config",
             "type": "python",
             "request": "launch",

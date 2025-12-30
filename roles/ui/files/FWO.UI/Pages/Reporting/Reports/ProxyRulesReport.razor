@@ -1,0 +1,211 @@
+@using FWO.Basics
+@using FWO.Data.Proxy
+
+@inject UserConfig userConfig
+
+<Table TableItem="ProxyRule" Items="Rules" ShowSearchBar="false"
+       RowClickAction="@(async rule => { if (AllowSelection) await OnRowClick(rule); })"
+       SelectedItems="selectedRules"
+       TableClass="table table-bordered table-sm th-bg-secondary table-responsive overflow-auto sticky-header"
+       PageSize="0" ColumnReorder="true">
+    @foreach (string column in columns)
+    {
+        if (column.Equals("id", StringComparison.OrdinalIgnoreCase))
+        {
+            <Column TableItem="ProxyRule" Context="rule" Title="@GetHeader(column)" Field="@(r => r.Id)" Sortable="true" Filterable="false" Hideable="true">
+                <Template>
+                    @GetCellValue(rule, GetRow(rule), column)
+                </Template>
+            </Column>
+        }
+        else if (column.Equals("management_id", StringComparison.OrdinalIgnoreCase))
+        {
+            <Column TableItem="ProxyRule" Context="rule" Title="@GetHeader(column)" Field="@(r => r.ManagementId)" Sortable="true" Filterable="false" Hideable="true">
+                <Template>
+                    @GetCellValue(rule, GetRow(rule), column)
+                </Template>
+            </Column>
+        }
+        else if (column.Equals("management_name", StringComparison.OrdinalIgnoreCase))
+        {
+            <Column TableItem="ProxyRule" Context="rule" Title="@GetHeader(column)" Field="@(r => r.ManagementName)" Sortable="true" Filterable="false" Hideable="true">
+                <Template>
+                    @GetCellValue(rule, GetRow(rule), column)
+                </Template>
+            </Column>
+        }
+        else if (column.Equals("name", StringComparison.OrdinalIgnoreCase))
+        {
+            <Column TableItem="ProxyRule" Context="rule" Title="@GetHeader(column)" Field="@(r => r.Name)" Sortable="true" Filterable="false" Hideable="true">
+                <Template>
+                    @GetCellValue(rule, GetRow(rule), column)
+                </Template>
+            </Column>
+        }
+        else if (column.Equals("action", StringComparison.OrdinalIgnoreCase))
+        {
+            <Column TableItem="ProxyRule" Context="rule" Title="@GetHeader(column)" Field="@(r => r.Action)" Sortable="true" Filterable="false" Hideable="true">
+                <Template>
+                    @GetCellValue(rule, GetRow(rule), column)
+                </Template>
+            </Column>
+        }
+        else if (column.Equals("owner_id", StringComparison.OrdinalIgnoreCase))
+        {
+            <Column TableItem="ProxyRule" Context="rule" Title="@GetHeader(column)" Field="@(r => r.OwnerId)" Sortable="true" Filterable="false" Hideable="true">
+                <Template>
+                    @GetCellValue(rule, GetRow(rule), column)
+                </Template>
+            </Column>
+        }
+        else if (column.Equals("owner_name", StringComparison.OrdinalIgnoreCase))
+        {
+            <Column TableItem="ProxyRule" Context="rule" Title="@GetHeader(column)" Field="@(r => r.OwnerName)" Sortable="true" Filterable="false" Hideable="true">
+                <Template>
+                    @GetCellValue(rule, GetRow(rule), column)
+                </Template>
+            </Column>
+        }
+        else if (column.Equals("next_recert_date", StringComparison.OrdinalIgnoreCase))
+        {
+            <Column TableItem="ProxyRule" Context="rule" Title="@GetHeader(column)" Field="@(r => r.NextRecertDate)" Sortable="true" Filterable="false" Hideable="true">
+                <Template>
+                    @GetCellValue(rule, GetRow(rule), column)
+                </Template>
+            </Column>
+        }
+        else if (column.Equals("last_recertified", StringComparison.OrdinalIgnoreCase))
+        {
+            <Column TableItem="ProxyRule" Context="rule" Title="@GetHeader(column)" Field="@(r => r.LastRecertified)" Sortable="true" Filterable="false" Hideable="true">
+                <Template>
+                    @GetCellValue(rule, GetRow(rule), column)
+                </Template>
+            </Column>
+        }
+        else if (column.Equals("last_recertifier", StringComparison.OrdinalIgnoreCase))
+        {
+            <Column TableItem="ProxyRule" Context="rule" Title="@GetHeader(column)" Field="@(r => r.LastRecertifier)" Sortable="true" Filterable="false" Hideable="true">
+                <Template>
+                    @GetCellValue(rule, GetRow(rule), column)
+                </Template>
+            </Column>
+        }
+        else if (column.Equals("recertified", StringComparison.OrdinalIgnoreCase))
+        {
+            <Column TableItem="ProxyRule" Context="rule" Title="@GetHeader(column)" Field="@(r => r.Recertified)" Sortable="true" Filterable="false" Hideable="true">
+                <Template>
+                    @GetCellValue(rule, GetRow(rule), column)
+                </Template>
+            </Column>
+        }
+        else if (column.Equals("comment", StringComparison.OrdinalIgnoreCase))
+        {
+            <Column TableItem="ProxyRule" Context="rule" Title="@GetHeader(column)" Field="@(r => r.Comment)" Sortable="true" Filterable="false" Hideable="true">
+                <Template>
+                    @GetCellValue(rule, GetRow(rule), column)
+                </Template>
+            </Column>
+        }
+        else
+        {
+            <Column TableItem="ProxyRule" Context="rule" Title="@GetHeader(column)" Sortable="false" Filterable="false" Hideable="true">
+                <Template>
+                    @GetCellValue(rule, GetRow(rule), column)
+                </Template>
+            </Column>
+        }
+    }
+    @if (showRawJsonColumn)
+    {
+        <Column TableItem="ProxyRule" Context="rule" Title="Raw JSON" Field="@(r => r.RawJson)" Sortable="false" Filterable="false" Hideable="true">
+            <Template>
+                @if (!string.IsNullOrWhiteSpace(rule.RawJson))
+                {
+                    <details>
+                        <summary>Raw JSON</summary>
+                        <pre>@rule.RawJson</pre>
+                    </details>
+                }
+            </Template>
+        </Column>
+    }
+</Table>
+
+@code
+{
+    [Parameter]
+    public List<ProxyRule> Rules { get; set; } = [];
+
+    [Parameter]
+    public bool AllowSelection { get; set; } = false;
+
+    [Parameter]
+    public EventCallback<List<ProxyRule>> SelectedRulesChanged { get; set; }
+
+    private IReadOnlyList<string> columns = [];
+    private List<Dictionary<string, string>> rows = [];
+
+    private List<ProxyRule> selectedRules = [];
+    private Dictionary<ProxyRule, Dictionary<string, string>> rowLookup = [];
+    private bool showRawJsonColumn;
+
+    protected override void OnParametersSet()
+    {
+        if (!AllowSelection)
+        {
+            selectedRules.Clear();
+        }
+        ProxyRuleTableData tableData = ProxyRuleColumnHelper.BuildTableData(Rules);
+        columns = tableData.Columns;
+        rows = tableData.Rows.Select(row => new Dictionary<string, string>(row, StringComparer.OrdinalIgnoreCase)).ToList();
+        rowLookup = BuildRowLookup(Rules, rows);
+        showRawJsonColumn = Rules.Any(rule => !string.IsNullOrWhiteSpace(rule.RawJson));
+    }
+
+    private async Task OnRowClick(ProxyRule rule)
+    {
+        if (!selectedRules.Remove(rule))
+        {
+            selectedRules.Add(rule);
+        }
+        await SelectedRulesChanged.InvokeAsync(selectedRules.ToList());
+    }
+
+    private static string GetCellValue(ProxyRule rule, Dictionary<string, string> row, string column)
+    {
+        if (column.Equals("next_recert_date", StringComparison.OrdinalIgnoreCase))
+        {
+            return rule.NextRecertDate?.ToString("dd.MM.yyyy") ?? "";
+        }
+        if (column.Equals("last_recertified", StringComparison.OrdinalIgnoreCase))
+        {
+            return rule.LastRecertified?.ToString("dd.MM.yyyy") ?? "";
+        }
+        return row.TryGetValue(column, out string? value) ? value : "";
+    }
+
+    private string GetHeader(string column)
+    {
+        string header = userConfig.GetText(column);
+        return header == GlobalConst.kUndefinedText ? column : header;
+    }
+
+    private static Dictionary<ProxyRule, Dictionary<string, string>> BuildRowLookup(IReadOnlyList<ProxyRule> rules, IReadOnlyList<Dictionary<string, string>> rows)
+    {
+        Dictionary<ProxyRule, Dictionary<string, string>> lookup = [];
+        int rowCount = rows.Count;
+        for (int index = 0; index < rules.Count; index++)
+        {
+            lookup[rules[index]] = index < rowCount ? rows[index] : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        }
+        return lookup;
+    }
+
+    private Dictionary<string, string> GetRow(ProxyRule rule)
+    {
+        return rowLookup.TryGetValue(rule, out Dictionary<string, string>? row)
+            ? row
+            : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+    }
+
+}

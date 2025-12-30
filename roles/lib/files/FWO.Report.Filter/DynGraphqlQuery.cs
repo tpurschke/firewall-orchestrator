@@ -516,6 +516,8 @@ namespace FWO.Report.Filter
                     case ReportType.Connections:
                     case ReportType.VarianceAnalysis:
                     case ReportType.RecertificationEvent:
+                    case ReportType.ProxyRules:
+                    case ReportType.ProxyRuleRecertOverview:
                         break;
                     default:
                         Log.WriteError("Filter", $"Unexpected report type found: {reportType}");

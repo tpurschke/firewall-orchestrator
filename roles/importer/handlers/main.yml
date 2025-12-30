@@ -23,3 +23,10 @@
     - "Try to upgrade {{ product_name }} later or contact the support support@cactus.de"
   listen: "importer handler"
   when: importer_handler_guard == "start"
+
+- name: restart proxy importer
+  systemd:
+    name: "{{ proxy_importer_service_name }}"
+    state: restarted
+    daemon_reload: true
+  become: true

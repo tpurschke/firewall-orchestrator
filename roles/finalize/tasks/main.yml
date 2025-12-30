@@ -113,6 +113,7 @@
   loop:
     - "{{ product_name }}-importer-legacy"
     - "{{ product_name }}-importer-api"
+    - "{{ proxy_importer_service_name }}"
 
 - name: remove maint website dir
   file:

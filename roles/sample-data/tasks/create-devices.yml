@@ -25,6 +25,10 @@
 
 - block: # demo & test
 
+    - name: set demo proxy management name
+      set_fact:
+        demo_proxy_mgmt_name: "skyhigh-proxy1"
+
     - name: insert sample fortiOS management
       postgresql_query:
         db: "{{ fworch_db_name }}"
@@ -45,8 +49,140 @@
           VALUES ((select mgm_id from management where mgm_name='{{ sample_fortigate_name }}'),'{{ sample_fortigate_name }}','access_rules',25); 
           END IF; END $do$ 
 
+    - name: insert demo proxy management
+      postgresql_query:
+        db: "{{ fworch_db_name }}"
+        query: >
+          DO $do$ BEGIN
+          IF NOT EXISTS (SELECT * FROM management WHERE mgm_name='{{ demo_proxy_mgmt_name }}') THEN
+          insert into management (dev_typ_id,mgm_name,import_credential_id,ssh_hostname,do_not_import,importer_hostname)
+          VALUES (30,'{{ demo_proxy_mgmt_name }}',{{ credential_id }},'',{{ do_not_import }},'{{ importer_hostname }}');
+          END IF; END $do$
+
+    - name: insert demo proxy gateways
+      postgresql_query:
+        db: "{{ fworch_db_name }}"
+        query: >
+          DO $do$ BEGIN
+          IF NOT EXISTS (SELECT * FROM device WHERE dev_name='{{ item }}') THEN
+          insert into device (mgm_id,dev_name,local_rulebase_name,dev_typ_id)
+          VALUES ((select mgm_id from management where mgm_name='{{ demo_proxy_mgmt_name }}'),'{{ item }}','proxy_rules',30);
+          END IF; END $do$
+      loop:
+        - "{{ demo_proxy_mgmt_name }}-gw1"
+        - "{{ demo_proxy_mgmt_name }}-gw2"
+
   become: true
   become_user: postgres
+
+- block:
+    - name: set demo proxy rules path
+      set_fact:
+        demo_proxy_rules_path: "{{ fworch_home }}/sample-configs/proxy/demo14_skyhigh_proxy.json"
+        demo_f5_rules_path: "{{ fworch_home }}/sample-configs/generic_gateway/demo15_f5_lb.json"
+
+    - name: ensure demo proxy rules directory exists
+      file:
+        path: "{{ fworch_home }}/sample-configs/proxy"
+        state: directory
+        owner: "{{ fworch_user }}"
+        group: "{{ fworch_group }}"
+        mode: "0755"
+
+    - name: ensure demo F5 rules directory exists
+      file:
+        path: "{{ fworch_home }}/sample-configs/generic_gateway"
+        state: directory
+        owner: "{{ fworch_user }}"
+        group: "{{ fworch_group }}"
+        mode: "0755"
+
+    - name: fetch demo proxy rules json
+      get_url:
+        url: "https://fwodemodata.cactus.de/demo14_skyhigh_proxy.json"
+        dest: "{{ demo_proxy_rules_path }}"
+        mode: "0644"
+        owner: "{{ fworch_user }}"
+        group: "{{ fworch_group }}"
+
+    - name: fetch demo F5 rules json
+      get_url:
+        url: "https://fwodemodata.cactus.de/demo15_f5_lb.json"
+        dest: "{{ demo_f5_rules_path }}"
+        mode: "0644"
+        owner: "{{ fworch_user }}"
+        group: "{{ fworch_group }}"
+
+    - name: load demo proxy rules json
+      slurp:
+        src: "{{ demo_proxy_rules_path }}"
+      register: demo_proxy_rules_raw
+
+    - name: extend demo proxy rules with gateways
+      set_fact:
+        demo_proxy_gateway1: "{{ demo_proxy_mgmt_name }}-gw1"
+        demo_proxy_gateway2: "{{ demo_proxy_mgmt_name }}-gw2"
+        demo_proxy_rules_updated:
+          rules: >-
+            {{
+              (demo_proxy_rules_raw.content | b64decode | from_json).rules
+              | default([])
+              | map('combine', {'gateway': demo_proxy_mgmt_name + '-gw1'})
+              | list
+              + [
+                {
+                  'id': 'demo-gw2-1',
+                  'name': 'Allow Web via GW2',
+                  'action': 'allow',
+                  'gateway': demo_proxy_mgmt_name + '-gw2',
+                  'sources': ['any'],
+                  'destinations': ['example.org'],
+                  'services': [{'name': 'https'}]
+                }
+              ]
+            }}
+
+    - name: write updated demo proxy rules json
+      copy:
+        content: "{{ demo_proxy_rules_updated | to_nice_json }}"
+        dest: "{{ demo_proxy_rules_path }}"
+        mode: "0644"
+        owner: "{{ fworch_user }}"
+        group: "{{ fworch_group }}"
+
+    - name: ensure proxy importer uses demo rules file
+      replace:
+        path: "{{ proxy_importer_start_dir }}/appsettings.json"
+        regexp: '("Skyhigh"\s*:\s*\{[\s\S]*?"RulesJsonPath"\s*:\s*")([^"]*)'
+        replace: '\1{{ demo_proxy_rules_path }}'
+        backrefs: true
+
+    - name: ensure F5 importer uses demo rules file
+      replace:
+        path: "{{ proxy_importer_start_dir }}/appsettings.json"
+        regexp: '("F5BigIp"\s*:\s*\{[\s\S]*?"RulesJsonPath"\s*:\s*")([^"]*)'
+        replace: '\1{{ demo_f5_rules_path }}'
+        backrefs: true
+
+  become: true
+
+- block:
+    - name: fetch demo proxy management id
+      postgresql_query:
+        db: "{{ fworch_db_name }}"
+        query: "SELECT mgm_id FROM management WHERE mgm_name='{{ demo_proxy_mgmt_name }}'"
+      register: demo_proxy_mgmt_id
+
+  become: true
+  become_user: postgres
+
+- block:
+    - name: import demo proxy rules
+      uri:
+        url: "{{ proxy_importer_listen_uri | regex_replace('0\\.0\\.0\\.0', '127.0.0.1') }}api/proxy/import/skyhigh?managementId={{ demo_proxy_mgmt_id.query_result[0].mgm_id }}&managementName={{ demo_proxy_mgmt_name }}"
+        method: POST
+        status_code: 200
+      register: demo_proxy_import_result
 
 
 - block: # demo only

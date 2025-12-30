@@ -1,1 +1,8 @@
 importer_home: "{{ fworch_home }}/importer"
+proxy_importer_dir: "{{ fworch_home }}/proxy-importer"
+proxy_importer_start_dir: "{{ proxy_importer_dir }}/FWO.ProxyImporter"
+proxy_importer_service_name: "{{ product_name }}-generic-importer"
+proxy_importer_listen_uri: "http://0.0.0.0:{{ proxy_importer_listen_port }}/"
+proxy_importer_db_user: "fworchimporter"
+proxy_importer_schema: "generic_gateway"
+apache_generic_importer_timeout: 14400

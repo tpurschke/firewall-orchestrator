@@ -1,0 +1,15 @@
+query getProxyRules($where: generic_gateway_rulebase_bool_exp) {
+  generic_gateway_rulebase(where: $where, order_by: {next_recert_date: asc_nulls_last}) {
+    rule_id
+    management_id
+    management_name
+    owner_id
+    owner_name
+    next_recert_date
+    last_recertified
+    last_recertifier
+    recertified
+    comment
+    rule_json
+  }
+}

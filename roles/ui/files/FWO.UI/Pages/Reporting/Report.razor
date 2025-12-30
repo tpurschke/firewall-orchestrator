@@ -33,7 +33,7 @@
         {
             <ReportModellingParamSelection @bind-ModellingFilter="actReportFilters.ModellingFilter" @bind-TimeFilter="actReportFilters.TimeFilter" InjectedAppId="injectedAppId" ReportType="actReportFilters.ReportType" />
         }
-        @if(actReportFilters.ReportType == ReportType.Recertification || actReportFilters.ReportType == ReportType.OwnerRecertification)
+        @if(actReportFilters.ReportType == ReportType.Recertification || actReportFilters.ReportType == ReportType.OwnerRecertification || actReportFilters.ReportType == ReportType.ProxyRuleRecertOverview)
         {
             <ReportRecertParamSelection @bind-FilterInput="filterInput" @bind-RecertFilter="actReportFilters.RecertFilter" ReportType="actReportFilters.ReportType" />
         }
@@ -140,6 +140,12 @@
                         case ReportType.AppRules:
                             <RulesReport Managements="currentReport.ReportData.ManagementData" SelectedReportType="actReportFilters.ReportType" RulesPerPage="rulesPerPage"
                                 @bind-SelectedRules="selectedItemsRuleReportTable" />
+                            break;
+                        case ReportType.ProxyRules:
+                            <ProxyRulesReport Rules="currentReport.ReportData.ProxyRules" AllowSelection="false" />
+                            break;
+                        case ReportType.ProxyRuleRecertOverview:
+                            <ProxyRecertOverviewReport Overview="currentReport.ReportData.ProxyRecertOverview" />
                             break;
 
                         case ReportType.ComplianceReport:
@@ -312,6 +318,7 @@
             {
                 actReportFilters.Init(userConfig, showRuleRelatedReports);
             }
+            ApplyProxyManagementFilter();
             InitDone = true;
             await InvokeAsync(StateHasChanged);
         }
@@ -356,6 +363,7 @@
             actReportFilters.ReportType = newReportType;
             SetProperRoleForReport();
             actReportFilters.SetDisplayedTimeSelection();
+            ApplyProxyManagementFilter();
             AdjustDeviceSelection();
             ResetReport();
             StateHasChanged();
@@ -409,6 +417,38 @@
         }
     }
 
+    private void ApplyProxyManagementFilter()
+    {
+        bool isProxyReport = actReportFilters.ReportType == ReportType.ProxyRules
+            || actReportFilters.ReportType == ReportType.ProxyRuleRecertOverview;
+        foreach (ManagementSelect management in actReportFilters.DeviceFilter.Managements)
+        {
+            bool visible = !isProxyReport || management.DeviceTypeId == DeviceTypeIds.ProxyManagement;
+            management.Visible = visible;
+            if (!visible)
+            {
+                management.Selected = false;
+            }
+            foreach (DeviceSelect device in management.Devices)
+            {
+                device.Visible = visible;
+                if (!visible)
+                {
+                    device.Selected = false;
+                }
+            }
+        }
+        actReportFilters.DeviceFilter.SynchronizeMgmtFilter();
+        if (actReportFilters.DeviceFilter.AreAllDevicesSelected())
+        {
+            actReportFilters.SelectAll = false;
+        }
+        else if (!actReportFilters.DeviceFilter.IsAnyDeviceFilterSet())
+        {
+            actReportFilters.SelectAll = true;
+        }
+    }
+
     private void ResetReport()
     {
         // clear report data when switching reportType as we would be missing src/dst/svc information in some cases
@@ -445,6 +485,7 @@
         }
         await TenantViewChanged(tenantFromTemplate);
         actReportFilters.SyncFiltersFromTemplate(template);
+        ApplyProxyManagementFilter();
         StateHasChanged();
     }
 
@@ -613,6 +654,7 @@
         List<ReportType> orderedReportTypeList = new ()
         {
             ReportType.Rules, ReportType.ResolvedRules, ReportType.ResolvedRulesTech, ReportType.UnusedRules, ReportType.NatRules,
+            ReportType.ProxyRules, ReportType.ProxyRuleRecertOverview,
             ReportType.Recertification,
             ReportType.Changes, ReportType.ResolvedChanges, ReportType.ResolvedChangesTech, 
             ReportType.Statistics,

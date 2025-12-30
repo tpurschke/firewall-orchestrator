@@ -1,4 +1,5 @@
 ﻿using FWO.Basics.Interfaces;
+using FWO.Data.Proxy;
 
 namespace FWO.Data.Report
 {
@@ -10,6 +11,8 @@ namespace FWO.Data.Report
         public ManagementReport GlobalStats { get; set; } = new();
         public List<Rule> RulesFlat = [];
         public IEnumerable<IRuleViewData> RuleViewData = [];
+        public List<ProxyRule> ProxyRules { get; set; } = [];
+        public List<ProxyRecertOwnerOverview> ProxyRecertOverview { get; set; } = [];
         public int ElementsCount { get; set; }
         public int RecertificationDisplayPeriod { get; set; } = 0;
 
@@ -22,6 +25,8 @@ namespace FWO.Data.Report
             OwnerData = reportData.OwnerData;
             GlobalComSvc = reportData.GlobalComSvc;
             GlobalStats = reportData.GlobalStats;
+            ProxyRules = reportData.ProxyRules;
+            ProxyRecertOverview = reportData.ProxyRecertOverview;
             RecertificationDisplayPeriod = reportData.RecertificationDisplayPeriod;
         }
     }

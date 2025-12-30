@@ -29247,6 +29247,190 @@
                   }
                 }
               ]
+            },
+            {
+              "table": {
+                "name": "rulebase",
+                "schema": "generic_gateway"
+              },
+              "select_permissions": [
+                {
+                  "role": "auditor",
+                  "permission": {
+                    "columns": [
+                      "rule_id",
+                      "management_id",
+                      "management_name",
+                      "owner_id",
+                      "owner_name",
+                      "next_recert_date",
+                      "last_recertified",
+                      "last_recertifier",
+                      "recertified",
+                      "comment",
+                      "rule_json",
+                      "imported_at"
+                    ],
+                    "filter": {},
+                    "allow_aggregations": true
+                  },
+                  "comment": ""
+                },
+                {
+                  "role": "fw-admin",
+                  "permission": {
+                    "columns": [
+                      "rule_id",
+                      "management_id",
+                      "management_name",
+                      "owner_id",
+                      "owner_name",
+                      "next_recert_date",
+                      "last_recertified",
+                      "last_recertifier",
+                      "recertified",
+                      "comment",
+                      "rule_json",
+                      "imported_at"
+                    ],
+                    "filter": {},
+                    "allow_aggregations": true
+                  },
+                  "comment": ""
+                },
+                {
+                  "role": "importer",
+                  "permission": {
+                    "columns": [
+                      "rule_id",
+                      "management_id",
+                      "management_name",
+                      "owner_id",
+                      "owner_name",
+                      "next_recert_date",
+                      "last_recertified",
+                      "last_recertifier",
+                      "recertified",
+                      "comment",
+                      "rule_json",
+                      "imported_at"
+                    ],
+                    "filter": {},
+                    "allow_aggregations": true
+                  },
+                  "comment": ""
+                },
+                {
+                  "role": "middleware-server",
+                  "permission": {
+                    "columns": [
+                      "rule_id",
+                      "management_id",
+                      "management_name",
+                      "owner_id",
+                      "owner_name",
+                      "next_recert_date",
+                      "last_recertified",
+                      "last_recertifier",
+                      "recertified",
+                      "comment",
+                      "rule_json",
+                      "imported_at"
+                    ],
+                    "filter": {},
+                    "allow_aggregations": true
+                  },
+                  "comment": ""
+                },
+                {
+                  "role": "modeller",
+                  "permission": {
+                    "columns": [
+                      "rule_id",
+                      "management_id",
+                      "management_name",
+                      "owner_id",
+                      "owner_name",
+                      "next_recert_date",
+                      "last_recertified",
+                      "last_recertifier",
+                      "recertified",
+                      "comment",
+                      "rule_json",
+                      "imported_at"
+                    ],
+                    "filter": {},
+                    "allow_aggregations": true
+                  },
+                  "comment": ""
+                },
+                {
+                  "role": "recertifier",
+                  "permission": {
+                    "columns": [
+                      "rule_id",
+                      "management_id",
+                      "management_name",
+                      "owner_id",
+                      "owner_name",
+                      "next_recert_date",
+                      "last_recertified",
+                      "last_recertifier",
+                      "recertified",
+                      "comment",
+                      "rule_json",
+                      "imported_at"
+                    ],
+                    "filter": {},
+                    "allow_aggregations": true
+                  },
+                  "comment": ""
+                },
+                {
+                  "role": "reporter",
+                  "permission": {
+                    "columns": [
+                      "rule_id",
+                      "management_id",
+                      "management_name",
+                      "owner_id",
+                      "owner_name",
+                      "next_recert_date",
+                      "last_recertified",
+                      "last_recertifier",
+                      "recertified",
+                      "comment",
+                      "rule_json",
+                      "imported_at"
+                    ],
+                    "filter": {},
+                    "allow_aggregations": true
+                  },
+                  "comment": ""
+                },
+                {
+                  "role": "reporter-viewall",
+                  "permission": {
+                    "columns": [
+                      "rule_id",
+                      "management_id",
+                      "management_name",
+                      "owner_id",
+                      "owner_name",
+                      "next_recert_date",
+                      "last_recertified",
+                      "last_recertifier",
+                      "recertified",
+                      "comment",
+                      "rule_json",
+                      "imported_at"
+                    ],
+                    "filter": {},
+                    "allow_aggregations": true
+                  },
+                  "comment": ""
+                }
+              ]
             }
           ],
           "functions": [

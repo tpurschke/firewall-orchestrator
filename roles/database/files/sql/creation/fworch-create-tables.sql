@@ -1690,3 +1690,30 @@ create table modelling.change_history
 	change_time Timestamp default now(),
 	change_source Varchar default 'manual'
 );
+
+CREATE SCHEMA IF NOT EXISTS generic_gateway;
+
+CREATE TABLE IF NOT EXISTS generic_gateway.rulebase
+(
+	rule_id TEXT PRIMARY KEY,
+	management_id INTEGER NOT NULL,
+	management_name TEXT,
+	owner_id INTEGER,
+	owner_name TEXT,
+	next_recert_date TIMESTAMPTZ,
+	last_recertified TIMESTAMPTZ,
+	last_recertifier TEXT,
+	recertified BOOLEAN NOT NULL DEFAULT FALSE,
+	comment TEXT,
+	rule_json JSONB NOT NULL,
+	imported_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_rulebase_mgmt ON generic_gateway.rulebase (management_id);
+CREATE INDEX IF NOT EXISTS idx_rulebase_owner ON generic_gateway.rulebase (owner_id);
+CREATE INDEX IF NOT EXISTS idx_rulebase_next_recert ON generic_gateway.rulebase (next_recert_date);
+
+GRANT USAGE ON SCHEMA generic_gateway TO configimporters;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA generic_gateway TO configimporters;
+GRANT USAGE ON SCHEMA generic_gateway TO fworchadmins;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA generic_gateway TO fworchadmins;

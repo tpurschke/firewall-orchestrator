@@ -32,7 +32,7 @@ namespace FWO.Report
                     ReportFile reportFile = (await apiConnection.SendQueryAsync<List<ReportFile>>(ReportQueries.getGeneratedReport, new { report_id = reportId }))[0];
                     if (reportFile.Json != null)
                     {
-                        return JsonSerializer.Deserialize<List<OwnerConnectionReport>>(reportFile.Json) ?? [];
+                        return System.Text.Json.JsonSerializer.Deserialize<List<OwnerConnectionReport>>(reportFile.Json) ?? [];
                     }
                 }
             }

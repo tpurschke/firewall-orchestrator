@@ -43,6 +43,9 @@ namespace FWO.Config.File
             [JsonPropertyName("api_uri")]
             public string? ApiServerUri { get; set; }
 
+            [JsonPropertyName("proxy_importer_uri")]
+            public string? ProxyImporterUri { get; set; }
+
             [JsonPropertyName("remote_addresses")]
             public string[]? RemoteAddresses { get; set; }
 
@@ -94,6 +97,14 @@ namespace FWO.Config.File
             get
             {
                 return CriticalConfigValueLoaded(Data.MiddlewareServerUri);
+            }
+        }
+
+        public static string ProxyImporterUri
+        {
+            get
+            {
+                return Data.ProxyImporterUri ?? "";
             }
         }
 

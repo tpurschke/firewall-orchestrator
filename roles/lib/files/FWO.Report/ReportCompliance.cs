@@ -76,7 +76,7 @@ namespace FWO.Report
 
             if (!string.IsNullOrEmpty(_globalConfig.DebugConfig))
             {
-                DebugConfig = JsonSerializer.Deserialize<DebugConfig>(_globalConfig.DebugConfig) ?? new();
+                DebugConfig = System.Text.Json.JsonSerializer.Deserialize<DebugConfig>(_globalConfig.DebugConfig) ?? new();
             }
             else
             {
@@ -145,7 +145,7 @@ namespace FWO.Report
 
         public override string ExportToJson()
         {
-            return JsonSerializer.Serialize(ReportData.RuleViewData, new JsonSerializerOptions { WriteIndented = true });
+            return System.Text.Json.JsonSerializer.Serialize(ReportData.RuleViewData, new JsonSerializerOptions { WriteIndented = true });
         }
 
         public override string ExportToCsv()

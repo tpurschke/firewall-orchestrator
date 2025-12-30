@@ -1,0 +1,15 @@
+[Unit]
+Description=FWOrch Generic Importer
+After=network.target
+
+[Service]
+WorkingDirectory={{ proxy_importer_start_dir }}
+ExecStart={{ proxy_importer_start_dir }}/bin/{{ dotnet_mode }}/net{{ dotnet_version }}/FWO.ProxyImporter
+Restart=on-failure
+User={{ fworch_user }}
+Environment=ASPNETCORE_URLS={{ proxy_importer_listen_uri }}
+Environment=DOTNET_ENVIRONMENT=Production
+Environment=ProxyImporter__Schema={{ proxy_importer_schema }}
+
+[Install]
+WantedBy=multi-user.target

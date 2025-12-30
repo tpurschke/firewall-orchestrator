@@ -163,6 +163,8 @@ namespace FWO.Report
                 ReportType.VarianceAnalysis => new ReportVariances(query, userConfig, repType),
                 ReportType.ComplianceReport => new ReportCompliance(query, userConfig, repType, reportFilter.ReportParams),
                 ReportType.ComplianceDiffReport => new ReportComplianceDiff(query, userConfig, repType, reportFilter.ReportParams),
+                ReportType.ProxyRules => new ReportProxyRules(query, userConfig, repType),
+                ReportType.ProxyRuleRecertOverview => new ReportProxyRecertOverview(query, userConfig, repType),
                 ReportType.OwnerRecertification => new ReportOwnerRecerts(query, userConfig, repType),
                 ReportType.RecertificationEvent => new RecertificateOwner(query, userConfig, repType),
                 ReportType.RecertEventReport => new ReportRecertEvent(query, userConfig, repType),

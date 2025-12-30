@@ -1,5 +1,5 @@
 ### general settings
-product_version: "9.0"
+product_version: "9.1"
 ansible_user: "{{ lookup('env', 'USER') }}"
 ansible_become_method: sudo
 ansible_python_interpreter: /usr/bin/python3
@@ -103,6 +103,12 @@ middleware_web_listener_port: 8888
 middleware_uri: "https://{{ middleware_hostname }}:{{ middleware_web_listener_port }}/"
 ##### application server data
 middleware_internal_port: 8880
+
+###############################################################
+### proxy importer service
+proxy_importer_listen_port: 8890
+proxy_importer_web_listener_port: 8889
+proxy_importer_uri: "https://{{ importer_hostname }}:{{ proxy_importer_web_listener_port }}/"
 
 ###############################################################
 ui_admin_password_file: "{{ fworch_secrets_dir }}/ui_admin_pwd"

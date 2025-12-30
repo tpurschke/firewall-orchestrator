@@ -60,7 +60,7 @@ namespace FWO.Report
             globalStatisticsManagement.Name = "global statistics";
             List<ManagementReport> combinedManagements = new (){ globalStatisticsManagement };
             combinedManagements.AddRange(ReportData.ManagementData.Where(mgt => !mgt.Ignore));
-            return JsonSerializer.Serialize(combinedManagements, new JsonSerializerOptions { WriteIndented = true });
+            return System.Text.Json.JsonSerializer.Serialize(combinedManagements, new JsonSerializerOptions { WriteIndented = true });
         }
 
         public override string ExportToCsv()

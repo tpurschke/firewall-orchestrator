@@ -1,0 +1,29 @@
+- name: copy proxy importer systemd service script
+  template:
+    src: fworch-generic-importer.service.j2
+    dest: "/lib/systemd/system/{{ proxy_importer_service_name }}.service"
+    backup: true
+    mode: "0644"
+    owner: "root"
+  become: true
+  environment: "{{ proxy_env }}"
+
+- name: publish proxy importer
+  command: "dotnet publish --no-self-contained -c {{ dotnet_mode }} -o {{ proxy_importer_start_dir }}/bin/{{ dotnet_mode }}/net{{ dotnet_version }}"
+  args:
+    chdir: "{{ proxy_importer_start_dir }}"
+  become: true
+  become_user: "{{ fworch_user }}"
+  environment: "{{ proxy_env }}"
+  register: publish_result
+
+- name: fail if publish returned an error
+  fail:
+    msg: "could not publish proxy importer successfully: {{ publish_result }}"
+  when: publish_result.rc != 0
+
+- name: make proxy importer service run at host startup
+  systemd:
+    name: "{{ proxy_importer_service_name }}"
+    enabled: true
+  become: true

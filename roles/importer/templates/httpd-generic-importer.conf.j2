@@ -1,0 +1,25 @@
+<VirtualHost *:{{ proxy_importer_web_listener_port }}>
+	ServerName {{ importer_hostname }}:{{ proxy_importer_web_listener_port }}
+	ServerAdmin {{ server_admin }}
+	Timeout {{ apache_generic_importer_timeout }}
+
+	ProxyPass / http://127.0.0.1:{{ proxy_importer_listen_port }}/
+	ProxyPassReverse / http://127.0.0.1:{{ proxy_importer_listen_port }}/
+
+	ErrorLog /var/log/{{ webserver_package_name }}/error.log
+	TransferLog /var/log/{{ webserver_package_name }}/access.log
+	CustomLog /var/log/{{ webserver_package_name }}/ssl_request_log "%t %h %{SSL_PROTOCOL}x %{SSL_CIPHER}x \"%r\" %b"
+	
+	SSLEngine on
+	SSLCipherSuite RSA:!EXP:!NULL:+HIGH:+MEDIUM:-LOW 
+	SSLCertificateFile /etc/{{ webserver_package_name }}/ssl/server.crt
+	SSLCertificateKeyFile /etc/{{ webserver_package_name }}/ssl/server.key
+
+    # --- Security Headers ---
+<IfModule mod_headers.c>
+{% for header in apache_security_headers %}
+    {{ header }}
+{% endfor %}
+</IfModule>
+
+</VirtualHost>

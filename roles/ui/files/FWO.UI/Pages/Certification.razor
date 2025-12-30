@@ -5,6 +5,7 @@
 @using FWO.Report
 @using FWO.Report.Filter
 @using FWO.Services
+@using FWO.Data.Proxy
 @using FWO.Ui.Data
 @using FWO.Ui.Pages.Reporting.Reports
 @using System
@@ -17,6 +18,7 @@
 @inject ApiConnection apiConnection
 @inject UserConfig userConfig
 @inject MiddlewareClient middlewareClient
+@inject ProxyImporterClient proxyImporterClient
 
 @* ==== LEFT SIDEBAR ==== *@
 <Sidebar @ref="deviceSelectionSidebar" Collapsible="true" Resizeable="true" PositionLeft="true"
@@ -100,9 +102,16 @@
         }
     </div>
     <hr />
-    <RulesReport Recertification="true" ReadonlyMode="readonlyMode" Managements="managementsReport"
-        RulesPerPage="rulesPerPage" @bind-SelectedRules="selectedRules"
-        SelectedReportType="ReportType.Recertification" />
+    @if (proxyRecertMode)
+    {
+        <ProxyRulesReport Rules="proxyRules" AllowSelection="!readonlyMode" SelectedRulesChanged="UpdateSelectedProxyRules" />
+    }
+    else
+    {
+        <RulesReport Recertification="true" ReadonlyMode="readonlyMode" Managements="managementsReport"
+            RulesPerPage="rulesPerPage" @bind-SelectedRules="selectedRules"
+            SelectedReportType="ReportType.Recertification" />
+    }
 </div>
 
 <PopUp Title="@(userConfig.GetText("add_comment"))" Show="@AddCommentMode" Size=PopupSize.Large
@@ -163,6 +172,9 @@
     private List<FwoOwner> collectedOwnerships = [];
     private DeviceFilter deviceFilter = new();
     private List<Rule> selectedRules = [];
+    private List<ProxyRule> proxyRules = [];
+    private List<ProxyRule> selectedProxyRules = [];
+    private bool proxyRecertMode = false;
 
     private ReportBase? currentReport;
     private ReportTemplate reportParams = new();
@@ -245,6 +257,9 @@
         processing = true;
         readonlyMode = !authenticationStateTask!.Result.User.IsInRole(Roles.Recertifier) || selectedOwner == null;
         selectedRules.Clear();
+        selectedProxyRules.Clear();
+        proxyRules = [];
+        rulesFound = false;
 
         try
         {
@@ -252,6 +267,25 @@
             {
                 DisplayMessageInUi(null, userConfig.GetText("no_device_selected"), userConfig.GetText("E1001"), true);
                 processing = false;
+                return;
+            }
+
+            List<int> proxyManagements = GetSelectedProxyManagementIds();
+            proxyRecertMode = proxyManagements.Count > 0;
+
+            if (proxyRecertMode)
+            {
+                currentReport = null;
+                managementsReport = [];
+                int? dueWithinDays = recertLookAheadDays > 0 ? recertLookAheadDays : null;
+                proxyRules = await proxyImporterClient.GetProxyRulesAsync(proxyManagements, selectedOwner?.Id, dueWithinDays, false, tokenSource.Token);
+                rulesFound = proxyRules.Count > 0;
+                processing = false;
+                await InvokeAsync(StateHasChanged);
+                if (!rulesFound)
+                {
+                    DisplayMessageInUi(null, userConfig.GetText("generate_report"), userConfig.GetText("E4002"), true);
+                }
                 return;
             }
 
@@ -303,6 +337,14 @@
         };
     }
 
+    private List<int> GetSelectedProxyManagementIds()
+    {
+        return deviceFilter.Managements
+            .Where(mgt => mgt.DeviceTypeId == DeviceTypeIds.ProxyManagement && DeviceFilter.IsSelectedManagement(mgt))
+            .Select(mgt => mgt.Id)
+            .ToList();
+    }
+
     private void postProcessReport()
     {
         rulesFound = false;
@@ -345,6 +387,13 @@
         AddCommentMode = false;
         try
         {
+            if (proxyRecertMode)
+            {
+                await RecertifyProxyRules();
+                await GenerateRecertificationReport();
+                return;
+            }
+
             AnalyzeSelected();
             await DoRecerts();
 
@@ -366,6 +415,33 @@
         {
             DisplayMessageInUi(exception, userConfig.GetText("execute_selected"), "", true);
         }
+    }
+
+    private async Task RecertifyProxyRules()
+    {
+        if (selectedProxyRules.Count == 0)
+        {
+            DisplayMessageInUi(null, userConfig.GetText("execute_selected"), userConfig.GetText("E4002"), true);
+            return;
+        }
+
+        ProxyRecertificationRequest request = new()
+        {
+            RuleIds = selectedProxyRules.Select(rule => rule.Id).ToList(),
+            RecertifierDn = userConfig.User.Dn ?? "",
+            Comment = actComment,
+            NextRecertDate = DateTime.UtcNow.AddDays(userConfig.RecertificationPeriod)
+        };
+
+        int updated = await proxyImporterClient.RecertifyRulesAsync(request);
+        string txt = userConfig.GetText("recerts_executed") + updated.ToString();
+        DisplayMessageInUi(null, userConfig.GetText("execute_selected"), txt, false);
+    }
+
+    private Task UpdateSelectedProxyRules(List<ProxyRule> rules)
+    {
+        selectedProxyRules = rules;
+        return Task.CompletedTask;
     }
 
     private void AnalyzeSelected()

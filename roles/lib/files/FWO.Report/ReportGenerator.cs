@@ -34,6 +34,32 @@ namespace FWO.Report
         {
             try
             {
+                if (report.ReportType == ReportType.ProxyRules || report.ReportType == ReportType.ProxyRuleRecertOverview)
+                {
+                    List<int> selectedManagements = reportTemplate.ReportParams.DeviceFilter.GetSelectedManagements();
+                    int? ownerId = reportTemplate.ReportParams.RecertFilter.RecertOwnerList.Count > 0
+                        ? reportTemplate.ReportParams.RecertFilter.RecertOwnerList[0]
+                        : null;
+                    int recertDisplayDays = reportTemplate.ReportParams.RecertFilter.RecertificationDisplayPeriod;
+                    int? dueWithinDays = recertDisplayDays > 0 ? recertDisplayDays : null;
+
+                    report.ReportData.RecertificationDisplayPeriod = recertDisplayDays;
+
+                    if (report is ReportProxyRules proxyRules)
+                    {
+                        proxyRules.SelectedManagementIds = selectedManagements;
+                        proxyRules.OwnerId = ownerId;
+                        proxyRules.DueWithinDays = dueWithinDays;
+                    }
+                    if (report is ReportProxyRecertOverview proxyOverview)
+                    {
+                        proxyOverview.SelectedManagementIds = selectedManagements;
+                        proxyOverview.DueWithinDays = dueWithinDays;
+                    }
+                    await report.Generate(userConfig.ElementsPerFetch, apiConnection, _ => Task.CompletedTask, token);
+                    return;
+                }
+
                 if (report.ReportType.IsConnectionRelatedReport())
                 {
                     await GenerateConnectionRelatedReport(report, reportTemplate, apiConnection, userConfig, displayMessageInUi, token);

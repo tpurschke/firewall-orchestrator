@@ -1,0 +1,61 @@
+{
+  "rules": [
+    {
+      "id": "demo-1",
+      "name": "Allow Web",
+      "action": "allow",
+      "sources": [
+        "any"
+      ],
+      "destinations": [
+        "example.com",
+        {
+          "name": "api.example.com"
+        }
+      ],
+      "services": [
+        {
+          "name": "https"
+        }
+      ],
+      "owner": "demo-owner",
+      "nextRecertDate": "2025-01-15T00:00:00Z",
+      "gateway": "skyhigh-proxy1-gw1"
+    },
+    {
+      "id": "demo-2",
+      "ruleName": "Block Social",
+      "decision": "deny",
+      "sources": [
+        {
+          "value": "branch-office"
+        }
+      ],
+      "destinations": [
+        "facebook.com"
+      ],
+      "services": [
+        "http",
+        "https"
+      ],
+      "gateway": "skyhigh-proxy1-gw1"
+    },
+    {
+      "id": "demo-gw2-1",
+      "name": "Allow Web via GW2",
+      "action": "allow",
+      "gateway": "skyhigh-proxy1-gw2",
+      "sources": [
+        "any"
+      ],
+      "destinations": [
+        "example.org"
+      ],
+      "services": [
+        {
+          "name": "https"
+        }
+      ]
+    }
+  ]
+}

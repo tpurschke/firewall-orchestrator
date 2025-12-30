@@ -4,7 +4,7 @@
 @typeparam ElementType
 
 @inject DomEventService eventService
-@inject IJSRuntime? jsRuntime
+@inject IJSRuntime jsRuntime
 @implements IDisposable
 
 <div id="@($"dropdown-{Id}")" class="input-group @(Small ? "input-group-sm" : "")">
@@ -331,10 +331,6 @@
             eventService.OnGlobalClick -= OnGlobalClick;
         }
 
-        if (jsRuntime is not null)
-        {
-            jsRuntime = null;
-            JsDisposed = true;
-        }
+        JsDisposed = true;
     }
 }

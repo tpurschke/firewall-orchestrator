@@ -497,6 +497,14 @@ thead {
     transform: translate(0px, 55px) !important;
 }
 
+.table-responsive:has(.dropdown-menu.show) {
+    overflow: visible;
+}
+
+.table-responsive .dropdown-menu {
+    z-index: 1055;
+}
+
 .cursor-pointer{
     cursor: pointer;
 }

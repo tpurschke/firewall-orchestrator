@@ -338,3 +338,9 @@ make sure to place your venv outside the repo, e.g. into /home/user/dev/venv
     source installer-venv/bin/activate
     pip install -r path-to-repo/roles/importer/files/importer/requirements.txt
 - also reducing db listener to localhost
+
+# 9.1 - 27.12.2025 DEVELOP
+- add proxy importer service for proxy configurations
+- store proxy rules in PostgreSQL schema "proxy" with JSONB payloads
+- add report types Rules: Proxy and Cert: Proxy Rule Overview
+- enable proxy rule recertification in certification mode

@@ -16,6 +16,9 @@ namespace FWO.Data.Report
         [JsonProperty("uid"), JsonPropertyName("uid")]
         public string Uid { get; set; } = "";
 
+        [JsonProperty("dev_typ_id"), JsonPropertyName("dev_typ_id")]
+        public int DeviceTypeId { get; set; }
+
 		[JsonProperty("devices"), JsonPropertyName("devices")]
         public List<DeviceSelect> Devices { get; set; } = [];
 
@@ -36,6 +39,8 @@ namespace FWO.Data.Report
             {
                 Id = Id,
                 Name = Name,
+                Uid = Uid,
+                DeviceTypeId = DeviceTypeId,
                 Devices = ClonedDevices,
                 UiReference = UiReference,
                 Visible = Visible,

@@ -183,6 +183,11 @@ namespace FWO.Report
             }
             else
             {
+                if (mgmt.Rulebases.Any(rulebase => rulebase.Rules.Length > 0))
+                {
+                    Log.TryWriteLog(LogType.Info, "Device Report", $"Found rules in unlinked rulebase for device {dev.Id} ({dev.Name}).", _debugConfig.ExtendedLogReportGeneration);
+                    return false;
+                }
                 Log.TryWriteLog(LogType.Info, "Device Report", $"No rulebase links found in device {dev.Id} ({dev.Name}).", _debugConfig.ExtendedLogReportGeneration);
             }
 

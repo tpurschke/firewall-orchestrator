@@ -34,6 +34,40 @@
         - "--chown={{ fworch_user }}:{{ fworch_group }}"
     tags: [ 'test' ]
 
+  - name: copy proxy importer files
+    synchronize:
+      src: "proxy-importer"
+      dest: "{{ fworch_home }}"
+      rsync_opts:
+        - "--chmod=0755"
+        - "--chown={{ fworch_user }}:{{ fworch_group }}"
+    tags: [ 'test' ]
+
+  - name: read fworch db password for proxy importer
+    slurp:
+      src: "{{ fworch_db_password_file }}"
+    register: fworch_db_password_raw
+    become: true
+
+  - name: set proxy importer db connection string
+    set_fact:
+      proxy_importer_connection_string: "Host={{ fworch_db_host }};Port={{ fworch_db_port }};Database={{ fworch_db_name }};Username={{ fworch_user }};Password={{ fworch_db_password_raw.content | b64decode | trim }};SearchPath={{ proxy_importer_schema }}"
+
+  - name: write proxy importer connection string to appsettings.json
+    replace:
+      path: "{{ proxy_importer_start_dir }}/appsettings.json"
+      regexp: '"ConnectionString":\s*"[^\"]*"'
+      replace: '"ConnectionString": "{{ proxy_importer_connection_string }}"'
+    notify:
+      - restart proxy importer
+
+  - name: create lib tmp dir for dotnet installer
+    file:
+      dest: "{{ lib_tmp_dir }}"
+      state: directory
+      owner: "{{ fworch_user }}"
+      group: "{{ fworch_group }}"
+
   - name: Install importer perl modules 
     package: name={{ item }} state=present
     loop:
@@ -106,6 +140,17 @@
       mode: "0644"
       owner: "root"
     become: true
+
+  - name: install dotnet for proxy importer
+    import_role:
+      name: lib
+      tasks_from: install_dot_net.yml
+
+  - name: install and enable proxy importer service
+    import_tasks: install_and_run_proxy_importer_service.yml
+
+  - name: install and enable generic importer apache proxy
+    import_tasks: generic_importer_apache_install_and_setup.yml
 
   - name: include fetch importer pwd script
     import_tasks: fetch-importer-pwd.yml

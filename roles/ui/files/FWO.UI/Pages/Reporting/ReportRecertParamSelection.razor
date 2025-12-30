@@ -16,32 +16,35 @@
             </ElementTemplate>
         </Dropdown>
         <br>
-        <div class="form-check">
-            <input class="form-check-input" type="checkbox" id="recertShowAnyMatch"
-                @bind="RecertFilter.RecertShowAnyMatch"
-                @oninput="@(async () =>
-                { 
-                    RecertFilter.RecertShowAnyMatch = !RecertFilter.RecertShowAnyMatch;
-                    if (!RecertFilter.RecertShowAnyMatch) 
-                    {
-                        if (FilterInput.Length > 0)
+        @if (ReportType == ReportType.Recertification)
+        {
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="recertShowAnyMatch"
+                    @bind="RecertFilter.RecertShowAnyMatch"
+                    @oninput="@(async () =>
+                    { 
+                        RecertFilter.RecertShowAnyMatch = !RecertFilter.RecertShowAnyMatch;
+                        if (!RecertFilter.RecertShowAnyMatch) 
                         {
-                            FilterInput += " and (not src==0.0.0.0 and not dst==0.0.0.0)";
+                            if (FilterInput.Length > 0)
+                            {
+                                FilterInput += " and (not src==0.0.0.0 and not dst==0.0.0.0)";
+                            }
+                            else
+                            {
+                                FilterInput = "(not src==0.0.0.0 and not dst==0.0.0.0)";
+                            }
                         }
-                        else
+                        else 
                         {
-                            FilterInput = "(not src==0.0.0.0 and not dst==0.0.0.0)";
+                            FilterInput =  FilterInput.Replace("and (not src==0.0.0.0 and not dst==0.0.0.0)", string.Empty);
+                            FilterInput =  FilterInput.Replace("(not src==0.0.0.0 and not dst==0.0.0.0)", string.Empty);
                         }
-                    }
-                    else 
-                    {
-                        FilterInput =  FilterInput.Replace("and (not src==0.0.0.0 and not dst==0.0.0.0)", string.Empty);
-                        FilterInput =  FilterInput.Replace("(not src==0.0.0.0 and not dst==0.0.0.0)", string.Empty);
-                    }
-                    await FilterInputChanged.InvokeAsync(FilterInput);
-                })" />
-            <label class="form-check-label text-white" for="recertShowAnyMatch">@(userConfig.GetText("show_any_match"))</label>
-        </div>
+                        await FilterInputChanged.InvokeAsync(FilterInput);
+                    })" />
+                <label class="form-check-label text-white" for="recertShowAnyMatch">@(userConfig.GetText("show_any_match"))</label>
+            </div>
+        }
     }
 </div>
 

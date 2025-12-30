@@ -36,6 +36,7 @@ namespace FWO.Api.Client.Queries
 
         public static readonly string getManagementForNormalizedConfig;
         public static readonly string getManagementForLatestNormalizedConfig;
+        public static readonly string getProxyRules;
 
         static ReportQueries()
         {
@@ -69,6 +70,7 @@ namespace FWO.Api.Client.Queries
                 setImportsNotified = GetQueryText("report/setImportsNotified.graphql");
                 getManagementForNormalizedConfig = GetQueryText("report/getManagementForNormalizedConfig.graphql");
                 getManagementForLatestNormalizedConfig = GetQueryText("report/getManagementForLatestNormalizedConfig.graphql");
+                getProxyRules = GetQueryText("report/getProxyRules.graphql");
             }
             catch (Exception exception)
             {
