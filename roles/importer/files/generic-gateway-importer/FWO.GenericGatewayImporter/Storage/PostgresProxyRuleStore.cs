@@ -1,16 +1,16 @@
 using System.Text.Json;
-using FWO.ProxyImporter.Models;
+using FWO.GenericGatewayImporter.Models;
 using Npgsql;
 using NpgsqlTypes;
 
-namespace FWO.ProxyImporter.Storage
+namespace FWO.GenericGatewayImporter.Storage
 {
     public class PostgresProxyRuleStore : IProxyRuleStore
     {
         private readonly string connectionString;
         private readonly string schema;
 
-        public PostgresProxyRuleStore(ProxyImporterOptions options)
+        public PostgresProxyRuleStore(GenericGatewayImporterOptions options)
         {
             connectionString = options.ConnectionString;
             schema = string.IsNullOrWhiteSpace(options.Schema) ? "generic_gateway" : options.Schema;

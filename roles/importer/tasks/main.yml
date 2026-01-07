@@ -36,7 +36,7 @@
 
   - name: copy proxy importer files
     synchronize:
-      src: "proxy-importer"
+      src: "generic-gateway-importer"
       dest: "{{ fworch_home }}"
       rsync_opts:
         - "--chmod=0755"
@@ -51,13 +51,13 @@
 
   - name: set proxy importer db connection string
     set_fact:
-      proxy_importer_connection_string: "Host={{ fworch_db_host }};Port={{ fworch_db_port }};Database={{ fworch_db_name }};Username={{ fworch_user }};Password={{ fworch_db_password_raw.content | b64decode | trim }};SearchPath={{ proxy_importer_schema }}"
+      generic_gateway_importer_connection_string: "Host={{ fworch_db_host }};Port={{ fworch_db_port }};Database={{ fworch_db_name }};Username={{ fworch_user }};Password={{ fworch_db_password_raw.content | b64decode | trim }};SearchPath={{ generic_gateway_importer_schema }}"
 
   - name: write proxy importer connection string to appsettings.json
     replace:
-      path: "{{ proxy_importer_start_dir }}/appsettings.json"
+      path: "{{ generic_gateway_importer_start_dir }}/appsettings.json"
       regexp: '"ConnectionString":\s*"[^\"]*"'
-      replace: '"ConnectionString": "{{ proxy_importer_connection_string }}"'
+      replace: '"ConnectionString": "{{ generic_gateway_importer_connection_string }}"'
     notify:
       - restart proxy importer
 
@@ -147,7 +147,7 @@
       tasks_from: install_dot_net.yml
 
   - name: install and enable proxy importer service
-    import_tasks: install_and_run_proxy_importer_service.yml
+    import_tasks: install_and_run_generic_gateway_importer_service.yml
 
   - name: install and enable generic importer apache proxy
     import_tasks: generic_importer_apache_install_and_setup.yml

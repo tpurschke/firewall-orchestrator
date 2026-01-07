@@ -5,17 +5,17 @@ using FWO.Logging;
 
 namespace FWO.Services
 {
-    public class ProxyImporterClient
+    public class GenericGatewayImporterClient
     {
         private readonly HttpClient httpClient;
         private readonly string baseUri;
 
-        public ProxyImporterClient()
-            : this(new HttpClient(), ConfigFile.ProxyImporterUri)
+        public GenericGatewayImporterClient()
+            : this(new HttpClient(), ConfigFile.GenericGatewayImporterUri)
         {
         }
 
-        public ProxyImporterClient(HttpClient httpClient, string baseUri)
+        public GenericGatewayImporterClient(HttpClient httpClient, string baseUri)
         {
             this.httpClient = httpClient;
             this.baseUri = string.IsNullOrWhiteSpace(baseUri) ? "" : baseUri.TrimEnd('/') + "/";
@@ -23,13 +23,13 @@ namespace FWO.Services
 
         public async Task<List<ProxyRule>> GetProxyRulesAsync(List<int> managementIds, int? ownerId, int? dueWithinDays, bool includeRecertified, CancellationToken cancellationToken = default)
         {
-            string url = BuildUrl("api/proxy/rules", managementIds, ownerId, dueWithinDays, includeRecertified);
+            string url = BuildUrl("api/generic-gateway/rules", managementIds, ownerId, dueWithinDays, includeRecertified);
             return await GetListAsync<ProxyRule>(url, cancellationToken);
         }
 
         public async Task<List<ProxyRecertOwnerOverview>> GetRecertOverviewAsync(List<int> managementIds, int? dueWithinDays, CancellationToken cancellationToken = default)
         {
-            string url = BuildUrl("api/proxy/recert/overview", managementIds, null, dueWithinDays, null);
+            string url = BuildUrl("api/generic-gateway/recert/overview", managementIds, null, dueWithinDays, null);
             return await GetListAsync<ProxyRecertOwnerOverview>(url, cancellationToken);
         }
 
@@ -37,14 +37,14 @@ namespace FWO.Services
         {
             if (string.IsNullOrWhiteSpace(baseUri))
             {
-                Log.WriteWarning("Proxy Importer", "Proxy importer uri is not configured.");
+                Log.WriteWarning("Generic Gateway Importer", "Generic gateway importer uri is not configured.");
                 return 0;
             }
-            string url = new Uri(new Uri(baseUri), "api/proxy/recertify").ToString();
+            string url = new Uri(new Uri(baseUri), "api/generic-gateway/recertify").ToString();
             HttpResponseMessage response = await httpClient.PostAsJsonAsync(url, request, cancellationToken);
             if (!response.IsSuccessStatusCode)
             {
-                Log.WriteWarning("Proxy Importer", $"Recertify request failed: {response.StatusCode}");
+                Log.WriteWarning("Generic Gateway Importer", $"Recertify request failed: {response.StatusCode}");
                 return 0;
             }
             var result = await response.Content.ReadFromJsonAsync<RecertifyResult>(cancellationToken: cancellationToken);
@@ -57,7 +57,7 @@ namespace FWO.Services
             {
                 if (string.IsNullOrWhiteSpace(url))
                 {
-                    Log.WriteWarning("Proxy Importer", "Proxy importer uri is not configured.");
+                    Log.WriteWarning("Generic Gateway Importer", "Generic gateway importer uri is not configured.");
                     return [];
                 }
                 List<T>? result = await httpClient.GetFromJsonAsync<List<T>>(url, cancellationToken);
@@ -65,7 +65,7 @@ namespace FWO.Services
             }
             catch (Exception exception)
             {
-                Log.WriteError("Proxy Importer", $"Failed to call {url}", exception);
+                Log.WriteError("Generic Gateway Importer", $"Failed to call {url}", exception);
                 return [];
             }
         }

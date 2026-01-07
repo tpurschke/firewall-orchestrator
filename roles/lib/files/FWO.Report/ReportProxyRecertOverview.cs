@@ -17,7 +17,7 @@ namespace FWO.Report
 
         public override async Task Generate(int elementsPerFetch, ApiConnection apiConnection, Func<ReportData, Task> callback, CancellationToken ct)
         {
-            ProxyImporterClient client = new();
+            GenericGatewayImporterClient client = new();
             List<ProxyRecertOwnerOverview> overview = await client.GetRecertOverviewAsync(SelectedManagementIds, DueWithinDays, ct);
             ReportData.ProxyRecertOverview = overview;
             ReportData.ElementsCount = overview.Sum(entry => entry.RulesDue.Count);

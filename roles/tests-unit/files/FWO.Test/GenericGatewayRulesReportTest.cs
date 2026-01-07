@@ -4,7 +4,7 @@ using NUnit.Framework;
 namespace FWO.Test
 {
     [TestFixture]
-    internal class ProxyRulesReportTest
+    internal class GenericGatewayRulesReportTest
     {
         [Test]
         public void BuildTableData_ExtractsDynamicColumnsFromRawJson()

@@ -1,6 +1,6 @@
-using FWO.ProxyImporter.Models;
+using FWO.GenericGatewayImporter.Models;
 
-namespace FWO.ProxyImporter.Storage
+namespace FWO.GenericGatewayImporter.Storage
 {
     public interface IProxyRuleStore
     {

@@ -1,6 +1,6 @@
-namespace FWO.ProxyImporter.Models
+namespace FWO.GenericGatewayImporter.Models
 {
-    public class ProxyImporterOptions
+    public class GenericGatewayImporterOptions
     {
         public string ConnectionString { get; set; } = "";
         public string Schema { get; set; } = "proxy";

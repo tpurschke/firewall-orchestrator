@@ -59,7 +59,9 @@ exclude = [
     "__init__.py",
     "scripts",
     "roles/tests-integration",
-    "roles/importer/files/importer/test"
+    "roles/importer/files/importer/test",
+    "roles/importer/files/generic-gateway-importer/samplescript",
+    "roles/importer/files/proxy-importer/samplescript/sample_skyhigh_config_getter.py"
 ]
 
 [tool.ruff.lint]
@@ -81,5 +83,3 @@ quote-style = "double"
 indent-style = "space"
 skip-magic-trailing-comma = false
 line-ending = "auto"
-
-

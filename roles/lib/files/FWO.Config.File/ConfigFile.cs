@@ -43,8 +43,8 @@ namespace FWO.Config.File
             [JsonPropertyName("api_uri")]
             public string? ApiServerUri { get; set; }
 
-            [JsonPropertyName("proxy_importer_uri")]
-            public string? ProxyImporterUri { get; set; }
+            [JsonPropertyName("generic_gateway_importer_uri")]
+            public string? GenericGatewayImporterUri { get; set; }
 
             [JsonPropertyName("remote_addresses")]
             public string[]? RemoteAddresses { get; set; }
@@ -100,11 +100,11 @@ namespace FWO.Config.File
             }
         }
 
-        public static string ProxyImporterUri
+        public static string GenericGatewayImporterUri
         {
             get
             {
-                return Data.ProxyImporterUri ?? "";
+                return Data.GenericGatewayImporterUri ?? "";
             }
         }
 

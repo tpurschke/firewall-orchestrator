@@ -1,12 +1,12 @@
 using System.Net;
 using System.Text.RegularExpressions;
-using FWO.ProxyImporter.Importers;
-using FWO.ProxyImporter.Models;
-using FWO.ProxyImporter.Storage;
+using FWO.GenericGatewayImporter.Importers;
+using FWO.GenericGatewayImporter.Models;
+using FWO.GenericGatewayImporter.Storage;
 using Microsoft.Extensions.Options;
 using Npgsql;
 
-namespace FWO.ProxyImporter.Services
+namespace FWO.GenericGatewayImporter.Services
 {
     public class GenericGatewayImportScheduler : BackgroundService
     {
@@ -14,7 +14,7 @@ namespace FWO.ProxyImporter.Services
         private const int DefaultSleepSeconds = 40;
 
         private readonly IServiceProvider serviceProvider;
-        private readonly ProxyImporterOptions proxyOptions;
+        private readonly GenericGatewayImporterOptions proxyOptions;
         private readonly SkyhighOptions skyhighOptions;
         private readonly F5BigIpOptions f5Options;
         private readonly ILogger<GenericGatewayImportScheduler> logger;
@@ -22,7 +22,7 @@ namespace FWO.ProxyImporter.Services
 
         public GenericGatewayImportScheduler(
             IServiceProvider serviceProvider,
-            IOptions<ProxyImporterOptions> proxyOptions,
+            IOptions<GenericGatewayImporterOptions> proxyOptions,
             IOptions<SkyhighOptions> skyhighOptions,
             IOptions<F5BigIpOptions> f5Options,
             ILogger<GenericGatewayImportScheduler> logger)
@@ -127,7 +127,7 @@ namespace FWO.ProxyImporter.Services
             }
 
             await using AsyncServiceScope scope = serviceProvider.CreateAsyncScope();
-            SkyhighProxyImporter importer = scope.ServiceProvider.GetRequiredService<SkyhighProxyImporter>();
+            SkyhighGenericGatewayImporter importer = scope.ServiceProvider.GetRequiredService<SkyhighGenericGatewayImporter>();
             IProxyRuleStore store = scope.ServiceProvider.GetRequiredService<IProxyRuleStore>();
 
             foreach (ManagementInfo management in targets)

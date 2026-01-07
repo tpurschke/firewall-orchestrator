@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace FWO.ProxyImporter.Models
+namespace FWO.GenericGatewayImporter.Models
 {
     public class ProxyRuleDocument
     {

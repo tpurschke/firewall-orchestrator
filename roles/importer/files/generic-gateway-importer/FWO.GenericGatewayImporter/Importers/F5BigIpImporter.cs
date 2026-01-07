@@ -1,8 +1,8 @@
 using System.Text.Json;
-using FWO.ProxyImporter.Models;
+using FWO.GenericGatewayImporter.Models;
 using Microsoft.Extensions.Options;
 
-namespace FWO.ProxyImporter.Importers
+namespace FWO.GenericGatewayImporter.Importers
 {
     public class F5BigIpImporter : IGatewayConfigImporter
     {

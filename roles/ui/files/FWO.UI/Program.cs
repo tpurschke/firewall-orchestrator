@@ -57,7 +57,7 @@ string ProductVersion = ConfigFile.ProductVersion;
 
 builder.Services.AddScoped<ApiConnection>(_ => new GraphQlApiConnection(ApiUri));
 builder.Services.AddScoped<MiddlewareClient>(_ => new MiddlewareClient(MiddlewareUri));
-builder.Services.AddScoped<ProxyImporterClient>();
+builder.Services.AddScoped<GenericGatewayImporterClient>();
 
 // Create "anonymous" (empty) jwt
 MiddlewareClient middlewareClient = new MiddlewareClient(MiddlewareUri);

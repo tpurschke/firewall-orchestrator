@@ -43,7 +43,7 @@
             "type": "process",
             "args": [
                 "build",
-                "${workspaceFolder}/roles/importer/files/proxy-importer/FWO.ProxyImporter/FWO.ProxyImporter.csproj",
+                "${workspaceFolder}/roles/importer/files/proxy-importer/FWO.GenericGatewayImporter/FWO.GenericGatewayImporter.csproj",
                 "/property:GenerateFullPaths=true",
                 "/consoleloggerparameters:NoSummary"
             ],

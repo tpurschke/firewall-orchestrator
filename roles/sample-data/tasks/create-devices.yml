@@ -152,14 +152,14 @@
 
     - name: ensure proxy importer uses demo rules file
       replace:
-        path: "{{ proxy_importer_start_dir }}/appsettings.json"
+        path: "{{ generic_gateway_importer_start_dir }}/appsettings.json"
         regexp: '("Skyhigh"\s*:\s*\{[\s\S]*?"RulesJsonPath"\s*:\s*")([^"]*)'
         replace: '\1{{ demo_proxy_rules_path }}'
         backrefs: true
 
     - name: ensure F5 importer uses demo rules file
       replace:
-        path: "{{ proxy_importer_start_dir }}/appsettings.json"
+        path: "{{ generic_gateway_importer_start_dir }}/appsettings.json"
         regexp: '("F5BigIp"\s*:\s*\{[\s\S]*?"RulesJsonPath"\s*:\s*")([^"]*)'
         replace: '\1{{ demo_f5_rules_path }}'
         backrefs: true
@@ -179,7 +179,7 @@
 - block:
     - name: import demo proxy rules
       uri:
-        url: "{{ proxy_importer_listen_uri | regex_replace('0\\.0\\.0\\.0', '127.0.0.1') }}api/proxy/import/skyhigh?managementId={{ demo_proxy_mgmt_id.query_result[0].mgm_id }}&managementName={{ demo_proxy_mgmt_name }}"
+        url: "{{ generic_gateway_importer_listen_uri | regex_replace('0\\.0\\.0\\.0', '127.0.0.1') }}api/generic-gateway/import/skyhigh?managementId={{ demo_proxy_mgmt_id.query_result[0].mgm_id }}&managementName={{ demo_proxy_mgmt_name }}"
         method: POST
         status_code: 200
       register: demo_proxy_import_result

@@ -49,7 +49,7 @@
     - name: add generic importer port to apache
       lineinfile:
         path: "/etc/apache2/ports.conf"
-        line: "Listen {{ proxy_importer_web_listener_port }}"
+        line: "Listen {{ generic_gateway_importer_web_listener_port }}"
         insertafter: "<IfModule ssl_module>"
 
     - name: restart apache

@@ -1,6 +1,6 @@
-using FWO.ProxyImporter.Models;
+using FWO.GenericGatewayImporter.Models;
 
-namespace FWO.ProxyImporter.Importers
+namespace FWO.GenericGatewayImporter.Importers
 {
     public interface IGatewayConfigImporter
     {

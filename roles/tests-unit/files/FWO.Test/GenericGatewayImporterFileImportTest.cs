@@ -8,12 +8,12 @@ using NUnit.Framework;
 namespace FWO.Test
 {
     [TestFixture]
-    internal class ProxyImporterFileImportTest
+    internal class GenericGatewayImporterFileImportTest
     {
         [Test]
         public async Task ImportProxyRulesAsync_ReadsRulesFromJsonFile()
         {
-            Assembly? importerAssembly = TryLoadProxyImporterAssembly();
+            Assembly? importerAssembly = TryLoadGenericGatewayImporterAssembly();
             if (importerAssembly == null)
             {
                 Assert.Ignore("Proxy importer assembly not available in this test environment.");
@@ -62,11 +62,11 @@ namespace FWO.Test
                 "proxy-rules.json"));
         }
 
-        private static Assembly? TryLoadProxyImporterAssembly()
+        private static Assembly? TryLoadGenericGatewayImporterAssembly()
         {
             try
             {
-                return Assembly.Load("FWO.ProxyImporter");
+                return Assembly.Load("FWO.GenericGatewayImporter");
             }
             catch (FileNotFoundException)
             {
@@ -76,7 +76,7 @@ namespace FWO.Test
 
         private static object CreateSkyhighOptions(Assembly importerAssembly, string rulesPath)
         {
-            Type optionsType = importerAssembly.GetType("FWO.ProxyImporter.Models.SkyhighOptions", throwOnError: true)!;
+            Type optionsType = importerAssembly.GetType("FWO.GenericGatewayImporter.Models.SkyhighOptions", throwOnError: true)!;
             object options = Activator.CreateInstance(optionsType)!;
             PropertyInfo rulesPathProperty = optionsType.GetProperty("RulesJsonPath")!;
             rulesPathProperty.SetValue(options, rulesPath);
@@ -85,7 +85,7 @@ namespace FWO.Test
 
         private static object CreateImporter(Assembly importerAssembly, object options)
         {
-            Type importerType = importerAssembly.GetType("FWO.ProxyImporter.Importers.SkyhighProxyImporter", throwOnError: true)!;
+            Type importerType = importerAssembly.GetType("FWO.GenericGatewayImporter.Importers.SkyhighGenericGatewayImporter", throwOnError: true)!;
             Type optionsType = options.GetType();
             MethodInfo createMethod = typeof(Options)
                 .GetMethod(nameof(Options.Create), BindingFlags.Public | BindingFlags.Static)!
