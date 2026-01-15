@@ -1,4 +1,4 @@
-﻿using System.Text.RegularExpressions;
+using System.Text.RegularExpressions;
 using FWO.Basics;
 using FWO.Logging;
 using FWO.Config.Api.Data;
@@ -15,6 +15,7 @@ namespace FWO.Config.Api
     /// </summary>
     public class UserConfig : Config, IDisposable
     {
+        public GlobalConfig? GlobalConfig => globalConfig;
         private readonly GlobalConfig? globalConfig;
         private bool disposedValue;
 
@@ -22,6 +23,8 @@ namespace FWO.Config.Api
         public Dictionary<string, string> Overwrite { get; set; } = [];
 
         public UiUser User { private set; get; }
+
+        
 
         public static async Task<UserConfig> ConstructAsync(GlobalConfig globalConfig, ApiConnection apiConnection, int userId)
         {
@@ -45,12 +48,16 @@ namespace FWO.Config.Api
         }
 
         // Warning: only for Texts, ConfigItems contain Default content, correct ConfigItems are only in this.globalConfig
-        public UserConfig(GlobalConfig globalConfig) : base()
+        public UserConfig(GlobalConfig globalConfig, bool registerOnChangeHandler = true) : base()
         {
             User = new UiUser();
             Translate = globalConfig.LangDict[globalConfig.DefaultLanguage];
             this.globalConfig = globalConfig;
-            globalConfig.OnChange += OnGlobalConfigChange;
+
+            if (registerOnChangeHandler)
+            {
+                globalConfig.OnChange += OnGlobalConfigChange;
+            }
         }
 
         public UserConfig() : base()
@@ -183,7 +190,7 @@ namespace FWO.Config.Api
             Match m = Regex.Match(key, pattern);
             if (m.Success)
             {
-                string msg = GetText(key[..5]);
+                string msg = GetText(m.Value);
                 if (msg != GlobalConst.kUndefinedText)
                 {
                     text = msg;

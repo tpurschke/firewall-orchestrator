@@ -43,21 +43,18 @@ namespace FWO.Report
         private async Task<int> FetchInitialManagementData(ApiConnection apiConnection, string startTime, string stopTime, Dictionary<int, List<long>> managementImportIds)
         {
             int queriesNeeded = 0;
-            foreach (int mgmId in Query.RelevantManagementIds)
+            List<ManagementReport> managementsWithRelevantImportId = await GetRelevantImportIds(apiConnection, startTime);
+            List<ManagementReport> managementsWithImportIds = await GetImportIdsInTimeRange(apiConnection, startTime, stopTime, ruleChangeRequired: true);
+            foreach (var management in managementsWithRelevantImportId)
             {
-                List<long> importIdLastBeforeRange = await GetRelevantImportIds(apiConnection, startTime, mgmId);
-                List<long> importIdsInRange = await GetImportIdsInTimeRange(apiConnection, startTime, stopTime, mgmId, ruleChangeRequired: true);
+                List<long> importIdLastBeforeRange = [management.RelevantImportId ?? -1];
+                List<long> importIdsInRange = [.. managementsWithImportIds.Where(m => m.Id == management.Id).SelectMany(m => m.ImportControls).Select(ic => ic.ControlId)];
                 List<long> relevantImportIds = [.. importIdLastBeforeRange, .. importIdsInRange];
-                if (relevantImportIds.Count == 0)
-                {
-                    Log.WriteDebug("Generate Changes Report", $"No relevant import IDs found in time range for management ID {mgmId}");
-                    continue;
-                }
-                SetMgtQueryVars(mgmId, relevantImportIds[0], relevantImportIds[1]);
+                SetMgtQueryVars(management.Id, relevantImportIds[0], relevantImportIds[1]);
                 ManagementReport managementReport = (await apiConnection.SendQueryAsync<List<ManagementReport>>(Query.FullQuery, Query.QueryVariables)).First();
                 queriesNeeded += 1;
                 ReportData.ManagementData.Add(managementReport);
-                managementImportIds.Add(mgmId, relevantImportIds);
+                managementImportIds.Add(management.Id, relevantImportIds);
             }
             return queriesNeeded;
         }
@@ -123,30 +120,6 @@ namespace FWO.Report
             Query.QueryVariables[QueryVar.MgmId] = mgmId;
             Query.QueryVariables[QueryVar.ImportIdOld] = importIdOld;
             Query.QueryVariables[QueryVar.ImportIdNew] = importIdNew;
-        }
-
-        public static async Task<List<long>> GetImportIdsInTimeRange(ApiConnection apiConnection, string startTime, string stopTime, int mgmId, bool? ruleChangeRequired = null)
-        {
-            var queryVariables = new
-            {
-                start_time = startTime,
-                end_time = stopTime,
-                mgmIds = mgmId,
-                ruleChangesFound = ruleChangeRequired
-            };
-            List<ImportControl> importControls = await apiConnection.SendQueryAsync<List<ImportControl>>(ReportQueries.getRelevantImportIdsInTimeRange, queryVariables);
-            return [.. importControls.Select(ic => ic.ControlId)];
-        }
-
-        public static async Task<List<long>> GetRelevantImportIds(ApiConnection apiConnection, string starttime, int mgmId)
-        {
-            var queryVariables = new
-            {
-                time = starttime,
-                mgmIds = mgmId
-            };
-            List<ManagementReport> managementReports = await apiConnection.SendQueryAsync<List<ManagementReport>>(ReportQueries.getRelevantImportIdsAtTime, queryVariables);
-            return [.. managementReports.Select(mr => mr.Import.ImportAggregate.ImportAggregateMax.RelevantImportId ?? -1)];
         }
 
         public override Task<bool> GetObjectsForManagementInReport(Dictionary<string, object> objQueryVariables, ObjCategory objects, int maxFetchCycles, ApiConnection apiConnection, Func<ReportData, Task> callback)
@@ -300,63 +273,36 @@ namespace FWO.Report
 
         private string ExportResolvedChangesToJson()
         {
-            StringBuilder report = new("{");
-            report.Append(DisplayReportHeaderJson());
-            report.AppendLine("\"managements\": [");
             RuleChangeDisplayJson ruleChangeDisplayJson = new(userConfig);
-            foreach (var management in ReportData.ManagementData.Where(mgt => !mgt.Ignore && mgt.Devices != null &&
-                    Array.Exists(mgt.Devices, device => device.RuleChanges != null && device.RuleChanges.Length > 0)))
-            {
-                report.AppendLine($"{{\"{management.Name}\": {{");
-                report.AppendLine($"\"gateways\": [");
-                foreach (var gateway in management.Devices)
-                {
-                    if (gateway.RuleChanges != null && gateway.RuleChanges.Length > 0)
-                    {
-                        report.Append($"{{\"{gateway.Name}\": {{\n\"rule changes\": [");
-                        foreach (var ruleChange in gateway.RuleChanges)
-                        {
-                            report.Append('{');
-                            report.Append(ruleChangeDisplayJson.DisplayChangeTime(ruleChange));
-                            report.Append(ruleChangeDisplayJson.DisplayChangeAction(ruleChange));
-                            report.Append(ruleChangeDisplayJson.DisplayName(ruleChange));
-                            report.Append(ruleChangeDisplayJson.DisplaySourceZone(ruleChange));
-                            report.Append(ruleChangeDisplayJson.DisplaySourceNegated(ruleChange));
-                            report.Append(ruleChangeDisplayJson.DisplaySource(ruleChange, ReportType));
-                            report.Append(ruleChangeDisplayJson.DisplayDestinationZone(ruleChange));
-                            report.Append(ruleChangeDisplayJson.DisplayDestinationNegated(ruleChange));
-                            report.Append(ruleChangeDisplayJson.DisplayDestination(ruleChange, ReportType));
-                            report.Append(ruleChangeDisplayJson.DisplayServiceNegated(ruleChange));
-                            report.Append(ruleChangeDisplayJson.DisplayServices(ruleChange, ReportType));
-                            report.Append(ruleChangeDisplayJson.DisplayAction(ruleChange));
-                            report.Append(ruleChangeDisplayJson.DisplayTrack(ruleChange));
-                            report.Append(ruleChangeDisplayJson.DisplayEnabled(ruleChange));
-                            report.Append(ruleChangeDisplayJson.DisplayUid(ruleChange));
-                            report.Append(ruleChangeDisplayJson.DisplayComment(ruleChange));
-                            report = RuleDisplayBase.RemoveLastChars(report, 1); // remove last chars (comma)
-                            report.Append("},");  // EO ruleChange
-                        } // rules
-                        report = RuleDisplayBase.RemoveLastChars(report, 1); // remove last char (comma)
-                        report.Append(']'); // EO rules
-                        report.Append('}'); // EO gateway internal
-                        report.Append("},"); // EO gateway external
-                    }
-                } // gateways
-                report = RuleDisplayBase.RemoveLastChars(report, 1); // remove last char (comma)
-                report.Append(']'); // EO gateways
-                report.Append('}'); // EO management internal
-                report.Append("},"); // EO management external
-            } // managements
-            report = RuleDisplayBase.RemoveLastChars(report, 1); // remove last char (comma)
-            report.Append(']'); // EO managements
-            report.Append('}'); // EO top
 
-            dynamic? json = JsonConvert.DeserializeObject(report.ToString());
-            JsonSerializerSettings settings = new()
-            {
-                Formatting = Formatting.Indented
-            };
-            return JsonConvert.SerializeObject(json, settings);
+            return ExportToJson(
+                hasItems: dev => dev.RuleChanges != null && dev.RuleChanges.Length > 0,
+                getItems: (dev, mgmt) => dev.RuleChanges!,
+                renderItem: ruleChange =>
+                {
+                    var sb = new StringBuilder("{");
+                    sb.Append(ruleChangeDisplayJson.DisplayChangeTime(ruleChange));
+                    sb.Append(ruleChangeDisplayJson.DisplayChangeAction(ruleChange));
+                    sb.Append(ruleChangeDisplayJson.DisplayName(ruleChange));
+                    sb.Append(ruleChangeDisplayJson.DisplaySourceZones(ruleChange));
+                    sb.Append(ruleChangeDisplayJson.DisplaySourceNegated(ruleChange));
+                    sb.Append(ruleChangeDisplayJson.DisplaySource(ruleChange, ReportType));
+                    sb.Append(ruleChangeDisplayJson.DisplayDestinationZones(ruleChange));
+                    sb.Append(ruleChangeDisplayJson.DisplayDestinationNegated(ruleChange));
+                    sb.Append(ruleChangeDisplayJson.DisplayDestination(ruleChange, ReportType));
+                    sb.Append(ruleChangeDisplayJson.DisplayServiceNegated(ruleChange));
+                    sb.Append(ruleChangeDisplayJson.DisplayServices(ruleChange, ReportType));
+                    sb.Append(ruleChangeDisplayJson.DisplayAction(ruleChange));
+                    sb.Append(ruleChangeDisplayJson.DisplayTrack(ruleChange));
+                    sb.Append(ruleChangeDisplayJson.DisplayEnabled(ruleChange));
+                    sb.Append(ruleChangeDisplayJson.DisplayUid(ruleChange));
+                    sb.Append(ruleChangeDisplayJson.DisplayComment(ruleChange));
+                    RuleDisplayBase.RemoveLastChars(sb, 1);
+                    sb.Append("},");
+                    return sb.ToString();
+                },
+                itemsPropertyName: "rule changes"
+            );
         }
     }
 }

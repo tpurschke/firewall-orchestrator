@@ -6,7 +6,7 @@
 		<ImplicitUsings>enable</ImplicitUsings>
 	</PropertyGroup>
 	<ItemGroup>
-		<PackageReference Include="IPAddressRange" Version="6.2.0" />
+		<PackageReference Include="IPAddressRange" Version="6.3.0" />
 		<PackageReference Include="BlazorTable" Version="1.17.0" />
 		<PackageReference Include="PuppeteerSharp" Version="20.2.2" />
 	</ItemGroup>
@@ -26,5 +26,6 @@
 		<ProjectReference Include="..\..\..\lib\files\FWO.Middleware.Client\FWO.Middleware.Client.csproj" />
 		<ProjectReference Include="..\..\..\lib\files\FWO.DeviceAutoDiscovery\FWO.DeviceAutoDiscovery.csproj" />
 		<ProjectReference Include="..\..\..\lib\files\FWO.Services\FWO.Services.csproj" />
+		<ProjectReference Include="..\..\..\lib\files\FWO.Compliance\FWO.Compliance.csproj" />
 	</ItemGroup>
 </Project>

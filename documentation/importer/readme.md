@@ -24,8 +24,8 @@ need to change import id in all csv-files to next id, e.g.:
 ## python importer
 
 ```console
-user@test:~$ ./import-mgm.py --help
-usage: import-mgm.py [-h] -m management_id [-c] [-f] [-d debug_level] [-v] [-s] [-l api_limit] [-i config_file_input] [-n config_file_normalized_input]
+user@test:~$ ./import_mgm.py --help
+usage: import_mgm.py [-h] -m management_id [-c] [-f] [-d debug_level] [-v] [-s] [-l api_limit] [-i config_file_input] [-n config_file_normalized_input]
 
 Read configuration from FW management via API calls
 
@@ -49,4 +49,38 @@ optional arguments:
   -n config_file_normalized_input, --normalized_in_file config_file_normalized_input
                         if set, the config will not be fetched from firewall but read from normalized json config file specified here; may also be an url.
 user@test:~$ 
+```
+
+
+### Lint Setup
+
+ruff und pre-commit sind in den requirements
+
+```
+pip install -r .\roles\importer\files\importer\requirements.txt
+```
+
+```
+pre-commit install
+```
+
+### Usage
+
+Ruff lint check
+
+```
+ruff check
+```
+
+Ruff lint check and auto fix
+
+```
+ruff check --fix
+```
+
+  
+Ruff format ( only needed for VS, but also run pre-commit) 
+
+```
+ruff format
 ```

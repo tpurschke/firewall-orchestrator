@@ -6,7 +6,7 @@ Contact			https://cactus.de/fworch
 Database		PostgreSQL 9-13
 */
 
-/* Create Sequence 
+/* Create Sequence
 
 the abs_hange_id is needed as it is incremented across 4 different tables
 
@@ -33,6 +33,7 @@ Create table "device" -- contains an entry for each firewall gateway
 	"dev_id" SERIAL,
 	"mgm_id" Integer NOT NULL,
 	"dev_name" Varchar,
+	"dev_uid" Varchar,
 	"local_rulebase_name" Varchar,
 	"local_rulebase_uid" Varchar,
 	"global_rulebase_name" Varchar,
@@ -58,7 +59,7 @@ Create table "management" -- contains an entry for each firewall management syst
 	"mgm_name" Varchar NOT NULL,
 	"mgm_comment" Text,
  	"cloud_tenant_id" VARCHAR,
-	"cloud_subscription_id" VARCHAR,	
+	"cloud_subscription_id" VARCHAR,
 	"mgm_create" Timestamp NOT NULL Default now(),
 	"mgm_update" Timestamp NOT NULL Default now(),
 	"import_credential_id" Integer NOT NULL,
@@ -76,9 +77,14 @@ Create table "management" -- contains an entry for each firewall management syst
 	"importer_hostname" Varchar,
 	"debug_level" Integer,
 	"multi_device_manager_id" integer,		-- if this manager belongs to another multi_device_manager, then this id points to it
+	"is_super_manager" BOOLEAN DEFAULT FALSE,
 	"ext_mgm_data" Varchar,
+	"mgm_uid" Varchar NOT NULL DEFAULT '',
+	"rulebase_name" Varchar NOT NULL DEFAULT '',
+	"rulebase_uid" Varchar NOT NULL DEFAULT '',
  primary key ("mgm_id")
 );
+
 
 create table import_credential
 (
@@ -122,6 +128,7 @@ Create table "object"
 	"obj_sys_readcom" Varchar,
 	"obj_sys_writecom" Varchar,
 	"active" Boolean NOT NULL Default TRUE,
+	"removed" BIGINT,
 	"obj_create" BIGINT NOT NULL,
 	"obj_last_seen" BIGINT NOT NULL,
  primary key ("obj_id")
@@ -132,6 +139,7 @@ Create table "objgrp"
 	"objgrp_id" BIGINT NOT NULL,
 	"objgrp_member_id" BIGINT NOT NULL,
 	"import_created" BIGINT NOT NULL,
+	"removed" BIGINT,
 	"import_last_seen" BIGINT NOT NULL,
 	"active" Boolean NOT NULL Default TRUE,
 	"negated" Boolean NOT NULL Default FALSE,
@@ -147,6 +155,7 @@ Create table "rule"
 	"parent_rule_id" BIGINT,
 	"parent_rule_type" smallint,
 	"active" Boolean NOT NULL Default TRUE,
+	"removed" BIGINT,
 	"rule_num" Integer NOT NULL,
 	"rule_num_numeric" NUMERIC(16, 8),
 	"rule_ruleid" Varchar,
@@ -179,15 +188,17 @@ Create table "rule"
 	"access_rule" BOOLEAN Default TRUE,
 	"nat_rule" BOOLEAN Default FALSE,
 	"xlate_rule" BIGINT,
- primary key ("rule_id")
+	"is_global" BOOLEAN DEFAULT FALSE NOT NULL,
+	"rulebase_id" Integer NOT NULL,
+	primary key ("rule_id")
 );
 
 -- rule_metadata contains rule related data that does not change when the rule itself is changed
 Create table "rule_metadata"
 (
 	"rule_metadata_id" BIGSERIAL,
-	"dev_id" Integer NOT NULL,
 	"rule_uid" Text NOT NULL,
+	"mgm_id" Integer NOT NULL,
 	"rule_created" Timestamp NOT NULL Default now(),
 	"rule_last_modified" Timestamp NOT NULL Default now(),
 	"rule_first_hit" Timestamp,
@@ -245,6 +256,7 @@ Create table "rule_from"
 	"user_id" BIGINT,
 	"active" Boolean NOT NULL Default TRUE,
 	"negated" Boolean NOT NULL Default FALSE,
+	"removed" BIGINT,
 	"rf_create" BIGINT NOT NULL,
 	"rf_last_seen" BIGINT NOT NULL
 );
@@ -257,6 +269,7 @@ Create table "rule_service"
 	"rs_create" BIGINT NOT NULL,
 	"rs_last_seen" BIGINT NOT NULL,
 	"negated" Boolean NOT NULL Default FALSE,
+	"removed" BIGINT,
  primary key ("rule_id","svc_id")
 );
 
@@ -270,6 +283,7 @@ Create table "rule_to"
 	"rt_create" BIGINT NOT NULL,
 	"rt_last_seen" BIGINT NOT NULL,
 	"active" Boolean NOT NULL Default TRUE,
+	"removed" BIGINT,
 	"negated" Boolean NOT NULL Default FALSE
 );
 
@@ -306,6 +320,7 @@ Create table "service"
 	"svc_sync_delay_start" Integer,
 	"active" Boolean NOT NULL Default TRUE,
 	"last_change_admin" Integer,
+	"removed" BIGINT,
 	"svc_create" BIGINT NOT NULL,
 	"svc_last_seen" BIGINT NOT NULL,
  primary key ("svc_id")
@@ -317,6 +332,7 @@ Create table "svcgrp"
 	"svcgrp_member_id" BIGINT NOT NULL,
 	"import_created" BIGINT NOT NULL,
 	"import_last_seen" BIGINT NOT NULL,
+	"removed" BIGINT,
 	"active" Boolean NOT NULL Default TRUE,
 	"negated" Boolean NOT NULL Default FALSE,
  primary key ("svcgrp_id","svcgrp_member_id")
@@ -327,10 +343,31 @@ Create table "zone"
 	"zone_id" SERIAL,
 	"zone_create" BIGINT NOT NULL,
 	"zone_last_seen" BIGINT NOT NULL,
+	"removed" BIGINT,
 	"mgm_id" Integer NOT NULL,
 	"zone_name" Varchar NOT NULL,
 	"active" Boolean NOT NULL Default TRUE,
  primary key ("zone_id")
+);
+
+--crosstabulation rule zone for source
+Create table "rule_from_zone"
+(
+	"rule_id" BIGINT NOT NULL,
+	"zone_id" Integer NOT NULL,
+	"created" BIGINT NOT NULL,
+	"removed" BIGINT,
+	primary key (rule_id, zone_id, created)
+);
+
+--crosstabulation rule zone for destination
+Create table "rule_to_zone"
+(
+	"rule_id" BIGINT NOT NULL,
+	"zone_id" Integer NOT NULL,
+	"created" BIGINT NOT NULL,
+	"removed" BIGINT,
+	primary key (rule_id, zone_id, created)
 );
 
 Create table "usr"
@@ -351,6 +388,7 @@ Create table "usr"
 	"time_restrict" Text,
 	"user_create" BIGINT NOT NULL,
 	"user_last_seen" BIGINT NOT NULL,
+	"removed" BIGINT,
 	"user_comment" Text,
 	"user_uid" Text,
 	"user_firstname" Varchar,
@@ -365,6 +403,7 @@ Create table "usergrp"
 	"usergrp_member_id" BIGINT,
 	"import_created" BIGINT NOT NULL,
 	"import_last_seen" BIGINT NOT NULL,
+	"removed" BIGINT,
 	"active" Boolean NOT NULL Default TRUE,
  primary key ("usergrp_id","usergrp_member_id")
 );
@@ -376,6 +415,7 @@ Create table "usergrp_flat"
 	"usergrp_flat_member_id" BIGINT NOT NULL,
 	"import_created" BIGINT NOT NULL,
 	"import_last_seen" BIGINT NOT NULL,
+	"removed" BIGINT,
  primary key ("usergrp_flat_id","usergrp_flat_member_id")
 );
 
@@ -386,16 +426,18 @@ Create table "objgrp_flat"
 	"active" Boolean NOT NULL Default TRUE,
 	"import_created" BIGINT NOT NULL,
 	"import_last_seen" BIGINT NOT NULL,
+	"removed" BIGINT,
 	"negated" Boolean NOT NULL Default FALSE
 );
 
 Create table "svcgrp_flat"
 (
-	"svcgrp_flat_id" Integer NOT NULL,
-	"svcgrp_flat_member_id" Integer NOT NULL,
-	"import_created" Integer NOT NULL,
-	"import_last_seen" Integer NOT NULL,
+	"svcgrp_flat_id" BIGINT NOT NULL,
+	"svcgrp_flat_member_id" BIGINT NOT NULL,
+	"import_created" BIGINT NOT NULL,
+	"import_last_seen" BIGINT NOT NULL,
 	"active" Boolean NOT NULL Default TRUE,
+	"removed" BIGINT,
 	"negated" Boolean NOT NULL Default FALSE
 );
 
@@ -464,7 +506,7 @@ Create table "tenant"
 	"tenant_comment" Text,
 	"tenant_report" Boolean Default true,
 	"tenant_can_view_all_devices" Boolean NOT NULL Default false,
-	"tenant_is_superadmin" Boolean NOT NULL default false,	
+	"tenant_is_superadmin" Boolean NOT NULL default false,
 	"tenant_create" Timestamp NOT NULL Default now(),
  primary key ("tenant_id")
 );
@@ -501,15 +543,22 @@ Create table "tenant_network"
 
 Create table "parent_rule_type"
 (
-	"id" smallserial NOT NULL,
+	"id" smallint NOT NULL,
 	"name" Varchar NOT NULL,
  primary key ("id")
 );
 
+Create table IF NOT EXISTS "stm_link_type"
+(
+	"id" Integer primary key,
+	"name" Varchar NOT NULL
+);
+
 Create table "stm_action"
 (
-	"action_id" SERIAL,
+	"action_id" Integer,
 	"action_name" Varchar NOT NULL,
+	"allowed" BOOLEAN NOT NULL DEFAULT TRUE,
  primary key ("action_id")
 );
 
@@ -524,7 +573,7 @@ Create table "stm_color"
 
 Create table "stm_dev_typ"
 (
-	"dev_typ_id" SERIAL,
+	"dev_typ_id" Integer,
 	"dev_typ_manufacturer" Varchar,
 	"dev_typ_name" Varchar NOT NULL,
 	"dev_typ_version" Varchar NOT NULL,
@@ -542,7 +591,7 @@ Create table "stm_dev_typ"
 
 Create table "stm_obj_typ"
 (
-	"obj_typ_id" SERIAL,
+	"obj_typ_id" Integer,
 	"obj_typ_name" Varchar NOT NULL,
 	"obj_typ_comment" Text,
  primary key ("obj_typ_id")
@@ -550,7 +599,7 @@ Create table "stm_obj_typ"
 
 Create table "stm_track"
 (
-	"track_id" SERIAL,
+	"track_id" Integer,
 	"track_name" Varchar NOT NULL,
  primary key ("track_id")
 );
@@ -600,6 +649,7 @@ Create table "import_control"
 	"import_errors" Varchar,
 	"notification_done" Boolean NOT NULL Default FALSE,
 	"security_relevant_changes_counter" INTEGER NOT NULL Default 0,
+	"is_full_import" BOOLEAN DEFAULT FALSE,
  primary key ("control_id")
 );
 
@@ -607,7 +657,6 @@ Create table "import_control"
 CREATE table "import_config" (
     "import_id" bigint NOT NULL,
     "mgm_id" integer NOT NULL,
-    "chunk_number" integer,
     "config" jsonb NOT NULL,
 	"start_import_flag" Boolean NOT NULL Default FALSE,
 	"debug_mode" Boolean Default FALSE
@@ -620,6 +669,13 @@ CREATE TABLE "import_full_config" (
     "mgm_id" integer NOT NULL,
     "config" jsonb NOT NULL,
     PRIMARY KEY ("import_id")
+);
+
+CREATE TABLE IF NOT EXISTS "latest_config" (
+    "mgm_id" integer NOT NULL,
+    "import_id" bigint NOT NULL,
+    "config" jsonb NOT NULL,
+    PRIMARY KEY ("mgm_id")
 );
 
 -- temporary import tables -------------------------------------
@@ -912,7 +968,7 @@ Create table "changelog_rule"
 	"documented" Boolean NOT NULL Default FALSE,
 	"docu_time" Timestamp,
 	"mgm_id" Integer NOT NULL,
-	"dev_id" Integer NOT NULL,
+	"dev_id" Integer,
 	"change_type_id" Integer NOT NULL Default 3,
 	"security_relevant" Boolean NOT NULL Default TRUE,
 	"change_request_info" Varchar,
@@ -923,7 +979,7 @@ Create table "changelog_rule"
 
 Create table "stm_change_type"
 (
-	"change_type_id" SERIAL,
+	"change_type_id" Integer,
 	"change_type_name" Varchar,
  primary key ("change_type_id")
 );
@@ -983,7 +1039,7 @@ Create table "report_schedule"
 	"report_template_id" Integer, --FK
 	"report_schedule_owner" Integer NOT NULL, --FK
 	"report_schedule_start_time" Timestamp NOT NULL,  -- if day is bigger than 28, simply use the 1st of the next month, 00:00 am
-	"report_schedule_repeat" Integer Not NULL Default 0, -- 0 do not repeat, 1 daily, 2 weekly, 3 monthly, 4 yearly 
+	"report_schedule_repeat" Integer Not NULL Default 0, -- 0 do not repeat, 1 daily, 2 weekly, 3 monthly, 4 yearly
 	"report_schedule_every" Integer Not NULL Default 1, -- x - every x days/weeks/months/years
 	"report_schedule_active" Boolean Default TRUE,
 	"report_schedule_repetitions" Integer,
@@ -1095,7 +1151,7 @@ create table owner_network
     port int,
     ip_proto_id int,
 	nw_type int,
-	import_source Varchar default 'manual', 
+	import_source Varchar default 'manual',
 	is_deleted boolean default false,
 	custom_type int
 );
@@ -1125,6 +1181,40 @@ create table recertification
 	comment varchar,
 	next_recert_date Timestamp,
 	owner_recert_id bigint
+);
+
+Create Table IF NOT EXISTS "rule_enforced_on_gateway"
+(
+	"rule_id" Integer NOT NULL,
+	"dev_id" Integer,  --  NULL if rule is available for all gateways of its management
+	"created" BIGINT,
+	"removed" BIGINT
+);
+
+Create table IF NOT EXISTS "rulebase"
+(
+	"id" SERIAL primary key,
+	"name" Varchar NOT NULL,
+	"uid" Varchar NOT NULL,
+	"mgm_id" Integer NOT NULL,
+	"is_global" BOOLEAN DEFAULT FALSE NOT NULL,
+	"created" BIGINT,
+	"removed" BIGINT
+);
+
+Create table IF NOT EXISTS "rulebase_link"
+(
+	"id" SERIAL primary key,
+	"gw_id" Integer,
+	"from_rulebase_id" Integer, -- either from_rulebase_id or from_rule_id must be SET or the is_initial flag
+	"from_rule_id" BIGINT,
+	"to_rulebase_id" Integer NOT NULL,
+	"link_type" Integer,
+	"is_initial" BOOLEAN DEFAULT FALSE,
+	"is_global" BOOLEAN DEFAULT FALSE,
+	"is_section" BOOLEAN DEFAULT TRUE,
+	"created" BIGINT,
+	"removed" BIGINT
 );
 
 create table owner_recertification
@@ -1175,7 +1265,7 @@ CREATE TYPE rule_field_enum AS ENUM ('source', 'destination', 'service', 'rule',
 CREATE TYPE action_enum AS ENUM ('create', 'delete', 'modify', 'unchanged', 'addAfterCreation');
 
 -- create tables
-create table request.reqtask 
+create table request.reqtask
 (
     id BIGSERIAL PRIMARY KEY,
     title VARCHAR,
@@ -1204,7 +1294,7 @@ create table request.reqtask
 	mgm_id int
 );
 
-create table request.reqelement 
+create table request.reqelement
 (
     id BIGSERIAL PRIMARY KEY,
     request_action action_enum NOT NULL default 'create',
@@ -1225,7 +1315,7 @@ create table request.reqelement
 	name varchar
 );
 
-create table request.approval 
+create table request.approval
 (
     id BIGSERIAL PRIMARY KEY,
     task_id bigint,
@@ -1242,7 +1332,7 @@ create table request.approval
 	state_id int NOT NULL
 );
 
-create table request.ticket 
+create table request.ticket
 (
     id BIGSERIAL PRIMARY KEY,
     title VARCHAR NOT NULL,
@@ -1263,7 +1353,7 @@ create table request.ticket
 	ticket_priority int
 );
 
-create table request.comment 
+create table request.comment
 (
     id BIGSERIAL PRIMARY KEY,
     ref_id bigint,
@@ -1384,13 +1474,22 @@ create table compliance.network_zone
 	name VARCHAR NOT NULL,
 	description VARCHAR NOT NULL,
 	super_network_zone_id bigint,
-	owner_id bigint
+	owner_id bigint,
+	removed timestamp with time zone,
+	created timestamp with time zone default now(),
+	criterion_id INT,
+    id_string TEXT,
+	is_auto_calculated_internet_zone BOOLEAN DEFAULT FALSE,
+	is_auto_calculated_undefined_internal_zone BOOLEAN DEFAULT FALSE
 );
 
 create table compliance.network_zone_communication
 (
+	criterion_id INT,
     from_network_zone_id bigint NOT NULL,
-	to_network_zone_id bigint NOT NULL
+	to_network_zone_id bigint NOT NULL,
+    removed timestamp with time zone,
+	created timestamp with time zone default now()
 );
 
 create table compliance.ip_range
@@ -1398,8 +1497,67 @@ create table compliance.ip_range
     network_zone_id bigint NOT NULL,
 	ip_range_start inet NOT NULL,
 	ip_range_end inet NOT NULL,
-	PRIMARY KEY(network_zone_id, ip_range_start, ip_range_end)
+	PRIMARY KEY(network_zone_id, ip_range_start, ip_range_end, created),
+	removed timestamp with time zone,
+	created timestamp with time zone default now(),
+	criterion_id INT,
+    name TEXT
 );
+
+create table compliance.policy
+(
+    id SERIAL PRIMARY KEY,
+	name TEXT,
+	created_date timestamp default now(),
+	disabled bool
+);
+
+create table compliance.policy_criterion
+(
+    policy_id INT NOT NULL,
+	criterion_id INT NOT NULL,
+    removed timestamp with time zone,
+	created timestamp with time zone default now()
+);
+
+create table compliance.criterion
+(
+    id SERIAL PRIMARY KEY,
+	name TEXT,
+	comment TEXT,
+	criterion_type TEXT,
+	content TEXT,
+	removed timestamp with time zone,
+	created timestamp with time zone default now(),
+	import_source TEXT
+);
+
+create table compliance.violation
+(
+    id BIGSERIAL PRIMARY KEY,
+	rule_id bigint NOT NULL,
+	rule_uid TEXT,
+	mgmt_uid TEXT,
+	found_date timestamp with time zone default now(),
+	removed_date timestamp with time zone,
+	details TEXT,
+	risk_score real,
+	policy_id INT NOT NULL,
+	criterion_id INT NOT NULL
+);
+
+-- create table compliance.assessability_issue
+-- (
+--     violation_id BIGINT NOT NULL,
+-- 	type_id INT NOT NULL,
+-- 	PRIMARY KEY(violation_id, type_id)
+-- );
+
+-- create table compliance.assessability_issue_type
+-- (
+-- 	type_id INT PRIMARY KEY,
+--     type_name VARCHAR(50) NOT NULL
+-- );
 
 
 --- Network modelling ---
@@ -1531,4 +1689,13 @@ create table modelling.change_history
 	changer Varchar,
 	change_time Timestamp default now(),
 	change_source Varchar default 'manual'
+);
+
+CREATE TABLE refresh_tokens (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES uiuser(uiuser_id) ON DELETE CASCADE,
+    token_hash VARCHAR(88) UNIQUE NOT NULL,
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    revoked_at TIMESTAMP WITH TIME ZONE NULL
 );
