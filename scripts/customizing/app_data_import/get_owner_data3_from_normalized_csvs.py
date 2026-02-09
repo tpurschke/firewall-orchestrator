@@ -66,7 +66,7 @@ if __name__ == "__main__":
                             "ldapPath": "dc=example,dc=de", \
                             "cmdbGitRepoUrl": "github.example.de/cmdb/app-export", \
                             "cmdbGitUsername": "git-user-1", \
-                            "gitPassword": "gituser-1-pwd", \
+                            "cmdbGitPassword": "gituser-1-pwd", \
                             "csvOwnerFilePattern": "NeMo_???_meta.csv", \
                             "csvAppServerFilePattern": "NeMo_???_IP_.*?.csv", \
                             "gitRepoOwnersWithActiveRecert": "github.example.de/FWO", \
@@ -106,7 +106,8 @@ if __name__ == "__main__":
     logger: logging.Logger = get_logger(debug_level_in=2)
 
     # read config
-    ldap_path: str = read_custom_config(args.config, "ldapPath", logger)
+    ldap_path_users: str = read_custom_config(args.config, "ldapPathUsers", logger)
+    ldap_path_groups: str = read_custom_config(args.config, "ldapPathGroups", logger)
     cmdb_git_repo_url_without_protocol: str = read_custom_config(args.config, "cmdbGitRepoUrl", logger)
     cmdb_git_username: str = read_custom_config(args.config, "cmdbGitUsername", logger)
     cmdb_git_password: str = read_custom_config(args.config, "cmdbGitPassword", logger)
@@ -178,7 +179,7 @@ if __name__ == "__main__":
             extract_app_data_from_csv(
                 file_path.name,
                 app_list,
-                ldap_path,
+                ldap_path_users,
                 import_source_string,
                 Owner,
                 logger,
