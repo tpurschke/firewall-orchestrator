@@ -1,5 +1,7 @@
 using FWO.Config.Api;
 using FWO.Data;
+using FWO.Api.Client.Queries;
+using FWO.Report.Filter;
 using FWO.Test.Mocks;
 using NUnit.Framework;
 
@@ -141,6 +143,40 @@ namespace FWO.Test
             Assert.That(multiple.Compliance == ComplianceViolationType.MultipleViolations);
             Assert.That(singular.ViolationDetails == controlSingular);
             Assert.That(singular.Compliance == ComplianceViolationType.ServiceViolation);
+        }
+
+        [Test]
+        public void CreateQueryVariables_UsesReportFilterManagementIdsFirst()
+        {
+            SimulatedGlobalConfig globalConfig = new()
+            {
+                ComplianceCheckRelevantManagements = "1,2"
+            };
+            UserConfig userConfig = new(globalConfig);
+            DynGraphqlQuery query = new("");
+            query.RelevantManagementIds = [7, 8];
+
+            MockReportCompliance report = new(query, userConfig, Basics.ReportType.ComplianceReport);
+            Dictionary<string, object> vars = report.TestCreateQueryVariables(0, 100, RuleQueries.getRulesWithCurrentViolationsByChunk);
+
+            Assert.That(vars.TryGetValue("mgm_ids", out object? mgmIdsObj), Is.True);
+            Assert.That(mgmIdsObj, Is.EqualTo(new List<int> { 7, 8 }));
+        }
+
+        [Test]
+        public void CreateQueryVariables_FallsBackToGlobalConfigManagementIds()
+        {
+            SimulatedGlobalConfig globalConfig = new()
+            {
+                ComplianceCheckRelevantManagements = "3,4"
+            };
+            UserConfig userConfig = new(globalConfig);
+            MockReportCompliance report = new(new(""), userConfig, Basics.ReportType.ComplianceReport);
+
+            Dictionary<string, object> vars = report.TestCreateQueryVariables(0, 100, RuleQueries.getRulesWithCurrentViolationsByChunk);
+
+            Assert.That(vars.TryGetValue("mgm_ids", out object? mgmIdsObj), Is.True);
+            Assert.That(mgmIdsObj, Is.EqualTo(new List<int> { 3, 4 }));
         }
 
         private List<Rule>[] BuildFixedRuleChunksParallel(int numberOfChunks, int numberOfRulesPerChunk, int startRuleId = 1, int? maxDegreeOfParallelism = null)

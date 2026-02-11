@@ -41,8 +41,8 @@ namespace FWO.Report.Filter
         public const string dateFormat = "yyyy-MM-dd";
         public const int layerRecursionLevel = 2;
 
-        const string mgmtWhereString = $@"where: {{ hide_in_gui: {{_eq: false }}
-                                        mgm_id: {{_in: $mgmId }}
+        const string mgmtWhereString = $@"where: {{ mgm_id: {{_in: $mgmId }}
+                                        hide_in_gui: {{_eq: false }}
                                         stm_dev_typ: {{dev_typ_is_multi_mgmt: {{_eq: false}} is_pure_routing_device: {{_eq: false}} }}
                                         }} order_by: {{ mgm_name: asc }}";
 
@@ -306,9 +306,9 @@ namespace FWO.Report.Filter
                     {(filter.Detailed ? RuleQueries.ruleDetailsForChangeReportFragments : RuleQueries.ruleOverviewForChangeReportFragments)}
                 query changeReport({paramString}){{
                     management(where: {{
+                            mgm_id: {{_in: $mgmId }}
                             hide_in_gui: {{_eq: false }}
                             stm_dev_typ: {{dev_typ_is_multi_mgmt: {{_eq: false}}, is_pure_routing_device: {{_eq: false}} }}
-                            mgm_id: {{_in: $mgmId }}
                         }} order_by: {{mgm_name: asc}})
                     {{
                         id: mgm_id

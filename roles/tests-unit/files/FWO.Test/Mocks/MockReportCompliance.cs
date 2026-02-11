@@ -5,6 +5,7 @@ using FWO.Data;
 using FWO.Data.Report;
 using FWO.Report;
 using FWO.Report.Filter;
+using System.Collections.Generic;
 
 namespace FWO.Test.Mocks
 {
@@ -16,6 +17,11 @@ namespace FWO.Test.Mocks
 
         public MockReportCompliance(DynGraphqlQuery query, UserConfig userConfig, ReportType reportType, ReportParams reportParams) : base(query, userConfig, reportType, reportParams)
         {
+        }
+
+        public Dictionary<string, object> TestCreateQueryVariables(int offset, int limit, string query)
+        {
+            return CreateQueryVariables(offset, limit, query);
         }
     }
 }

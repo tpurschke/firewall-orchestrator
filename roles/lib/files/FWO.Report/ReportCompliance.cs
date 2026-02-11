@@ -111,12 +111,14 @@ namespace FWO.Report
 
         public override async Task Generate(int elementsPerFetch, ApiConnection apiConnection, Func<ReportData, Task> callback, CancellationToken ct)
         {
+            List<int> relevantManagementIds = GetRelevantManagementIds();
+
             // Get management and device info for resolving names.
 
-            await GetManagementAndDevices(apiConnection);
+            await GetManagementAndDevices(apiConnection, relevantManagementIds);
             // Get amount of rules to fetch.
 
-            AggregateCount? result = await apiConnection.SendQueryAsync<AggregateCount>(RuleQueries.countRules);
+            AggregateCount? result = await apiConnection.SendQueryAsync<AggregateCount>(RuleQueries.countRules, new { mgm_ids = relevantManagementIds });
             int rulesCount = result?.Aggregate?.Count ?? 0;
 
             // Get data parallelized.
@@ -297,7 +299,7 @@ namespace FWO.Report
             return await GatherReportData(results);
         }
 
-        public async Task GetManagementAndDevices(ApiConnection apiConnection)
+        public async Task GetManagementAndDevices(ApiConnection apiConnection, List<int>? relevantManagementIds = null)
         {
             // Get management and device info for resolving names.
 
@@ -307,7 +309,9 @@ namespace FWO.Report
 
             if (managements != null)
             {
-                Managements = managements;
+                Managements = relevantManagementIds == null || relevantManagementIds.Count == 0
+                    ? managements
+                    : [.. managements.Where(m => relevantManagementIds.Contains(m.Id))];
 
                 _devices = new();
 
@@ -465,10 +469,19 @@ namespace FWO.Report
 
             if (query.Contains("mgm_ids"))
             {
-                queryVariables["mgm_ids"] = _relevanteManagementIDs;
+                queryVariables["mgm_ids"] = GetRelevantManagementIds();
             }
 
             return queryVariables;
+        }
+
+        private List<int> GetRelevantManagementIds()
+        {
+            if (Query.RelevantManagementIds.Count > 0)
+            {
+                return Query.RelevantManagementIds;
+            }
+            return _relevanteManagementIDs;
         }
 
         protected virtual void SetComplianceDataForRule(Rule rule, ApiConnection apiConnection, Func<ComplianceViolation, string>? formatter = null)
