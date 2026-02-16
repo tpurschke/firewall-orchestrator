@@ -1,4 +1,5 @@
 import argparse
+import os
 
 import pytest
 
@@ -154,6 +155,7 @@ def test_require_login_fields():
 
     args.fwo_jwt = None
     args.fwo_user = "user"
+    args.fwo_password = os.environ.get("FWO_PASSWORD", "test-password")
     args.fwo_middleware_url = "url"
     # Should pass
     sut.require_login_fields(args)
