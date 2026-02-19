@@ -834,19 +834,19 @@ BEGIN
 
     -- redo constraints
     ALTER TABLE rule_metadata ALTER COLUMN mgm_id SET NOT NULL;
-        ALTER TABLE rule_metadata DROP CONSTRAINT IF EXISTS rule_metadata_rule_uid_unique;
-        IF NOT EXISTS (
-            SELECT 1
-            FROM pg_constraint
-            WHERE conname = 'rule_metadata_mgm_id_rule_uid_unique'
-        ) THEN
-            ALTER TABLE rule_metadata ADD CONSTRAINT rule_metadata_mgm_id_rule_uid_unique UNIQUE (mgm_id, rule_uid);
-        END IF;
-        ALTER TABLE rule DROP CONSTRAINT IF EXISTS rule_rule_metadata_rule_uid_f_key;
-        ALTER TABLE rule DROP CONSTRAINT IF EXISTS rule_rule_metadata_mgm_id_rule_uid_f_key;
-        ALTER TABLE rule ADD CONSTRAINT rule_rule_metadata_mgm_id_rule_uid_f_key
-            FOREIGN KEY (mgm_id, rule_uid) REFERENCES rule_metadata (mgm_id, rule_uid)
-            ON UPDATE RESTRICT ON DELETE CASCADE;
+    ALTER TABLE rule_metadata DROP CONSTRAINT IF EXISTS rule_metadata_rule_uid_unique;
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'rule_metadata_mgm_id_rule_uid_unique'
+    ) THEN
+        ALTER TABLE rule_metadata ADD CONSTRAINT rule_metadata_mgm_id_rule_uid_unique UNIQUE (mgm_id, rule_uid);
+    END IF;
+    ALTER TABLE rule DROP CONSTRAINT IF EXISTS rule_rule_metadata_rule_uid_f_key CASCADE;
+    ALTER TABLE rule DROP CONSTRAINT IF EXISTS rule_rule_metadata_mgm_id_rule_uid_f_key CASCADE;
+    ALTER TABLE rule ADD CONSTRAINT rule_rule_metadata_mgm_id_rule_uid_f_key
+        FOREIGN KEY (mgm_id, rule_uid) REFERENCES rule_metadata (mgm_id, rule_uid)
+        ON UPDATE RESTRICT ON DELETE CASCADE;
 END$$;
 
 -- rework rule_metadata timestamps to reference import_control and drop unused columns
@@ -1403,7 +1403,7 @@ $$;
 
 -- now we can set the new constraint on rule_uid:
 Alter Table "rule" DROP Constraint IF EXISTS "rule_altkey";
-Alter Table "rule" DROP Constraint IF EXISTS "rule_unique_mgm_id_rule_uid_rule_create_xlate_rule";
+Alter Table "rule" DROP Constraint IF EXISTS "rule_unique_mgm_id_rule_uid_rule_create_xlate_rule" CASCADE;
 Alter Table "rule" ADD Constraint "rule_unique_mgm_id_rule_uid_rule_create_xlate_rule" UNIQUE ("mgm_id", "rule_uid","rule_create","xlate_rule");
 
 
@@ -1412,7 +1412,7 @@ Alter Table "rule" ADD Constraint "rule_unique_mgm_id_rule_uid_rule_create_xlate
 ALTER TABLE rule DROP CONSTRAINT IF EXISTS rule_dev_id_fkey;
 
 ALTER TABLE "rule_metadata" DROP CONSTRAINT IF EXISTS "rule_metadata_rulebase_id_f_key" CASCADE;
-ALTER TABLE "rule_metadata" DROP CONSTRAINT IF EXISTS "unique_rule_metadata_rule_uid_mgm_id";
+ALTER TABLE "rule_metadata" DROP CONSTRAINT IF EXISTS "unique_rule_metadata_rule_uid_mgm_id" CASCADE;
 ALTER TABLE "rule_metadata" ADD CONSTRAINT "unique_rule_metadata_rule_uid_mgm_id" UNIQUE ("rule_uid","mgm_id");
 
 -- reverse last_seen / removed logic for objects
