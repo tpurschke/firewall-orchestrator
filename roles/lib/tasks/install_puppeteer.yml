@@ -114,10 +114,24 @@
         chrome_versions_github_api
       }}
 
-- name: fail when no chrome metadata available
+- name: set chrome metadata availability
+  set_fact:
+    chrome_metadata_available: "{{ (chrome_versions.status | default(-1)) == 200 }}"
+
+- name: check if chrome is installed (via symlinked bin)
+  stat:
+    path: "{{ fworch_home }}/bin/chrome"
+  register: chrome_bin
+
+- name: fail when no chrome metadata available and no local upgrade fallback
   fail:
-    msg: "Could not fetch Chrome for Testing version metadata via primary URL or GitHub API."
-  when: chrome_versions.status | default(-1) != 200
+    msg: "Could not fetch Chrome for Testing metadata and no local Chrome fallback is available."
+  when: not chrome_metadata_available and not (installation_mode == "upgrade" and chrome_bin.stat.exists)
+
+- name: report local chrome fallback during upgrade
+  debug:
+    msg: "Using existing local Chrome because metadata download is unavailable during upgrade."
+  when: not chrome_metadata_available and installation_mode == "upgrade" and chrome_bin.stat.exists
 
 # Parse once, regardless of Content-Type
 - name: normalize/parse JSON response
@@ -128,22 +142,26 @@
         if (chrome_versions.json is defined)
         else (chrome_versions.content | trim | from_json)
       }}
+  when: chrome_metadata_available
 
 # Pick the Stable channel (some users accidentally use 'stable', so be flexible)
 - name: select Stable channel
   set_fact:
     chrome_for_testing_stable: "{{ chrome_versions_parsed.channels.Stable | default(chrome_versions_parsed.channels.stable) }}" # Chrome for Testing feed
+  when: chrome_metadata_available
 
 # Base path for all Chrome installs
 - name: set chrome root dir
   set_fact:
     chrome_root_dir: "/usr/local/fworch/bin/Chrome"
+  when: chrome_metadata_available
 
 # Extract downloads + version from Stable
 - name: parse latest stable versions for chrome #and headless shell
   set_fact:
     stable_chrome_versions: "{{ chrome_for_testing_stable.downloads }}"
     chrome_dest: "{{ chrome_root_dir }}/Linux-{{ chrome_for_testing_stable.version }}"
+  when: chrome_metadata_available
 
 # (Optional) sanity checks to fail early with a clear message
 - name: validate parsed data
@@ -154,6 +172,7 @@
       - chrome_for_testing_stable.version is defined
       - chrome_for_testing_stable.downloads is defined
     fail_msg: "Failed to parse Chrome for Testing JSON or locate the Stable channel."
+  when: chrome_metadata_available
 
 - block:
     - name: ensure chrome root directory exists
@@ -178,6 +197,7 @@
       when: item.path != chrome_dest
       loop_control:
         label: "{{ item.path }}"
+  when: chrome_metadata_available
 
   become: true
 
@@ -221,12 +241,6 @@
         target_major: >-
           {{ (target_version_full | regex_search('\\d+'))
              | default(target_major_fallback, true) | int }}
-
-    # Detect currently installed Chrome major version (if present)
-    - name: check if chrome is installed (via symlinked bin)
-      stat:
-        path: "{{ fworch_home }}/bin/chrome"
-      register: chrome_bin
 
     - name: read installed chrome version
       command: "{{ fworch_home }}/bin/chrome --version"
@@ -280,5 +294,6 @@
         content: 'export PATH="{{ fworch_home }}/bin:$PATH"'
         mode: "0644"
 
+  when: chrome_metadata_available
   become: true
   environment: "{{ proxy_env }}"
