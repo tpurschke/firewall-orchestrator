@@ -18,6 +18,49 @@
         - ca-certificates
         - curl
 
+    - name: check if docker is installed
+      command: docker --version
+      register: docker_installed_check
+      changed_when: false
+      failed_when: false
+
+    - name: set docker installation availability
+      set_fact:
+        docker_installed: "{{ docker_installed_check.rc == 0 }}"
+
+    - name: probe docker repository signing key endpoint
+      uri:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        method: HEAD
+        timeout: 30
+      register: docker_repo_probe
+      failed_when: false
+      environment: "{{ proxy_env }}"
+
+    - name: set docker repository availability
+      set_fact:
+        docker_repo_reachable: "{{ (docker_repo_probe.status | default(-1)) == 200 }}"
+
+    - name: fail when docker repository is unreachable and no local upgrade fallback exists
+      fail:
+        msg: "Docker repository is unreachable and no local Docker fallback is available."
+      when: not docker_repo_reachable and not (installation_mode == "upgrade" and docker_installed)
+
+    - name: report local docker fallback during upgrade
+      set_fact:
+        upgrade_warnings: >-
+          {{
+            ((upgrade_warnings | default([])) + [
+              "Docker repository unreachable (download.docker.com); keeping local Docker version."
+            ]) | unique
+          }}
+      when: not docker_repo_reachable and installation_mode == "upgrade" and docker_installed
+
+    - name: report local docker fallback during upgrade
+      debug:
+        msg: "Using existing local Docker because repository access is unavailable during upgrade."
+      when: not docker_repo_reachable and installation_mode == "upgrade" and docker_installed
+
     - name: adding docker apt signing key
       get_url:
         url: https://download.docker.com/linux/ubuntu/gpg
@@ -25,6 +68,7 @@
         force: true
         mode: "0644"
       environment: "{{ proxy_env }}"
+      when: docker_repo_reachable
 
     - name: add docker repo
       lineinfile:
@@ -32,10 +76,12 @@
         regexp: ".*https://download.docker.com/linux/.*"
         create: true
         line: "deb [arch=amd64] https://download.docker.com/linux/{{ ansible_distribution | lower }} {{ os_codename }} stable"
+      when: docker_repo_reachable
 
     - name: apt update
       apt: update_cache=true
       environment: "{{ proxy_env }}"
+      when: docker_repo_reachable
 
     - name: Install all packages for docker
       package:
@@ -44,6 +90,7 @@
         - docker-ce
         - docker-ce-cli
         - containerd.io
+      when: docker_repo_reachable
 
     - name: Add the group 'docker' for {{ ansible_user }} and {{ fworch_user }} to allow running docker
       user:

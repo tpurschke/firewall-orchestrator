@@ -129,6 +129,16 @@
   when: not chrome_metadata_available and not (installation_mode == "upgrade" and chrome_bin.stat.exists)
 
 - name: report local chrome fallback during upgrade
+  set_fact:
+    upgrade_warnings: >-
+      {{
+        ((upgrade_warnings | default([])) + [
+          "Chrome metadata unreachable (googlechromelabs/github); keeping local Chrome version."
+        ]) | unique
+      }}
+  when: not chrome_metadata_available and installation_mode == "upgrade" and chrome_bin.stat.exists
+
+- name: report local chrome fallback during upgrade
   debug:
     msg: "Using existing local Chrome because metadata download is unavailable during upgrade."
   when: not chrome_metadata_available and installation_mode == "upgrade" and chrome_bin.stat.exists

@@ -121,6 +121,12 @@
       import_tasks: scripts/show-fworch-listeners.yml
       become: true
 
+    - name: display upgrade warnings
+      debug:
+        msg: "WARNING: {{ item }}"
+      loop: "{{ upgrade_warnings | default([]) }}"
+      when: installation_mode == "upgrade" and (upgrade_warnings | default([]) | length > 0)
+
     - name: display secrets for this installation
       debug:
         msg:
