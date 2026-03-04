@@ -265,11 +265,29 @@
     - not api_reuse_existing_hasura_container | bool
     - dockerhub_manifest_check.status | default(0) != 200
 
-- name: start existing hasura container during upgrade
+- name: set local hasura image for reuse mode
+  set_fact:
+    api_local_hasura_image: "{{ existing_hasura_container_info.container.Config.Image | default('hasura/graphql-engine:' ~ api_hasura_version) }}"
+  when: api_reuse_existing_hasura_container | bool
+
+- name: recreate existing hasura container during upgrade with current env
   docker_container:
     name: "{{ api_container_name }}"
+    image: "{{ api_local_hasura_image }}"
     state: started
+    network_mode: host
+    networks_cli_compatible: true
+    log_driver: syslog
+    log_options:
+      syslog-address: "{{ syslog_proto }}://{{ syslog_host }}:{{ syslog_port }}"
+      syslog-facility: daemon
+      tag: "{{ api_container_name }}"
+    recreate: true
+    image_name_mismatch: recreate
+    env: "{{ hasura_env }}"
     container_default_behavior: no_defaults
+    user: "1001:1001" # hasura user and group id
+    pull: false
   register: docker_return
   become: true
   become_user: "{{ fworch_user }}"
