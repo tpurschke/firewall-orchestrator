@@ -33,6 +33,20 @@
     - not api_use_existing_hasura_on_upgrade | bool
     - api_hasura_release_access.status | default(0) != 200
 
+- name: store hasura fallback warning for final upgrade summary
+  set_fact:
+    upgrade_warnings: >-
+      {{
+        ((upgrade_warnings | default([])) + [
+          "GitHub unreachable for Hasura release lookup; reusing local Hasura image/container."
+        ]) | unique
+      }}
+  when:
+    - installation_mode == "upgrade"
+    - api_use_existing_hasura_on_upgrade | bool
+    - api_hasura_release_access is defined
+    - api_hasura_release_access.status | default(0) != 200
+
 - name: show hasura upgrade fallback decision
   debug:
     msg: >-

@@ -94,6 +94,14 @@
     admin_password: "{{ randomly_generated_pwd }}"
   when: (testkeys is not defined or not testkeys|bool) and installation_mode == 'new'
 
+- name: set UI admin password randomly for upgrade reset
+  set_fact:
+    admin_password: "{{ randomly_generated_pwd }}"
+  when:
+    - installation_mode == "upgrade"
+    - reset_admin_password_on_upgrade | default(false) | bool
+    - admin_password is not defined
+
 - name: write ui admin_password to secrets directory
   copy:
     content: "{{ admin_password }}\n"
@@ -102,7 +110,7 @@
     owner: "{{ fworch_user }}"
     group: "{{ fworch_group }}"
   become: true
-  when: installation_mode == 'new'
+  when: installation_mode == 'new' or (installation_mode == "upgrade" and reset_admin_password_on_upgrade | default(false) | bool)
 
 - name: Set admin password in ldap
   ldap_passwd:
@@ -113,7 +121,7 @@
     bind_pw: "{{ ldap_manager_pwd }}"
     validate_certs: "{{ openldap_server_enable_ssl | ternary(false, omit) }}"
     ca_path: "{{ openldap_server_enable_ssl | ternary(openldap_server_cert, omit) }}"
-  when: installation_mode == 'new'
+  when: installation_mode == 'new' or (installation_mode == "upgrade" and reset_admin_password_on_upgrade | default(false) | bool)
 
 - name: read importer password from secrets directory
   slurp:
