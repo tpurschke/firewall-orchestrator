@@ -1,4 +1,7 @@
 ---
+- name: Add OS specific OpenLDAP variables
+  include_vars: "{{ ansible_os_family }}.yml"
+
 - name: Create universal ldif directory
   file:
       path: "{{ middleware_ldif_dir }}"
@@ -10,9 +13,6 @@
 
 - block:
       ### OS basics
-      - name: Add the OS specific varibles
-        include_vars: "{{ ansible_os_family }}.yml"
-
       - name: Install the openldap and required Packages
         package:
             name: "{{ item }}"
