@@ -266,7 +266,6 @@
     name: "{{ api_container_name }}"
     image: "{{ api_hasura_image }}"
     state: created
-    replace: true
     recreate: true
     rm: true
     network:
