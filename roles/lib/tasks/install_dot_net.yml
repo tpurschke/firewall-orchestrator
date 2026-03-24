@@ -12,6 +12,17 @@
     - name: set dotnet package name
       set_fact:
         dotnet_package_name: "dotnet-sdk-{{ dotnet_version }}"
+        dotnet_install_via_script: false
+
+    - name: download dotnet-install script
+      get_url:
+        url: https://dot.net/v1/dotnet-install.sh
+        dest: "{{ lib_tmp_dir }}/dotnet-install.sh"
+        mode: "0755"
+      register: dotnet_install_script_download
+      until: dotnet_install_script_download is succeeded
+      retries: 3
+      delay: 5
 
     # for all distros except ubuntu >=22.04 we need to include a package source
     - block:
@@ -45,16 +56,43 @@
       - name: apt update
         apt:
           update_cache: true
+      rescue:
+        - name: set dotnet installer fallback after microsoft repo apt failure
+          set_fact:
+            dotnet_install_via_script: true
 
       when: ansible_facts['distribution']|lower != 'ubuntu' or 
         (ansible_facts['distribution']|lower == 'ubuntu' and ansible_facts['distribution_major_version'] is version('22', '<'))
 
     - name: Install apt-transport-https
       package: name=apt-transport-https state=present
+      when: not dotnet_install_via_script | bool
 
     - name: apt update
       apt:
         update_cache: true
+      when: not dotnet_install_via_script | bool
+      failed_when: false
+      register: dotnet_general_apt_update
+
+    - name: set dotnet installer fallback after general apt failure
+      set_fact:
+        dotnet_install_via_script: true
+      when:
+        - not dotnet_install_via_script | bool
+        - dotnet_general_apt_update is failed
+
+    - name: Remove Microsoft apt repository files after dotnet script fallback
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/apt/sources.list.d/microsoft-prod.list
+        - /etc/apt/sources.list.d/microsoft-prod.sources
+        - /etc/apt/preferences.d/fworch-dotnet
+      when:
+        - dotnet_install_via_script | bool
+        - ansible_facts['os_family'] == 'Debian'
 
     - block:
       - name: Install {{ dotnet_package_name }} from current apt sources
@@ -156,6 +194,7 @@
         - ansible_facts['distribution']|lower == 'ubuntu'
         - ansible_facts['distribution_major_version'] is version('22', '>=')
         - ansible_architecture == "x86_64"
+        - not dotnet_install_via_script | bool
 
     - name: Install dotnet-sdk-{{ dotnet_version }} on distro defaults
       package:
@@ -163,8 +202,34 @@
         state: present
       when:
         - ansible_architecture == "x86_64"
+        - not dotnet_install_via_script | bool
         - ansible_facts['distribution']|lower != 'ubuntu' or
           (ansible_facts['distribution']|lower == 'ubuntu' and ansible_facts['distribution_major_version'] is version('22', '<'))
+
+    - name: install dotnet sdk {{ dotnet_version }} with dotnet-install script
+      command: "{{ lib_tmp_dir }}/dotnet-install.sh --channel {{ dotnet_version }} --quality ga --install-dir /usr/share/dotnet"
+      when:
+        - ansible_architecture == "x86_64"
+        - dotnet_install_via_script | bool
+
+    - name: ensure dotnet symlink exists after script install
+      file:
+        src: /usr/share/dotnet/dotnet
+        dest: /usr/bin/dotnet
+        state: link
+        force: true
+      when:
+        - ansible_architecture == "x86_64"
+        - dotnet_install_via_script | bool
+
+    - name: verify dotnet sdk {{ dotnet_version }} is installed after script fallback
+      command: /usr/share/dotnet/dotnet --list-sdks
+      register: dotnet_sdks_after_script_fallback
+      changed_when: false
+      failed_when: dotnet_version not in dotnet_sdks_after_script_fallback.stdout
+      when:
+        - ansible_architecture == "x86_64"
+        - dotnet_install_via_script | bool
 
     - debug: 
         msg:

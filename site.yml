@@ -4,6 +4,7 @@
 - hosts: all
   roles:
     - { role: common }
+    - { role: internal-ca, when: "not installation_mode == 'uninstall'" }
   tags:
     - backend
     - frontend

@@ -7,7 +7,7 @@
     headers:
       Content-Type: html/text
     body:
-    validate_certs: false
+    validate_certs: true
     return_content: true
   register: web_call_result
   changed_when: false
@@ -29,7 +29,7 @@
     headers:
       Content-Type: html/text
     body:
-    validate_certs: false
+    validate_certs: true
     return_content: true
   register: web_call_result
   changed_when: false
@@ -51,7 +51,7 @@
     headers:
       Content-Type: html/text
     body:
-    validate_certs: false
+    validate_certs: true
     return_content: true
   register: web_call_result
   changed_when: false

@@ -1,0 +1,265 @@
+---
+- name: Install internal CA trust package
+  package:
+    name: ca-certificates
+    state: present
+  become: true
+
+- name: Validate internal CA inputs
+  assert:
+    that:
+      - internal_ca_mode in ['generated', 'provided']
+      - internal_ca_mode != 'provided' or internal_ca_cert_content | length > 0 or internal_ca_cert_src | length > 0
+    fail_msg: "Set internal_ca_mode to 'generated' or provide a CA certificate via internal_ca_cert_content or internal_ca_cert_src."
+
+- name: Create internal CA directories on signing host
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "{{ '0700' if item == internal_ca_root_dir else '0750' }}"
+  loop:
+    - "{{ internal_ca_root_dir }}"
+    - "{{ internal_ca_requests_dir }}"
+    - "{{ internal_ca_signed_certs_dir }}"
+  delegate_to: "{{ internal_ca_host }}"
+  run_once: true
+  become: true
+
+- name: Remove internal CA material when renewal is requested
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "{{ internal_ca_root_key }}"
+    - "{{ internal_ca_root_csr }}"
+    - "{{ internal_ca_root_cert }}"
+  delegate_to: "{{ internal_ca_host }}"
+  run_once: true
+  when: internal_ca_mode == 'generated' and internal_ca_force_renew | bool
+  become: true
+
+- name: Copy provided internal CA certificate to signing host
+  copy:
+    src: "{{ internal_ca_cert_src }}"
+    dest: "{{ internal_ca_root_cert }}"
+    owner: root
+    group: root
+    mode: "0644"
+  delegate_to: "{{ internal_ca_host }}"
+  run_once: true
+  when: internal_ca_mode == 'provided' and internal_ca_cert_src | length > 0
+  become: true
+
+- name: Write provided internal CA certificate content to signing host
+  copy:
+    content: "{{ internal_ca_cert_content }}"
+    dest: "{{ internal_ca_root_cert }}"
+    owner: root
+    group: root
+    mode: "0644"
+  delegate_to: "{{ internal_ca_host }}"
+  run_once: true
+  when: internal_ca_mode == 'provided' and internal_ca_cert_content | length > 0
+  become: true
+
+- name: Generate internal CA private key
+  openssl_privatekey:
+    path: "{{ internal_ca_root_key }}"
+    size: 4096
+    type: RSA
+  delegate_to: "{{ internal_ca_host }}"
+  run_once: true
+  when: internal_ca_mode == 'generated'
+  become: true
+
+- name: Set internal CA private key permissions
+  file:
+    path: "{{ internal_ca_root_key }}"
+    state: file
+    owner: root
+    group: root
+    mode: "0600"
+  delegate_to: "{{ internal_ca_host }}"
+  run_once: true
+  when: internal_ca_mode == 'generated'
+  become: true
+
+- name: Generate internal CA certificate signing request
+  openssl_csr:
+    path: "{{ internal_ca_root_csr }}"
+    privatekey_path: "{{ internal_ca_root_key }}"
+    country_name: "{{ internal_ca_country }}"
+    state_or_province_name: "{{ internal_ca_state }}"
+    locality_name: "{{ internal_ca_location }}"
+    organization_name: "{{ internal_ca_organization }}"
+    email_address: "{{ internal_ca_email_address }}"
+    common_name: "{{ internal_ca_common_name }}"
+    basic_constraints:
+      - CA:TRUE
+    basic_constraints_critical: true
+    key_usage:
+      - cRLSign
+      - digitalSignature
+      - keyCertSign
+    key_usage_critical: true
+  delegate_to: "{{ internal_ca_host }}"
+  run_once: true
+  when: internal_ca_mode == 'generated'
+  become: true
+
+- name: Generate internal CA certificate
+  openssl_certificate:
+    path: "{{ internal_ca_root_cert }}"
+    privatekey_path: "{{ internal_ca_root_key }}"
+    csr_path: "{{ internal_ca_root_csr }}"
+    provider: selfsigned
+    selfsigned_not_after: "+{{ internal_ca_validity_days }}d"
+  delegate_to: "{{ internal_ca_host }}"
+  run_once: true
+  when: internal_ca_mode == 'generated'
+  become: true
+
+- name: Read internal CA certificate from signing host
+  slurp:
+    src: "{{ internal_ca_root_cert }}"
+  register: internal_ca_root_cert_raw
+  delegate_to: "{{ internal_ca_host }}"
+  run_once: true
+  become: true
+
+- name: Remove legacy leaf certificate from trust store
+  file:
+    path: "{{ internal_ca_legacy_leaf_trust_cert }}"
+    state: absent
+  register: internal_ca_legacy_leaf_trust_removed
+  become: true
+
+- name: Install internal CA certificate into local trust store
+  copy:
+    content: "{{ internal_ca_root_cert_raw.content | b64decode }}"
+    dest: "{{ internal_ca_trust_cert }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: internal_ca_trust_copy
+  become: true
+
+- name: Install API trust CA certificate from source file
+  copy:
+    src: "{{ api_tls_certificate.trust_ca_src }}"
+    dest: "{{ api_tls_certificate.trust_ca_installed_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: api_tls_trust_copy
+  when: api_tls_certificate.trust_ca_src | length > 0
+  become: true
+
+- name: Install API trust CA certificate from inline content
+  copy:
+    content: "{{ api_tls_certificate.trust_ca_content }}"
+    dest: "{{ api_tls_certificate.trust_ca_installed_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: api_tls_trust_copy
+  when: api_tls_certificate.trust_ca_content | length > 0
+  become: true
+
+- name: Install middleware trust CA certificate from source file
+  copy:
+    src: "{{ middleware_tls_certificate.trust_ca_src }}"
+    dest: "{{ middleware_tls_certificate.trust_ca_installed_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: middleware_tls_trust_copy
+  when: middleware_tls_certificate.trust_ca_src | length > 0
+  become: true
+
+- name: Install middleware trust CA certificate from inline content
+  copy:
+    content: "{{ middleware_tls_certificate.trust_ca_content }}"
+    dest: "{{ middleware_tls_certificate.trust_ca_installed_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: middleware_tls_trust_copy
+  when: middleware_tls_certificate.trust_ca_content | length > 0
+  become: true
+
+- name: Install UI trust CA certificate from source file
+  copy:
+    src: "{{ ui_tls_certificate.trust_ca_src }}"
+    dest: "{{ ui_tls_certificate.trust_ca_installed_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: ui_tls_trust_copy
+  when: ui_tls_certificate.trust_ca_src | length > 0
+  become: true
+
+- name: Install UI trust CA certificate from inline content
+  copy:
+    content: "{{ ui_tls_certificate.trust_ca_content }}"
+    dest: "{{ ui_tls_certificate.trust_ca_installed_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: ui_tls_trust_copy
+  when: ui_tls_certificate.trust_ca_content | length > 0
+  become: true
+
+- name: Install LDAP trust CA certificate from source file
+  copy:
+    src: "{{ ldap_tls_certificate.trust_ca_src }}"
+    dest: "{{ ldap_tls_certificate.trust_ca_installed_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: ldap_tls_trust_copy
+  when: ldap_tls_certificate.trust_ca_src | length > 0
+  become: true
+
+- name: Install LDAP trust CA certificate from inline content
+  copy:
+    content: "{{ ldap_tls_certificate.trust_ca_content }}"
+    dest: "{{ ldap_tls_certificate.trust_ca_installed_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: ldap_tls_trust_copy
+  when: ldap_tls_certificate.trust_ca_content | length > 0
+  become: true
+
+- name: Refresh Debian CA trust store
+  command: update-ca-certificates
+  when: >
+    ansible_os_family == 'Debian'
+    and
+    (
+      internal_ca_trust_copy.changed
+      or internal_ca_legacy_leaf_trust_removed.changed
+      or api_tls_trust_copy.changed | default(false)
+      or middleware_tls_trust_copy.changed | default(false)
+      or ui_tls_trust_copy.changed | default(false)
+      or ldap_tls_trust_copy.changed | default(false)
+    )
+  become: true
+
+- name: Refresh RedHat CA trust store
+  command: update-ca-trust extract
+  when: >
+    ansible_os_family == 'RedHat'
+    and
+    (
+      internal_ca_trust_copy.changed
+      or internal_ca_legacy_leaf_trust_removed.changed
+      or api_tls_trust_copy.changed | default(false)
+      or middleware_tls_trust_copy.changed | default(false)
+      or ui_tls_trust_copy.changed | default(false)
+      or ldap_tls_trust_copy.changed | default(false)
+    )
+  become: true

@@ -8,8 +8,8 @@
 BASE    {{ openldap_path }}
 {% if openldap_server_enable_ssl %}
 URI     ldaps://{{ openldap_server }}:{{ openldap_port }}
-TLS_REQCERT never
-TLS_CACERT {{ openldap_server_cert }}
+TLS_REQCERT demand
+TLS_CACERT {{ ldap_tls_certificate.trust_ca_installed_path if ldap_tls_certificate.trust_ca_src | length > 0 or ldap_tls_certificate.trust_ca_content | length > 0 else internal_ca_trust_cert }}
 {% endif %}
 {% if not openldap_server_enable_ssl %}
 URI     ldap://{{ openldap_server }}:{{ openldap_port }}
@@ -21,9 +21,9 @@ URI     ldap://{{ openldap_server }}:{{ openldap_port }}
 {% if ansible_os_family == 'RedHat' %}
 # This if block is outdated
 TLS_CACERTDIR /etc/openldap/cacerts
-TLS_CACERT {{ openldap_server_cert }}
+TLS_CACERT {{ ldap_tls_certificate.trust_ca_installed_path if ldap_tls_certificate.trust_ca_src | length > 0 or ldap_tls_certificate.trust_ca_content | length > 0 else internal_ca_trust_cert }}
 {% endif %}
 {% if ansible_os_family == 'Debian' %}
-TLS_CACERTDIR {{ openldap_server_cert_path }}
-TLS_CACERT {{ openldap_server_cert }}
+TLS_CACERTDIR /etc/ssl/certs
+TLS_CACERT {{ ldap_tls_certificate.trust_ca_installed_path if ldap_tls_certificate.trust_ca_src | length > 0 or ldap_tls_certificate.trust_ca_content | length > 0 else internal_ca_trust_cert }}
 {% endif %}

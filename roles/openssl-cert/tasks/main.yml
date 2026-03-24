@@ -5,11 +5,73 @@
     owner: "{{ openssl_user }}"
     group: "{{ openssl_user }}"
 
+- name: Remove generated certificate material when renewal is requested
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "{{ openssl_private_key }}"
+    - "{{ openssl_csr }}"
+    - "{{ openssl_cert }}"
+  when: openssl_cert_mode | default('generated') == 'generated' and openssl_force_renew | default(false) | bool
+
+- name: Validate certificate inputs
+  assert:
+    that:
+      - openssl_cert_mode | default('generated') in ['generated', 'provided']
+      - openssl_cert_mode | default('generated') != 'provided' or (openssl_cert_content | default('') | length > 0 or openssl_cert_src | default('') | length > 0)
+      - openssl_cert_mode | default('generated') != 'provided' or (openssl_private_key_content | default('') | length > 0 or openssl_private_key_src | default('') | length > 0)
+    fail_msg: "Certificate configuration is incomplete. Generated mode requires a generated internal CA; provided mode requires cert and key input."
+
+- name: Build provided certificate payload
+  set_fact:
+    openssl_provided_cert_payload: >-
+      {{
+        (openssl_cert_content if openssl_cert_content | default('') | length > 0 else lookup('file', openssl_cert_src))
+        ~
+        (
+          '\n' ~ (openssl_chain_content if openssl_chain_content | default('') | length > 0 else lookup('file', openssl_chain_src))
+          if (openssl_chain_content | default('') | length > 0 or openssl_chain_src | default('') | length > 0)
+          else ''
+        )
+      }}
+    openssl_provided_key_payload: "{{ openssl_private_key_content if openssl_private_key_content | default('') | length > 0 else lookup('file', openssl_private_key_src) }}"
+  when: openssl_cert_mode | default('generated') == 'provided'
+  no_log: true
+
+- name: Build effective subject alternative names
+  set_fact:
+    openssl_effective_subject_alt_names: "{{ (openssl_subject_alt_names | default([]) + ['DNS:localhost', 'IP:127.0.0.1'] + ([ 'DNS:' ~ ansible_hostname ] if ansible_hostname is defined else []) + ([ 'DNS:' ~ ansible_fqdn ] if ansible_fqdn is defined and ansible_fqdn not in ['', 'localhost'] else []) + ([ 'IP:' ~ inventory_hostname ] if inventory_hostname is match('^\\d{1,3}(\\.\\d{1,3}){3}$') else [ 'DNS:' ~ inventory_hostname ]) + ([ 'IP:' ~ ansible_host ] if ansible_host is defined and ansible_host is match('^\\d{1,3}(\\.\\d{1,3}){3}$') else ([ 'DNS:' ~ ansible_host ] if ansible_host is defined else [])) + ([ 'IP:' ~ ansible_default_ipv4.address ] if ansible_default_ipv4 is defined and ansible_default_ipv4.address is defined else [])) | unique }}"
+  when: openssl_cert_mode | default('generated') == 'generated'
+
+- name: Build signing host filenames
+  set_fact:
+    openssl_cert_signing_name: "{{ inventory_hostname | regex_replace('[^A-Za-z0-9_.-]', '_') }}-{{ openssl_cert | regex_replace('[^A-Za-z0-9_.-]', '_') }}"
+  when: openssl_cert_mode | default('generated') == 'generated'
+
+- name: Build signing host request and certificate filenames
+  set_fact:
+    openssl_cert_request_name: "{{ openssl_cert_signing_name }}.csr"
+    openssl_signed_cert_name: "{{ openssl_cert_signing_name }}.crt"
+  when: openssl_cert_mode | default('generated') == 'generated'
+
+- name: Remove CA signing artifacts when renewal is requested
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "{{ internal_ca_requests_dir }}/{{ openssl_cert_request_name }}"
+    - "{{ internal_ca_signed_certs_dir }}/{{ openssl_signed_cert_name }}"
+  delegate_to: "{{ internal_ca_host }}"
+  when: openssl_cert_mode | default('generated') == 'generated' and openssl_force_renew | default(false) | bool and internal_ca_enabled | bool
+  become: true
+
 - name: Generate an OpenSSL private key
   openssl_privatekey:
     path: "{{ openssl_private_key }}"
     size: 3072
     type: RSA
+  when: openssl_cert_mode | default('generated') == 'generated'
 
 - name: Generate an OpenSSL Certificate Signing Request with Subject information
   openssl_csr:
@@ -20,7 +82,61 @@
     locality_name: "{{ openssl_location }}"
     organization_name: "{{ openssl_organization }}"
     email_address: "{{ openssl_email_address }}"
-    common_name: "{{ ansible_hostname }}"
+    common_name: "{{ openssl_common_name | default(ansible_fqdn | default(ansible_hostname)) }}"
+    subject_alt_name: "{{ openssl_effective_subject_alt_names }}"
+    key_usage:
+      - digitalSignature
+      - keyEncipherment
+    extended_key_usage:
+      - serverAuth
+  when: openssl_cert_mode | default('generated') == 'generated'
+
+- name: Read CSR for CA signing
+  slurp:
+    src: "{{ openssl_csr }}"
+  register: openssl_csr_raw
+  when: openssl_cert_mode | default('generated') == 'generated' and internal_ca_enabled | bool
+
+- name: Copy CSR to internal CA signing host
+  copy:
+    content: "{{ openssl_csr_raw.content | b64decode }}"
+    dest: "{{ internal_ca_requests_dir }}/{{ openssl_cert_request_name }}"
+    owner: root
+    group: root
+    mode: "0644"
+  delegate_to: "{{ internal_ca_host }}"
+  when: openssl_cert_mode | default('generated') == 'generated' and internal_ca_enabled | bool
+  become: true
+
+- name: Sign certificate with internal CA
+  openssl_certificate:
+    path: "{{ internal_ca_signed_certs_dir }}/{{ openssl_signed_cert_name }}"
+    csr_path: "{{ internal_ca_requests_dir }}/{{ openssl_cert_request_name }}"
+    provider: ownca
+    ownca_path: "{{ internal_ca_root_cert }}"
+    ownca_privatekey_path: "{{ internal_ca_root_key }}"
+    ownca_not_after: "+{{ internal_ca_leaf_validity_days }}d"
+  delegate_to: "{{ internal_ca_host }}"
+  register: openssl_signed_cert
+  when: openssl_cert_mode | default('generated') == 'generated' and internal_ca_enabled | bool
+  become: true
+
+- name: Read signed certificate from internal CA signing host
+  slurp:
+    src: "{{ internal_ca_signed_certs_dir }}/{{ openssl_signed_cert_name }}"
+  register: openssl_signed_cert_raw
+  delegate_to: "{{ internal_ca_host }}"
+  when: openssl_cert_mode | default('generated') == 'generated' and internal_ca_enabled | bool
+  become: true
+
+- name: Write internal CA signed certificate
+  copy:
+    content: "{{ openssl_signed_cert_raw.content | b64decode }}"
+    dest: "{{ openssl_cert }}"
+    owner: "{{ openssl_user }}"
+    group: "{{ openssl_user }}"
+    mode: "0644"
+  when: openssl_cert_mode | default('generated') == 'generated' and internal_ca_enabled | bool
 
 - name: Generate a self signed OpenSSL Certificate
   openssl_certificate:
@@ -28,6 +144,42 @@
     privatekey_path: "{{ openssl_private_key }}"
     csr_path: "{{ openssl_csr }}"
     provider: selfsigned
+  when: openssl_cert_mode | default('generated') == 'generated' and not internal_ca_enabled | bool
+
+- name: Copy provided certificate to target
+  copy:
+    content: "{{ openssl_provided_cert_payload }}"
+    dest: "{{ openssl_cert }}"
+    owner: "{{ openssl_user }}"
+    group: "{{ openssl_user }}"
+    mode: "0644"
+  when: openssl_cert_mode | default('generated') == 'provided'
+
+- name: Copy provided private key to target
+  copy:
+    content: "{{ openssl_provided_key_payload }}"
+    dest: "{{ openssl_private_key }}"
+    owner: "{{ openssl_user }}"
+    group: "{{ openssl_user }}"
+    mode: "0640"
+  when: openssl_cert_mode | default('generated') == 'provided'
+  no_log: true
+
+- name: Validate that certificate and private key match
+  shell: |
+    cert_pub="$(openssl x509 -in "{{ openssl_cert }}" -pubkey -noout | sha256sum | awk '{print $1}')"
+    key_pub="$(openssl pkey -in "{{ openssl_private_key }}" -pubout | sha256sum | awk '{print $1}')"
+    test "$cert_pub" = "$key_pub"
+  args:
+    executable: /bin/bash
+  changed_when: false
+  when: openssl_cert_mode | default('generated') == 'provided'
+  no_log: true
+
+- name: Validate provided certificate against configured issuer CA
+  command: "openssl verify -purpose sslserver -CAfile {{ openssl_trust_ca_file }} {{ openssl_cert }}"
+  changed_when: false
+  when: openssl_cert_mode | default('generated') == 'provided' and openssl_trust_ca_file | default('') | length > 0
 
 - name: Set permissions on key
   file:
@@ -35,7 +187,7 @@
     state: file
     owner: "{{ openssl_user }}"
     group: "{{ openssl_user }}"
-    mode: g+r
+    mode: "0640"
 
 - name: Set permissions on cert
   file:
@@ -43,17 +195,4 @@
     state: file
     owner: "{{ openssl_user }}"
     group: "{{ openssl_user }}"
-
-# the following only works vor deb based systems
-- name: set link to debian cert store
-  file:
-    src: "{{ openssl_cert }}"
-    dest: /usr/local/share/ca-certificates/{{ product_name }}-server.crt
-    state: link
-  become: true
-    
-# sudo dpkg-reconfigure ca-certificates -f noninteractive
-- name: reconfigure ca-certificates package
-  debconf:
-    name: ca-certificates
-  become: true
+    mode: "0644"

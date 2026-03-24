@@ -68,6 +68,15 @@
         vars:
             openssl_cert_path: "{{ openldap_server_cert_path }}"
             openssl_user: "{{ openldap_server_user }}"
+            openssl_cert_mode: "{{ ldap_tls_certificate.mode }}"
+            openssl_force_renew: "{{ ldap_tls_certificate.force_renew }}"
+            openssl_cert_src: "{{ ldap_tls_certificate.cert_src }}"
+            openssl_cert_content: "{{ ldap_tls_certificate.cert_content }}"
+            openssl_private_key_src: "{{ ldap_tls_certificate.key_src }}"
+            openssl_private_key_content: "{{ ldap_tls_certificate.key_content }}"
+            openssl_chain_src: "{{ ldap_tls_certificate.chain_src }}"
+            openssl_chain_content: "{{ ldap_tls_certificate.chain_content }}"
+            openssl_trust_ca_file: "{{ ldap_tls_certificate.trust_ca_installed_path if ldap_tls_certificate.trust_ca_src | length > 0 or ldap_tls_certificate.trust_ca_content | length > 0 else internal_ca_trust_cert }}"
             openssl_private_key: "{{ openldap_server_private_key }}"
             openssl_csr: "{{ openldap_server_csr }}"
             openssl_country: "{{ openldap_server_country }}"
@@ -75,7 +84,13 @@
             openssl_location: "{{ openldap_server_location }}"
             openssl_organization: "{{ openldap_server_organization }}"
             openssl_email_address: "{{ openldap_server_email_address }}"
+            openssl_common_name: "{{ openldap_server }}"
+            openssl_subject_alt_names:
+              - "DNS:localhost"
+              - "IP:127.0.0.1"
+              - "{{ 'IP:' ~ openldap_server if openldap_server is match('^\\d{1,3}(\\.\\d{1,3}){3}$') else 'DNS:' ~ openldap_server }}"
             openssl_cert: "{{ openldap_server_cert }}"
+        when: openldap_server_enable_ssl | bool
 
       ### Config files
       - name: Create the directory for ldap database
@@ -126,15 +141,79 @@
             src: override.conf.j2
             dest: /etc/systemd/system/slapd.service.d/override.conf
 
+      - name: Verify LDAP certificate against configured issuer CA
+        command: "openssl verify -CAfile {{ ldap_tls_certificate.trust_ca_installed_path if ldap_tls_certificate.trust_ca_src | length > 0 or ldap_tls_certificate.trust_ca_content | length > 0 else internal_ca_trust_cert }} {{ openldap_server_cert }}"
+        register: ldap_cert_verify
+        changed_when: false
+
+      - name: Validate slapd configuration before service start
+        command: "slaptest -u -F {{ openldap_server_app_path }}/slapd.d"
+        register: slapd_config_test
+        changed_when: false
+
       - name: Start the slapd service
-        systemd:
-            name: slapd
-            state: restarted
-            enabled: true
-            daemon_reload: true
+        block:
+          - name: Restart and enable slapd
+            systemd:
+                name: slapd
+                state: restarted
+                enabled: true
+                daemon_reload: true
+        rescue:
+          - name: Read slapd systemd status after failed start
+            command: systemctl status slapd --no-pager
+            register: slapd_systemd_status
+            changed_when: false
+            failed_when: false
+
+          - name: Read slapd journal after failed start
+            command: journalctl -xeu slapd --no-pager -n 80
+            register: slapd_journal
+            changed_when: false
+            failed_when: false
+
+          - name: Fail with collected slapd diagnostics
+            fail:
+              msg:
+                - "{{ slapd_systemd_status.stdout | default('') }}"
+                - "{{ slapd_systemd_status.stderr | default('') }}"
+                - "{{ slapd_journal.stdout | default('') }}"
+                - "{{ slapd_journal.stderr | default('') }}"
 
   become: true
   when: installation_mode == "new"
+
+- name: Create ldap certificates
+  include_role:
+      name: openssl-cert
+      apply:
+        become: true
+  vars:
+      openssl_cert_path: "{{ openldap_server_cert_path }}"
+      openssl_user: "{{ openldap_server_user }}"
+      openssl_cert_mode: "{{ ldap_tls_certificate.mode }}"
+      openssl_force_renew: "{{ ldap_tls_certificate.force_renew }}"
+      openssl_cert_src: "{{ ldap_tls_certificate.cert_src }}"
+      openssl_cert_content: "{{ ldap_tls_certificate.cert_content }}"
+      openssl_private_key_src: "{{ ldap_tls_certificate.key_src }}"
+      openssl_private_key_content: "{{ ldap_tls_certificate.key_content }}"
+      openssl_chain_src: "{{ ldap_tls_certificate.chain_src }}"
+      openssl_chain_content: "{{ ldap_tls_certificate.chain_content }}"
+      openssl_trust_ca_file: "{{ ldap_tls_certificate.trust_ca_installed_path if ldap_tls_certificate.trust_ca_src | length > 0 or ldap_tls_certificate.trust_ca_content | length > 0 else internal_ca_trust_cert }}"
+      openssl_private_key: "{{ openldap_server_private_key }}"
+      openssl_csr: "{{ openldap_server_csr }}"
+      openssl_country: "{{ openldap_server_country }}"
+      openssl_state: "{{ openldap_server_state }}"
+      openssl_location: "{{ openldap_server_location }}"
+      openssl_organization: "{{ openldap_server_organization }}"
+      openssl_email_address: "{{ openldap_server_email_address }}"
+      openssl_common_name: "{{ openldap_server }}"
+      openssl_subject_alt_names:
+        - "DNS:localhost"
+        - "IP:127.0.0.1"
+        - "{{ 'IP:' ~ openldap_server if openldap_server is match('^\\d{1,3}(\\.\\d{1,3}){3}$') else 'DNS:' ~ openldap_server }}"
+      openssl_cert: "{{ openldap_server_cert }}"
+  when: openldap_server_enable_ssl | bool and installation_mode == "upgrade"
 
 - name: include upgrade script
   import_tasks: run-upgrades.yml

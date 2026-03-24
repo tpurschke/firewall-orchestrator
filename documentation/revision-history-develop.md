@@ -378,5 +378,12 @@ A complete 80K lines rework of FWO, including
 # 9.0.14 - 17.03.2026 DEVELOP
 - prepare owner decommission notification
 
+# 9.0.17 - 24.03.2026 DEVELOP
+- secure internal CA key handling and add explicit CA / server certificate renewal switches
+
+# 9.0.16 - 24.03.2026 DEVELOP
+- add an internal CA role and CA-issued component certificates for strict certificate validation
+- add installer support for customer-provided cert/key/chain material for Apache and LDAP endpoints
+
 # 9.0.15 - 12.03.2026 DEVELOP
 - rename OwnerSourceCustomFieldKey to CustomFieldOwnerKey in config

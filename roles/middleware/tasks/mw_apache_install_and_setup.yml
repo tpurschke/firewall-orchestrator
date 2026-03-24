@@ -26,6 +26,15 @@
       vars:
         openssl_cert_path: /etc/apache2/ssl
         openssl_user: root
+        openssl_cert_mode: "{{ middleware_tls_certificate.mode }}"
+        openssl_force_renew: "{{ middleware_tls_certificate.force_renew }}"
+        openssl_cert_src: "{{ middleware_tls_certificate.cert_src }}"
+        openssl_cert_content: "{{ middleware_tls_certificate.cert_content }}"
+        openssl_private_key_src: "{{ middleware_tls_certificate.key_src }}"
+        openssl_private_key_content: "{{ middleware_tls_certificate.key_content }}"
+        openssl_chain_src: "{{ middleware_tls_certificate.chain_src }}"
+        openssl_chain_content: "{{ middleware_tls_certificate.chain_content }}"
+        openssl_trust_ca_file: "{{ middleware_tls_certificate.trust_ca_installed_path if middleware_tls_certificate.trust_ca_src | length > 0 or middleware_tls_certificate.trust_ca_content | length > 0 else internal_ca_trust_cert }}"
         openssl_private_key: "{{ openssl_cert_path }}/server.key"
         openssl_csr: "{{ openssl_cert_path }}/server.csr"
         openssl_country: DE
@@ -33,15 +42,12 @@
         openssl_location: Frankfurt
         openssl_organization: Cactus eSecurity
         openssl_email_address: "fworch@cactus.de"
+        openssl_common_name: "{{ middleware_hostname }}"
+        openssl_subject_alt_names:
+          - "DNS:localhost"
+          - "IP:127.0.0.1"
+          - "{{ 'IP:' ~ middleware_hostname if middleware_hostname is match('^\\d{1,3}(\\.\\d{1,3}){3}$') else 'DNS:' ~ middleware_hostname }}"
         openssl_cert: "{{ openssl_cert_path }}/server.crt"
-      when: installation_mode == "new"
-
-    - name: copy cert to /etc/ssl/certs/ to make it acceptable
-      copy:
-        src: "/etc/apache2/ssl/server.crt"
-        dest: "/etc/ssl/certs/"
-        remote_src: true
-      when: installation_mode == "new"
 
     - name: enable {{ product_name }} middleware apache site
       command: "a2ensite {{ product_name }}-mw"

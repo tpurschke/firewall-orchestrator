@@ -1,5 +1,5 @@
 ### general settings
-product_version: "9.0.15"
+product_version: "9.0.17"
 ansible_user: "{{ lookup('env', 'USER') }}"
 ansible_become_method: sudo
 ansible_python_interpreter: /usr/bin/python3
@@ -182,3 +182,97 @@ apache_security_headers:
     - 'Header always set X-Content-Type-Options "nosniff"'
 
 apache_global_settings_file: /etc/apache2/conf-available/security.conf
+
+#### internal certificate authority
+
+internal_ca_enabled: true
+internal_ca_mode: generated
+internal_ca_force_renew: false
+internal_ca_host: "{{ groups['middlewareserver'].0 }}"
+internal_ca_root_dir: "{{ fworch_conf_dir }}/internal-ca"
+internal_ca_requests_dir: "{{ internal_ca_root_dir }}/requests"
+internal_ca_signed_certs_dir: "{{ internal_ca_root_dir }}/issued"
+internal_ca_root_key: "{{ internal_ca_root_dir }}/ca.key"
+internal_ca_root_csr: "{{ internal_ca_root_dir }}/ca.csr"
+internal_ca_root_cert: "{{ internal_ca_root_dir }}/ca.crt"
+internal_ca_cert_src: ""
+internal_ca_cert_content: ""
+internal_ca_trust_cert: "{{ '/etc/pki/ca-trust/source/anchors/' ~ product_name ~ '-internal-ca.crt' if ansible_os_family == 'RedHat' else '/usr/local/share/ca-certificates/' ~ product_name ~ '-internal-ca.crt' }}"
+internal_ca_legacy_leaf_trust_cert: "{{ '/etc/pki/ca-trust/source/anchors/' ~ product_name ~ '-server.crt' if ansible_os_family == 'RedHat' else '/usr/local/share/ca-certificates/' ~ product_name ~ '-server.crt' }}"
+internal_ca_common_name: "{{ product_name }} Internal CA"
+internal_ca_country: DE
+internal_ca_state: Hessen
+internal_ca_location: Frankfurt
+internal_ca_organization: Cactus eSecurity
+internal_ca_email_address: "fworch@cactus.de"
+internal_ca_validity_days: 3650
+internal_ca_leaf_validity_days: 825
+
+tls_certificate_defaults:
+  mode: generated
+  force_renew: false
+  cert_src: ""
+  cert_content: ""
+  key_src: ""
+  key_content: ""
+  chain_src: ""
+  chain_content: ""
+  trust_ca_src: ""
+  trust_ca_content: ""
+
+api_tls_trust_cert_path: "{{ '/etc/pki/ca-trust/source/anchors/' ~ product_name ~ '-api-trust-ca.crt' if ansible_os_family == 'RedHat' else '/usr/local/share/ca-certificates/' ~ product_name ~ '-api-trust-ca.crt' }}"
+middleware_tls_trust_cert_path: "{{ '/etc/pki/ca-trust/source/anchors/' ~ product_name ~ '-middleware-trust-ca.crt' if ansible_os_family == 'RedHat' else '/usr/local/share/ca-certificates/' ~ product_name ~ '-middleware-trust-ca.crt' }}"
+ui_tls_trust_cert_path: "{{ '/etc/pki/ca-trust/source/anchors/' ~ product_name ~ '-ui-trust-ca.crt' if ansible_os_family == 'RedHat' else '/usr/local/share/ca-certificates/' ~ product_name ~ '-ui-trust-ca.crt' }}"
+ldap_tls_trust_cert_path: "{{ '/etc/pki/ca-trust/source/anchors/' ~ product_name ~ '-ldap-trust-ca.crt' if ansible_os_family == 'RedHat' else '/usr/local/share/ca-certificates/' ~ product_name ~ '-ldap-trust-ca.crt' }}"
+
+api_tls_certificate:
+  mode: "{{ tls_certificate_defaults.mode }}"
+  force_renew: "{{ tls_certificate_defaults.force_renew }}"
+  cert_src: "{{ tls_certificate_defaults.cert_src }}"
+  cert_content: "{{ tls_certificate_defaults.cert_content }}"
+  key_src: "{{ tls_certificate_defaults.key_src }}"
+  key_content: "{{ tls_certificate_defaults.key_content }}"
+  chain_src: "{{ tls_certificate_defaults.chain_src }}"
+  chain_content: "{{ tls_certificate_defaults.chain_content }}"
+  trust_ca_src: "{{ tls_certificate_defaults.trust_ca_src }}"
+  trust_ca_content: "{{ tls_certificate_defaults.trust_ca_content }}"
+  trust_ca_installed_path: "{{ api_tls_trust_cert_path }}"
+
+middleware_tls_certificate:
+  mode: "{{ tls_certificate_defaults.mode }}"
+  force_renew: "{{ tls_certificate_defaults.force_renew }}"
+  cert_src: "{{ tls_certificate_defaults.cert_src }}"
+  cert_content: "{{ tls_certificate_defaults.cert_content }}"
+  key_src: "{{ tls_certificate_defaults.key_src }}"
+  key_content: "{{ tls_certificate_defaults.key_content }}"
+  chain_src: "{{ tls_certificate_defaults.chain_src }}"
+  chain_content: "{{ tls_certificate_defaults.chain_content }}"
+  trust_ca_src: "{{ tls_certificate_defaults.trust_ca_src }}"
+  trust_ca_content: "{{ tls_certificate_defaults.trust_ca_content }}"
+  trust_ca_installed_path: "{{ middleware_tls_trust_cert_path }}"
+
+ui_tls_certificate:
+  mode: "{{ tls_certificate_defaults.mode }}"
+  force_renew: "{{ tls_certificate_defaults.force_renew }}"
+  cert_src: "{{ tls_certificate_defaults.cert_src }}"
+  cert_content: "{{ tls_certificate_defaults.cert_content }}"
+  key_src: "{{ tls_certificate_defaults.key_src }}"
+  key_content: "{{ tls_certificate_defaults.key_content }}"
+  chain_src: "{{ tls_certificate_defaults.chain_src }}"
+  chain_content: "{{ tls_certificate_defaults.chain_content }}"
+  trust_ca_src: "{{ tls_certificate_defaults.trust_ca_src }}"
+  trust_ca_content: "{{ tls_certificate_defaults.trust_ca_content }}"
+  trust_ca_installed_path: "{{ ui_tls_trust_cert_path }}"
+
+ldap_tls_certificate:
+  mode: "{{ tls_certificate_defaults.mode }}"
+  force_renew: "{{ tls_certificate_defaults.force_renew }}"
+  cert_src: "{{ tls_certificate_defaults.cert_src }}"
+  cert_content: "{{ tls_certificate_defaults.cert_content }}"
+  key_src: "{{ tls_certificate_defaults.key_src }}"
+  key_content: "{{ tls_certificate_defaults.key_content }}"
+  chain_src: "{{ tls_certificate_defaults.chain_src }}"
+  chain_content: "{{ tls_certificate_defaults.chain_content }}"
+  trust_ca_src: "{{ tls_certificate_defaults.trust_ca_src }}"
+  trust_ca_content: "{{ tls_certificate_defaults.trust_ca_content }}"
+  trust_ca_installed_path: "{{ ldap_tls_trust_cert_path }}"

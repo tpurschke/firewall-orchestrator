@@ -1,4 +1,6 @@
 [Service]
+Type=forking
+PIDFile=/run/slapd/slapd.pid
 ExecStartPre=/bin/mkdir -p /run/slapd
 ExecStartPre=/bin/chown openldap:openldap /run/slapd
 ExecStart=
