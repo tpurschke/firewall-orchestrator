@@ -146,6 +146,17 @@ namespace FWO.Report
 
         public abstract string ExportToHtml();
 
+        public string ExportToHtmlForMail()
+        {
+            return ExportToHtmlForMail(userConfig.FullReportHeaderInMail);
+        }
+
+        public string ExportToHtmlForMail(bool fullReportHeaderInMail)
+        {
+            string html = ExportToHtml();
+            return fullReportHeaderInMail ? html : RemoveFullHeaderForMail(html);
+        }
+
         public abstract string SetDescription();
 
         public static ReportBase ConstructReport(ReportTemplate reportFilter, UserConfig userConfig, IRuleTreeBuilder? ruleTreeBuilder = null)
@@ -320,6 +331,61 @@ namespace FWO.Report
             {
                 HtmlTemplate = HtmlTemplate.Replace("<p>##OtherFilters##</p>", "");
             }
+        }
+
+        private static string RemoveFullHeaderForMail(string html)
+        {
+            if (string.IsNullOrWhiteSpace(html))
+            {
+                return html;
+            }
+
+            HtmlDocument document = new();
+            document.LoadHtml(html);
+
+            HtmlNode? body = document.DocumentNode.SelectSingleNode("//body");
+            if (body == null)
+            {
+                return html;
+            }
+
+            int indexAfterHeader = FindIndexAfterHeader(body.ChildNodes);
+            if (indexAfterHeader == 0)
+            {
+                return html;
+            }
+
+            StringBuilder content = new();
+            foreach (HtmlNode node in body.ChildNodes.Skip(indexAfterHeader))
+            {
+                content.Append(node.OuterHtml);
+            }
+
+            return content.ToString();
+        }
+
+        private static int FindIndexAfterHeader(HtmlNodeCollection childNodes)
+        {
+            int hrCount = 0;
+            for (int index = 0; index < childNodes.Count; index++)
+            {
+                HtmlNode childNode = childNodes[index];
+                if (childNode.NodeType == HtmlNodeType.Text && string.IsNullOrWhiteSpace(childNode.InnerText))
+                {
+                    continue;
+                }
+
+                if (childNode.Name.Equals("hr", StringComparison.OrdinalIgnoreCase))
+                {
+                    hrCount++;
+                    if (hrCount == 2)
+                    {
+                        return index + 1;
+                    }
+                }
+            }
+
+            return 0;
         }
 
         protected static string ToUtcString(string? timestring)

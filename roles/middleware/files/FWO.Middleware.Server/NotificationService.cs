@@ -97,8 +97,9 @@ namespace FWO.Middleware.Server
         /// <param name="content">Text for notification (e.g. email body).</param>
         /// <param name="report">Optional report to be sent as attachment.</param>
         /// <param name="timeIntervalText">Optional resolved time interval text for placeholder replacement.</param>
+        /// <param name="htmlBody">Optional fully rendered HTML body for HtmlInBody notifications.</param>
         /// <returns>number of emails sent</returns>
-        public async Task<int> SendBundledNotifications(List<FwoNotification> notifications, FwoOwner? owner, string? content = null, ReportBase? report = null, string timeIntervalText = "")
+        public async Task<int> SendBundledNotifications(List<FwoNotification> notifications, FwoOwner? owner, string? content = null, ReportBase? report = null, string timeIntervalText = "", string? htmlBody = null)
         {
             int emailsSent = 0;
             foreach (IGrouping<string, FwoNotification> notificationGroup in notifications.GroupBy(GetBundleGroupKey))
@@ -106,11 +107,11 @@ namespace FWO.Middleware.Server
                 List<FwoNotification> groupedNotifications = [.. notificationGroup];
                 if (groupedNotifications.Count == 1 || groupedNotifications[0].BundleType == null)
                 {
-                    emailsSent += await SendNotification(groupedNotifications[0], owner, content, report, timeIntervalText);
+                    emailsSent += await SendNotification(groupedNotifications[0], owner, content, report, timeIntervalText, htmlBody);
                     continue;
                 }
 
-                await SendBundledEmail(groupedNotifications, content, owner, report, timeIntervalText);
+                await SendBundledEmail(groupedNotifications, content, owner, report, timeIntervalText, htmlBody);
                 foreach (FwoNotification notification in groupedNotifications)
                 {
                     if (!CheckedNotificationIds.Contains(notification.Id))
@@ -254,13 +255,13 @@ namespace FWO.Middleware.Server
             await MailKitMailer.SendAsync(mail, emailConnection, notification.Layout == NotificationLayout.HtmlInBody, new());
         }
 
-        private async Task SendBundledEmail(List<FwoNotification> notifications, string? content, FwoOwner? owner, ReportBase? report = null, string timeIntervalText = "")
+        private async Task SendBundledEmail(List<FwoNotification> notifications, string? content, FwoOwner? owner, ReportBase? report = null, string timeIntervalText = "", string? htmlBody = null)
         {
             string decryptedSecret = AesEnc.TryDecrypt(GlobalConfig.EmailPassword, false, "NotificationService", "Could not decrypt mailserver password.");
             EmailConnection emailConnection = new(GlobalConfig.EmailServerAddress, GlobalConfig.EmailPort,
                 GlobalConfig.EmailTls, GlobalConfig.EmailUser, decryptedSecret, GlobalConfig.EmailSenderAddress);
 
-            MailData mail = await PrepareBundledEmail(notifications, content, owner, report, timeIntervalText);
+            MailData mail = await PrepareBundledEmail(notifications, content, owner, report, timeIntervalText, htmlBody);
             await MailKitMailer.SendAsync(mail, emailConnection, false, new());
         }
 
@@ -278,7 +279,7 @@ namespace FWO.Middleware.Server
                 switch (notification.Layout)
                 {
                     case NotificationLayout.HtmlInBody:
-                        body += htmlBody ?? report.ExportToHtml() ?? "";
+                        body += htmlBody ?? report.ExportToHtmlForMail(GlobalConfig.FullReportHeaderInNotificationMail) ?? "";
                         break;
                     case NotificationLayout.PdfAsAttachment:
                         string html = report.ExportToHtml();
@@ -310,10 +311,10 @@ namespace FWO.Middleware.Server
             return mailData;
         }
 
-        private async Task<MailData> PrepareBundledEmail(List<FwoNotification> notifications, string? content, FwoOwner? owner, ReportBase? report = null, string timeIntervalText = "")
+        private async Task<MailData> PrepareBundledEmail(List<FwoNotification> notifications, string? content, FwoOwner? owner, ReportBase? report = null, string timeIntervalText = "", string? htmlBody = null)
         {
             FwoNotification baseNotification = notifications.First();
-            MailData mailData = await PrepareEmail(baseNotification, content, owner, null, timeIntervalText);
+            MailData mailData = await PrepareEmail(baseNotification, content, owner, null, timeIntervalText, htmlBody);
             if (report == null || baseNotification.BundleType == null)
             {
                 return mailData;

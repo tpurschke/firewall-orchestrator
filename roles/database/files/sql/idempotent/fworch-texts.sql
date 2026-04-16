@@ -3448,6 +3448,10 @@ INSERT INTO txt VALUES ('U5414', 'German',  'Anpassung der pers&ouml;nlichen Rez
 INSERT INTO txt VALUES ('U5414', 'English', 'Adapt your personal recertification settings');
 INSERT INTO txt VALUES ('U5415', 'German',  'Anpassung der pers&ouml;nlichen Modellierungseinstellungen');
 INSERT INTO txt VALUES ('U5415', 'English', 'Adapt your personal modelling settings');
+INSERT INTO txt VALUES ('fullReportHeaderInMail', 'German',  'Vollst&auml;ndiger Report-Kopf in geplanten Report-Emails');
+INSERT INTO txt VALUES ('fullReportHeaderInMail', 'English', 'Full report header in scheduled report mails');
+INSERT INTO txt VALUES ('fullReportHeaderInNotificationMail', 'German',  'Vollst&auml;ndiger Report-Kopf in Benachrichtigungs-Emails');
+INSERT INTO txt VALUES ('fullReportHeaderInNotificationMail', 'English', 'Full report header in notification mails');
 
 INSERT INTO txt VALUES ('U5501', 'German',  'Sind sie sicher, dass sie folgenden Status l&ouml;schen wollen: ');
 INSERT INTO txt VALUES ('U5501', 'English', 'Are you sure you want to delete state: ');
@@ -5692,6 +5696,18 @@ INSERT INTO txt VALUES ('H5471', 'German',  'Jeder Nutzer kann einige pers&ouml;
 ');
 INSERT INTO txt VALUES ('H5471', 'English', 'Every user can overwrite some personal settings for the report creation.
     The default value is set by the admin in the <a href="/help/settings/defaults">Default Settings</a>.
+');
+INSERT INTO txt VALUES ('H5472', 'German',  'Vollst&auml;ndiger Report-Kopf in geplanten Report-Emails: Steuert, ob bei HTML-Reports innerhalb von durch einen Nutzer geplanten Report-Emails der komplette Report-Kopf mit Titel, Metadaten und Inhaltsverzeichnis eingef&uuml;gt wird.
+    Ist die Option deaktiviert, wird nur der eigentliche Report-Inhalt in den Mail-Text eingebettet.
+');
+INSERT INTO txt VALUES ('H5472', 'English', 'Full report header in scheduled report mails: Controls whether HTML reports embedded in user-scheduled report mails include the complete report header with title, metadata, and table of contents.
+    When disabled, only the actual report content is embedded into the mail body.
+');
+INSERT INTO txt VALUES ('H5473', 'German',  'Vollst&auml;ndiger Report-Kopf in Benachrichtigungs-Emails: Steuert, ob bei HTML-Reports innerhalb von Benachrichtigungs-Emails aus globalen Einstellungen der komplette Report-Kopf mit Titel, Metadaten und Inhaltsverzeichnis eingef&uuml;gt wird.
+    Ist die Option deaktiviert, wird nur der eigentliche Report-Inhalt in den Mail-Text eingebettet.
+');
+INSERT INTO txt VALUES ('H5473', 'English', 'Full report header in notification mails: Controls whether HTML reports embedded in notification mails from global settings include the complete report header with title, metadata, and table of contents.
+    When disabled, only the actual report content is embedded into the mail body.
 ');
 INSERT INTO txt VALUES ('H5481', 'German',  'Ein Rezertifizierer kann einige pers&ouml;nliche Voreinstellungen f&uuml;r den Rezertifizierungsreport &uuml;berschreiben.
     Ausgangswert ist der vom Admin in den <a href="/help/settings/defaults">Standardeinstellungen</a> gesetzte Wert.

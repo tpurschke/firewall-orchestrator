@@ -1,6 +1,7 @@
 using NUnit.Framework;
 using NUnit.Framework.Legacy;
 using FWO.Api.Client;
+using FWO.Config.Api;
 using FWO.Data;
 using FWO.Data.Report;
 using FWO.Middleware.Server;
@@ -148,13 +149,55 @@ namespace FWO.Test
             ClassicAssert.IsNotNull(prepareBundledEmail);
 
             Task<FWO.Mail.MailData> task = (Task<FWO.Mail.MailData>)(prepareBundledEmail?.Invoke(notificationService,
-                [new List<FwoNotification> { htmlNotification, jsonNotification }, null, owner, report, ""])
+                [new List<FwoNotification> { htmlNotification, jsonNotification }, null, owner, report, "", null])
                 ?? throw new InvalidOperationException("PrepareBundledEmail returned null task."));
             FWO.Mail.MailData mailData = await task;
 
             ClassicAssert.AreEqual(htmlNotification.EmailBody, mailData.Body);
             ClassicAssert.IsNotNull(mailData.Attachments);
             ClassicAssert.AreEqual(2, mailData.Attachments?.Count);
+        }
+
+        [Test]
+        public async Task SendNotification_UsesGlobalConfigForNotificationReportHeader()
+        {
+            globalConfig.FullReportHeaderInNotificationMail = false;
+            List<UserGroup> ownerGroups = [];
+            NotificationService notificationService = await NotificationService.CreateAsync(NotificationClient.Recertification, globalConfig, apiConnection, ownerGroups);
+            FwoNotification notification = notificationService.Notifications[0];
+            notification.Layout = NotificationLayout.HtmlInBody;
+            SimulatedUserConfig simulatedUserConfig = new() { FullReportHeaderInMail = true };
+            TestHeaderReport report = new(simulatedUserConfig);
+
+            MethodInfo? prepareEmail = typeof(NotificationService).GetMethod("PrepareEmail", BindingFlags.Instance | BindingFlags.NonPublic);
+            ClassicAssert.IsNotNull(prepareEmail);
+
+            Task<FWO.Mail.MailData> task = (Task<FWO.Mail.MailData>)(prepareEmail?.Invoke(notificationService, [notification, "prefix", null, report, "", null])
+                ?? throw new InvalidOperationException("PrepareEmail returned null task."));
+            FWO.Mail.MailData mailData = await task;
+
+            ClassicAssert.AreEqual("prefix<div>mail body</div>", mailData.Body);
+        }
+
+        [Test]
+        public async Task SendNotification_KeepsFullNotificationReportHeaderWhenGlobalConfigEnabled()
+        {
+            globalConfig.FullReportHeaderInNotificationMail = true;
+            List<UserGroup> ownerGroups = [];
+            NotificationService notificationService = await NotificationService.CreateAsync(NotificationClient.Recertification, globalConfig, apiConnection, ownerGroups);
+            FwoNotification notification = notificationService.Notifications[0];
+            notification.Layout = NotificationLayout.HtmlInBody;
+            SimulatedUserConfig simulatedUserConfig = new() { FullReportHeaderInMail = false };
+            TestHeaderReport report = new(simulatedUserConfig);
+
+            MethodInfo? prepareEmail = typeof(NotificationService).GetMethod("PrepareEmail", BindingFlags.Instance | BindingFlags.NonPublic);
+            ClassicAssert.IsNotNull(prepareEmail);
+
+            Task<FWO.Mail.MailData> task = (Task<FWO.Mail.MailData>)(prepareEmail?.Invoke(notificationService, [notification, "prefix", null, report, "", null])
+                ?? throw new InvalidOperationException("PrepareEmail returned null task."));
+            FWO.Mail.MailData mailData = await task;
+
+            ClassicAssert.AreEqual("prefix<html><body><h2>Header</h2><p>Meta</p><hr><div>toc</div><hr><div>mail body</div></body></html>", mailData.Body);
         }
 
         [Test]
@@ -204,6 +247,34 @@ namespace FWO.Test
             public override string ExportToHtml()
             {
                 return "<html>report</html>";
+            }
+
+            public override string SetDescription()
+            {
+                return "";
+            }
+        }
+
+        private class TestHeaderReport(UserConfig userConfig) : ReportBase(new DynGraphqlQuery(""), userConfig, Basics.ReportType.TicketReport)
+        {
+            public override Task Generate(int elementsPerFetch, ApiConnection apiConnection, Func<ReportData, Task> callback, CancellationToken ct)
+            {
+                return Task.CompletedTask;
+            }
+
+            public override string ExportToCsv()
+            {
+                return "";
+            }
+
+            public override string ExportToJson()
+            {
+                return "";
+            }
+
+            public override string ExportToHtml()
+            {
+                return "<html><body><h2>Header</h2><p>Meta</p><hr><div>toc</div><hr><div>mail body</div></body></html>";
             }
 
             public override string SetDescription()

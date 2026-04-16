@@ -383,6 +383,28 @@ namespace FWO.Test
         }
 
         [Test]
+        public void ConnectionsGenerateMailHtmlWithoutFullHeaderWhenDisabled()
+        {
+            userConfig.FullReportHeaderInMail = false;
+
+            ReportConnections reportConnections = new(query, userConfig, ReportType.Connections)
+            {
+                ReportData = ConstructConnectionReport()
+            };
+
+            string reportHtml = RemoveLinebreaks(reportConnections.ExportToHtmlForMail());
+            IEnumerable<string> matches = reportHtml.GetMatches(ToCRegexPattern, ToCAnkerIdGroupName);
+            reportHtml = reportHtml.ReplaceAll(matches, StaticAnkerId);
+
+            StringAssert.DoesNotContain("<!DOCTYPE html>", reportHtml);
+            StringAssert.DoesNotContain("<h2>Connections Report</h2>", reportHtml);
+            StringAssert.DoesNotContain("Generated on:", reportHtml);
+            StringAssert.DoesNotContain("toc_container", reportHtml);
+            StringAssert.StartsWith("<h3 id=\"", reportHtml);
+            StringAssert.Contains(">TestOwner (APP-1234)</h3>", reportHtml);
+        }
+
+        [Test]
         public void VariancesGenerateHtml()
         {
             // TODO: to be enhanced

@@ -174,7 +174,7 @@ namespace FWO.Middleware.Server
                 switch (globalConfig.ImpChangeNotifyType)
                 {
                     case (int)NotificationLayout.HtmlInBody:
-                        body += changeReport.ExportToHtml();
+                        body += changeReport.ExportToHtmlForMail(globalConfig.FullReportHeaderInNotificationMail);
                         break;
                     case (int)NotificationLayout.PdfAsAttachment:
                         string html = changeReport.ExportToHtml();

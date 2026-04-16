@@ -231,6 +231,12 @@ namespace FWO.Config.Api.Data
         [JsonProperty("messageViewTime"), JsonPropertyName("messageViewTime"), UserConfigData]
         public int MessageViewTime { get; set; } = 7;
 
+        [JsonProperty("fullReportHeaderInMail"), JsonPropertyName("fullReportHeaderInMail"), UserConfigData]
+        public bool FullReportHeaderInMail { get; set; } = true;
+
+        [JsonProperty("fullReportHeaderInNotificationMail"), JsonPropertyName("fullReportHeaderInNotificationMail")]
+        public bool FullReportHeaderInNotificationMail { get; set; } = true;
+
         [JsonProperty("dailyCheckStartAt"), JsonPropertyName("dailyCheckStartAt")]
         public DateTime DailyCheckStartAt { get; set; } = DateTime.Now;
 
