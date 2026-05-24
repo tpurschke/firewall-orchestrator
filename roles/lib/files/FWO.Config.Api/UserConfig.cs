@@ -41,6 +41,7 @@ namespace FWO.Config.Api
             Translate = globalConfig.LangDict[user.Language!];
             Overwrite = apiConnection != null ? Task.Run(async () => await GetCustomDict(user.Language!)).Result : globalConfig.OverDict[user.Language!];
             this.globalConfig = globalConfig;
+            OnGlobalConfigChange(globalConfig, globalConfig.RawConfigItems);
             globalConfig.OnChange += OnGlobalConfigChange;
         }
 
@@ -67,7 +68,7 @@ namespace FWO.Config.Api
             if (IsDisposed) return;
             // Get properties that belong to the user config 
             IEnumerable<PropertyInfo> properties = GetType().GetProperties()
-                .Where(prop => prop.CustomAttributes.Any(attr => attr.GetType() == typeof(UserConfigDataAttribute)));
+                .Where(prop => prop.GetCustomAttribute<UserConfigDataAttribute>() != null);
 
             // Exclude all properties from update that belong to the user config
             ConfigItem[] relevantChangedItems = changedItems.Where(configItem =>
@@ -195,11 +196,11 @@ namespace FWO.Config.Api
         {
             ThrowIfDisposed();
             string text = key;
-            string pattern = @"[A]\d\d\d\d";
+            string pattern = @"[Aa]\d{4}";
             Match m = Regex.Match(key, pattern);
             if (m.Success)
             {
-                string msg = GetText(key[..5]);
+                string msg = GetText(m.Value);
                 if (msg != GlobalConst.kUndefinedText)
                 {
                     text = msg;

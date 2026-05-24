@@ -3,8 +3,10 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using FWO.Basics;
 using FWO.Data;
+using FWO.Data.Modelling;
 using FWO.Data.Workflow;
 using FWO.Mail;
+using FWO.Basics.Enums;
 
 namespace FWO.Config.Api.Data
 {
@@ -81,12 +83,15 @@ namespace FWO.Config.Api.Data
         [JsonProperty("fwApiElementsPerFetch"), JsonPropertyName("fwApiElementsPerFetch")]
         public int FwApiElementsPerFetch { get; set; } = 150;
 
+        [Obsolete("Use notification entries with NotificationClient.ImportChange instead.")]
         [JsonProperty("impChangeNotifyRecipients"), JsonPropertyName("impChangeNotifyRecipients")]
         public string ImpChangeNotifyRecipients { get; set; } = "";
 
+        [Obsolete("Use notification entries with NotificationClient.ImportChange instead.")]
         [JsonProperty("impChangeNotifySubject"), JsonPropertyName("impChangeNotifySubject")]
         public string ImpChangeNotifySubject { get; set; } = "";
 
+        [Obsolete("Use notification entries with NotificationClient.ImportChange instead.")]
         [JsonProperty("impChangeNotifyBody"), JsonPropertyName("impChangeNotifyBody")]
         public string ImpChangeNotifyBody { get; set; } = "";
 
@@ -96,6 +101,7 @@ namespace FWO.Config.Api.Data
         [JsonProperty("impChangeIncludeObjectChanges"), JsonPropertyName("impChangeIncludeObjectChanges")]
         public bool ImpChangeIncludeObjectChanges { get; set; } = false;
 
+        [Obsolete("Use notification entries with NotificationClient.ImportChange instead.")]
         [JsonProperty("impChangeNotifyType"), JsonPropertyName("impChangeNotifyType")]
         public int ImpChangeNotifyType { get; set; }
 
@@ -105,14 +111,8 @@ namespace FWO.Config.Api.Data
         [JsonProperty("impChangeNotifyStartAt"), JsonPropertyName("impChangeNotifyStartAt")]
         public DateTime ImpChangeNotifyStartAt { get; set; } = DateTime.Now;
 
-        [JsonProperty("updateRuleOwnerMappingActive"), JsonPropertyName("updateRuleOwnerMappingActive")]
-        public bool UpdateRuleOwnerMappingActive { get; set; } = false;
-
         [JsonProperty("updateRuleOwnerMappingSleepTime"), JsonPropertyName("updateRuleOwnerMappingSleepTime")]
         public int UpdateRuleOwnerMappingSleepTime { get; set; } = 60;
-
-        [JsonProperty("updateRuleOwnerMappingStartAt"), JsonPropertyName("updateRuleOwnerMappingStartAt")]
-        public DateTime UpdateRuleOwnerMappingStartAt { get; set; } = DateTime.Now;
 
         [JsonProperty("externalRequestSleepTime"), JsonPropertyName("externalRequestSleepTime")]
         public int ExternalRequestSleepTime { get; set; } = 60;
@@ -225,6 +225,9 @@ namespace FWO.Config.Api.Data
         [JsonProperty("dummyEmailAddress"), JsonPropertyName("dummyEmailAddress")]
         public string DummyEmailAddress { get; set; } = "";
 
+        [JsonProperty("notificationLanguage"), JsonPropertyName("notificationLanguage")]
+        public string NotificationLanguage { get; set; } = "";
+
         [JsonProperty("minCollapseAllDevices"), JsonPropertyName("minCollapseAllDevices"), UserConfigData]
         public int MinCollapseAllDevices { get; set; } = 15;
 
@@ -233,6 +236,9 @@ namespace FWO.Config.Api.Data
 
         [JsonProperty("dailyCheckStartAt"), JsonPropertyName("dailyCheckStartAt")]
         public DateTime DailyCheckStartAt { get; set; } = DateTime.Now;
+
+        [JsonProperty("dailyCheckModules"), JsonPropertyName("dailyCheckModules")]
+        public string DailyCheckModules { get; set; } = "";
 
         [JsonProperty("maxImportDuration"), JsonPropertyName("maxImportDuration")]
         public int MaxImportDuration { get; set; } = 4;
@@ -266,6 +272,9 @@ namespace FWO.Config.Api.Data
 
         [JsonProperty("reqShowCompliance"), JsonPropertyName("reqShowCompliance")]
         public bool ReqShowCompliance { get; set; } = false;
+
+        [JsonProperty("reqAllowedChangesByApprover"), JsonPropertyName("reqAllowedChangesByApprover")]
+        public string ReqAllowedChangesByApprover { get; set; } = System.Text.Json.JsonSerializer.Serialize(new ApproverAllowedChangesConfig());
 
         [JsonProperty("ruleOwnershipMode"), JsonPropertyName("ruleOwnershipMode")]
         public RuleOwnershipMode RuleOwnershipMode { get; set; } = RuleOwnershipMode.mixed;
@@ -306,23 +315,20 @@ namespace FWO.Config.Api.Data
         [JsonProperty("importAppDataStartAt"), JsonPropertyName("importAppDataStartAt")]
         public DateTime ImportAppDataStartAt { get; set; } = DateTime.Now;
 
-        [JsonProperty("ownerLdapId"), JsonPropertyName("ownerLdapId")]
-        public int OwnerLdapId { get; set; } = GlobalConst.kLdapInternalId;
-
-        [JsonProperty("manageOwnerLdapGroups"), JsonPropertyName("manageOwnerLdapGroups")]
-        public bool ManageOwnerLdapGroups { get; set; } = true;
-
-        [JsonProperty("ownerLdapGroupNames"), JsonPropertyName("ownerLdapGroupNames")]
-        public string OwnerLdapGroupNames { get; set; } = GlobalConst.kLdapGroupPattern;
-
         [JsonProperty("OwnerSoruceMappingID"), JsonPropertyName("OwnerSoruceMappingID")]
         public int OwnerSoruceMappingID { get; set; } = 0;
 
-        [JsonProperty("OwnerSourceCustomFieldKey"), JsonPropertyName("OwnerSourceCustomFieldKey")]
-        public string OwnerSourceCustomFieldKey { get; set; } = "";
+        [JsonProperty("CustomFieldOwnerKey"), JsonPropertyName("CustomFieldOwnerKey")]
+        public string CustomFieldOwnerKey { get; set; } = "";
+
+        [JsonProperty("CustomFieldChangeIdKey"), JsonPropertyName("CustomFieldChangeIdKey")]
+        public string CustomFieldChangeIdKey { get; set; } = "";
 
         [JsonProperty("rolesWithAppDataImport"), JsonPropertyName("rolesWithAppDataImport")]
         public string RolesWithAppDataImport { get; set; } = "[]";
+
+        [JsonProperty("ownerDataImportSyncUsers"), JsonPropertyName("ownerDataImportSyncUsers")]
+        public bool OwnerDataImportSyncUsers { get; set; } = true;
 
         [JsonProperty("importSubnetDataPath"), JsonPropertyName("importSubnetDataPath")]
         public string ImportSubnetDataPath { get; set; } = "";
@@ -354,6 +360,9 @@ namespace FWO.Config.Api.Data
         [JsonProperty("modReqInterfaceName"), JsonPropertyName("modReqInterfaceName")]
         public string ModReqInterfaceName { get; set; } = "";
 
+        [JsonProperty("flowNamingSourceManagementId"), JsonPropertyName("flowNamingSourceManagementId")]
+        public int? FlowNamingSourceManagementId { get; set; }
+
         [JsonProperty("modReqEmailReceiver"), JsonPropertyName("modReqEmailReceiver")]
         public string ModReqEmailReceiver { get; set; } = nameof(EmailRecipientOption.None);
 
@@ -371,6 +380,15 @@ namespace FWO.Config.Api.Data
 
         [JsonProperty("modUnansweredReqEmailBody"), JsonPropertyName("modUnansweredReqEmailBody")]
         public string ModUnansweredReqEmailBody { get; set; } = "";
+
+        [JsonProperty("ruleExpiryEmailBody"), JsonPropertyName("ruleExpiryEmailBody")]
+        public string RuleExpiryEmailBody { get; set; } = "";
+
+        [JsonProperty("ownerActiveRuleEmailBody"), JsonPropertyName("ownerActiveRuleEmailBody")]
+        public string OwnerActiveRuleEmailBody { get; set; } = "";
+
+        [JsonProperty("ruleExpiryInitiatorKeys"), JsonPropertyName("ruleExpiryInitiatorKeys")]
+        public string RuleExpiryInitiatorKeys { get; set; } = "";
 
         [JsonProperty("modReqTicketTitle"), JsonPropertyName("modReqTicketTitle")]
         public string ModReqTicketTitle { get; set; } = "";
@@ -390,6 +408,15 @@ namespace FWO.Config.Api.Data
         [JsonProperty("modDecommEmailBody"), JsonPropertyName("modDecommEmailBody")]
         public string ModDecommEmailBody { get; set; } = "";
 
+        [JsonProperty("modIntegrationMode"), JsonPropertyName("modIntegrationMode")]
+        public ModIntegrationMode ModIntegrationMode { get; set; } = ModIntegrationMode.FullyIntegrated;
+
+        [JsonProperty("modIntegrationStates"), JsonPropertyName("modIntegrationStates")]
+        public string ModIntegrationStates { get; set; } = "[]";
+
+        [JsonProperty("modIntegrationStateMarker"), JsonPropertyName("modIntegrationStateMarker")]
+        public string ModIntegrationStateMarker { get; set; } = ModIntegrationStateConfig.DefaultMarker;
+
         [JsonProperty("modRolloutActive"), JsonPropertyName("modRolloutActive")]
         public bool ModRolloutActive { get; set; } = true;
 
@@ -404,6 +431,9 @@ namespace FWO.Config.Api.Data
 
         [JsonProperty("modRolloutRemovedAppServers"), JsonPropertyName("modRolloutRemovedAppServers")]
         public bool ModRolloutRemovedAppServers { get; set; } = false;
+
+        [JsonProperty("modRequestOnlyOwnObjects"), JsonPropertyName("modRequestOnlyOwnObjects")]
+        public bool ModRequestOnlyOwnObjects { get; set; } = false;
 
         [JsonProperty("modRolloutErrorText"), JsonPropertyName("modRolloutErrorText")]
         public string ModRolloutErrorText { get; set; } = "";
@@ -486,6 +516,7 @@ namespace FWO.Config.Api.Data
         [JsonProperty("complianceCheckRelevantManagements"), JsonPropertyName("complianceCheckRelevantManagements")]
         public string ComplianceCheckRelevantManagements { get; set; } = "";
 
+        [Obsolete("Legacy report scheduler migration data. Use report schedule notifications instead.")]
         [JsonProperty("reportSchedulerConfig"), JsonPropertyName("reportSchedulerConfig")]
         public string ReportSchedulerConfig { get; set; } = "";
 
@@ -558,6 +589,11 @@ namespace FWO.Config.Api.Data
         [JsonProperty("importedMatrixReadOnly"), JsonPropertyName("importedMatrixReadOnly")]
         public bool ImportedMatrixReadOnly { get; set; } = true;
 
+        [JsonProperty("accessTokenLifetimeHours"), JsonPropertyName("accessTokenLifetimeHours")]
+        public int AccessTokenLifetimeHours { get; set; } = 7;
+
+        [JsonProperty("refreshTokenLifetimeDays"), JsonPropertyName("refreshTokenLifetimeDays")]
+        public int RefreshTokenLifetimeDays { get; set; } = 7;
         [JsonProperty("complianceCheckElementsPerFetch"), JsonPropertyName("complianceCheckElementsPerFetch")]
         public int ComplianceCheckElementsPerFetch { get; set; } = 500;
 
@@ -567,6 +603,8 @@ namespace FWO.Config.Api.Data
         [JsonProperty("complianceFilterOutInitialViolations"), JsonPropertyName("complianceFilterOutInitialViolations")]
         public bool ComplianceFilterOutInitialViolations { get; set; } = false;
 
+        [JsonProperty("reportingPersonalPreferredCollapseState"), JsonPropertyName("reportingPersonalPreferredCollapseState")]
+        public PreferredCollapseState ReportingPersonalPreferredCollapseState { get; set; } = PreferredCollapseState.Collapsed;
 
         public ConfigData(bool editable = false)
         {

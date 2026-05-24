@@ -168,7 +168,7 @@
                     </TabSet>
                 </div>
                 <ConfirmDelete @bind-Display="appHandler!.DeleteConnMode"
-                    PerformAction="async () => {await appHandler!.DeleteConnection(); appHandler!.RestoreTab(); StateHasChanged();}"
+                    PerformAction="DeleteConnection"
                     Title="@userConfig.GetText(appHandler!.ConnToDelete.IsInterface ? "delete_interface" : "delete_connection")"
                     DeleteMessage="@appHandler!.Message" DeleteAllowed="appHandler!.DeleteAllowed" AllowedRoles="@Roles.Modeller" />
                 <DecommissionInterfacePopup @bind-Display="appHandler.DecommissionInterfaceMode" ConnHandler="appHandler.ConnHandler"
@@ -273,21 +273,17 @@ else
     {
         try
         {
-            bool isAdmin = authenticationStateTask!.Result.User.IsInRole(Roles.Admin);
-            bool isAuditor = authenticationStateTask.Result.User.IsInRole(Roles.Auditor);
-            if (isAdmin)
+            apps = await ModellingHandlerBase.GetOwnApps(authenticationStateTask!, userConfig, apiConnection, DisplayMessageInUi, true);
+            if (authenticationStateTask!.Result.User.IsInRole(Roles.Admin))
             {
-                apps = await ModellingHandlerBase.GetOwnApps(authenticationStateTask, userConfig, apiConnection, DisplayMessageInUi, true);
                 recertifiableOwnerIds = apps.Select(owner => owner.Id).ToHashSet();
             }
-            else if (isAuditor)
+            else if (authenticationStateTask!.Result.User.IsInRole(Roles.Auditor))
             {
-                apps = await ModellingHandlerBase.GetOwnApps(authenticationStateTask, userConfig, apiConnection, DisplayMessageInUi, true);
                 recertifiableOwnerIds = [];
             }
             else
             {
-                apps = await ModellingHandlerBase.GetOwnApps(authenticationStateTask, userConfig, apiConnection, DisplayMessageInUi, true);
                 recertifiableOwnerIds = userConfig.User.RecertOwnerships.ToHashSet();
             }
 
@@ -408,7 +404,7 @@ else
     {
         if (!IsModellingWriteAllowedForSelectedApp())
         {
-            DisplayMessageInUi(null, userConfig.GetText("request_fw_change"), userConfig.GetText("C9012"), true);
+            DisplayMessageInUi(null, userConfig.GetText("request_fw_change"), userConfig.GetText("E9104"), true);
             return;
         }
         showFwChange = true;
@@ -418,18 +414,29 @@ else
     {
         if (!IsModellingWriteAllowedForSelectedApp() || appHandler == null)
         {
-            DisplayMessageInUi(null, userConfig.GetText("add_connection"), userConfig.GetText("C9012"), true);
+            DisplayMessageInUi(null, userConfig.GetText("add_connection"), userConfig.GetText("E9104"), true);
             return;
         }
 
         await appHandler.AddConnection();
     }
 
+    private async Task DeleteConnection()
+    {
+        if (appHandler == null)
+        {
+            return;
+        }
+        await appHandler.DeleteConnection();
+        appHandler.RestoreTab();
+        StateHasChanged();
+    }
+
     private async Task AddInterface()
     {
         if (!IsModellingWriteAllowedForSelectedApp() || appHandler == null)
         {
-            DisplayMessageInUi(null, userConfig.GetText("add_interface"), userConfig.GetText("C9012"), true);
+            DisplayMessageInUi(null, userConfig.GetText("add_interface"), userConfig.GetText("E9104"), true);
             return;
         }
 
@@ -440,7 +447,7 @@ else
     {
         if (!IsModellingWriteAllowedForSelectedApp() || appHandler == null)
         {
-            DisplayMessageInUi(null, userConfig.GetText("add_common_service"), userConfig.GetText("C9012"), true);
+            DisplayMessageInUi(null, userConfig.GetText("add_common_service"), userConfig.GetText("E9104"), true);
             return;
         }
 
@@ -451,7 +458,7 @@ else
     {
         if (!HasRecertWriteAccess() || !IsRecertificationAllowedForSelectedApp())
         {
-            DisplayMessageInUi(null, userConfig.GetText("recertify"), userConfig.GetText("C9012"), true);
+            DisplayMessageInUi(null, userConfig.GetText("recertify"), userConfig.GetText("E9104"), true);
             return;
         }
         showRecert = true;

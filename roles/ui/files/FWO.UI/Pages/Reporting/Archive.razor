@@ -11,10 +11,10 @@
 <Sidebar @ref="archiveSidebar" Collapsible="true" Resizeable="true" PositionLeft="true" @bind-Width="sidebarLeftWidth" >
     <div class="p-3 mt-2">
         <h5 class="text-left">@(userConfig.GetText("report_type"))</h5>
-        <Dropdown ElementType="ReportType" ElementToString="@(r => userConfig.GetText(r.ToString()))" SelectedElement="selectedReportType"
+        <Dropdown ElementType="ReportType" ElementToString="DisplayArchiveReportType" SelectedElement="selectedReportType"
             SelectedElementChanged="ReportTypeChanged" Elements="visibleReportTypes">
             <ElementTemplate Context="reportType">
-                @userConfig.GetText(reportType.ToString())
+                @DisplayArchiveReportType(reportType)
             </ElementTemplate>
         </Dropdown>
         @if(selectedReportType == ReportType.RecertificationEvent)
@@ -103,14 +103,7 @@
     private bool ShowDeleteReportFileDialog = false;
     private bool ShowDownloadReportFileDialog = false;
     private bool Exporting = false;
-    private bool showRuleRelatedReports => authenticationStateTask!.Result.User.IsInRole(Roles.Reporter)
-        || authenticationStateTask!.Result.User.IsInRole(Roles.ReporterViewAll)
-        || authenticationStateTask!.Result.User.IsInRole(Roles.FwAdmin)
-        || authenticationStateTask!.Result.User.IsInRole(Roles.Admin)
-        || authenticationStateTask!.Result.User.IsInRole(Roles.Auditor);
-    private bool showModellingReports => authenticationStateTask!.Result.User.IsInRole(Roles.Modeller)
-        || authenticationStateTask!.Result.User.IsInRole(Roles.Admin)
-        || authenticationStateTask!.Result.User.IsInRole(Roles.Auditor);
+    private ReportVisibility reportVisibility => RoleGroups.GetReportVisibility(authenticationStateTask!.Result.User);
 
 
     protected override async Task OnInitializedAsync()
@@ -163,7 +156,12 @@
 
     private void SetVisibleReportTypes()
     {
-        visibleReportTypes = [.. ReportTypeGroups.ReportTypeSelection(showRuleRelatedReports, showModellingReports).Where(v => visibleReports.Any(r => r.Type == (int)v))];
+        visibleReportTypes = [.. ReportTypeGroups.ReportTypeSelection(reportVisibility).Where(v => visibleReports.Any(r => r.Type == (int)v))];
+    }
+
+    private string DisplayArchiveReportType(ReportType reportType)
+    {
+        return reportType == ReportType.Undefined ? userConfig.GetText("all") : userConfig.GetText(reportType.ToString());
     }
 
     private async void HandleSubscriptionError(Exception exception)

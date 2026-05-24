@@ -1,6 +1,7 @@
 using FWO.Api.Client;
 using FWO.Api.Client.Queries;
 using FWO.Basics;
+using FWO.Basics.Enums;
 using FWO.Config.Api;
 using FWO.Data;
 using FWO.Data.Report;
@@ -156,10 +157,10 @@ namespace FWO.Report
             {
                 foreach (DeviceReport deviceReport in managementReport.Devices)
                 {
-                    ruleCount = 0;
                     scopedRuleTreeBuilder.Reset(managementReport.Rulebases, deviceReport.RulebaseLinks);
 
                     List<Rule> allRules = scopedRuleTreeBuilder.BuildRuleTree(managementReport.Rulebases, deviceReport.RulebaseLinks, managementReport.Id, deviceReport.Id);
+                    ApplyPreferredCollapseState(scopedRuleTreeBuilder, managementReport.Id, deviceReport.Id);
 
                     Rule[] rulesArray = [.. allRules];
                     _rulesCache[(deviceReport.Id, managementReport.Id)] = rulesArray;
@@ -170,11 +171,35 @@ namespace FWO.Report
                         rulesArray.Select(r => r.Id).Except(managementReport.ReportedRuleIds)
                     );
 
-                    ruleCount += allRules.Count;
+                    ruleCount += rulesArray.Count(rule => string.IsNullOrEmpty(rule.SectionHeader));
                 }
             }
 
             ReportData.ElementsCount = ruleCount;
+        }
+
+        /// <summary>
+        /// Applies the user's preferred initial collapse state to the generated rule tree.
+        /// </summary>
+        private void ApplyPreferredCollapseState(IRuleTreeBuilder scopedRuleTreeBuilder, int managementId, int deviceId)
+        {
+            if (!scopedRuleTreeBuilder.RuleTreeCache.TryGetValue((managementId, deviceId), out RuleTreeItem? ruleTree))
+            {
+                return;
+            }
+
+            switch (userConfig.ReportingPersonalPreferredCollapseState)
+            {
+                case PreferredCollapseState.Collapsed:
+                    RuleTreeItem.SetExpandedRecursively(ruleTree, false);
+                    break;
+                case PreferredCollapseState.Expanded:
+                    RuleTreeItem.SetExpandedRecursively(ruleTree, true);
+                    break;
+                case PreferredCollapseState.Intermediate:
+                default:
+                    break;
+            }
         }
 
         protected virtual void SetMgtQueryVars(ManagementReport management)

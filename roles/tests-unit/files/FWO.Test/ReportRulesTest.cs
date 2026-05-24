@@ -1,9 +1,12 @@
 using FWO.Basics;
+using FWO.Basics.Enums;
 using FWO.Data;
 using FWO.Data.Report;
 using FWO.Report;
+using FWO.Report.Filter;
 using FWO.Services.RuleTreeBuilder;
 using FWO.Test.Mocks;
+using Microsoft.Extensions.DependencyInjection;
 using NUnit.Framework;
 using NUnit.Framework.Legacy;
 using System.Reflection;
@@ -362,6 +365,101 @@ namespace FWO.Test
             );
 
             ClassicAssert.AreEqual(6, count);
+        }
+
+        [Test]
+        public void Test_TryBuildRuleTree_AccumulatesOnlyRealRulesAcrossDevices()
+        {
+            MockReportRules.RulebaseId = 0;
+            MockReportRules.RuleId = 0;
+
+            RulebaseReport rulebase1 = MockReportRules.CreateRulebaseReport("RB1", 2);
+            RulebaseReport rulebase2 = MockReportRules.CreateRulebaseReport("RB2", 3);
+            RulebaseReport rulebase3 = MockReportRules.CreateRulebaseReport("RB3", 1);
+
+            DeviceReport firstDevice = MockReportRules.CreateDeviceReport(1, "Device1",
+            [
+                new RulebaseLink
+                {
+                    GatewayId = 1,
+                    IsInitial = true,
+                    ToRulebase = new Rulebase { Id = (long)rulebase2.Id, Name = rulebase2.Name!, Rules = rulebase2.Rules },
+                    FromRulebaseId = 0,
+                    NextRulebaseId = rulebase2.Id,
+                    LinkType = 2
+                },
+                new RulebaseLink
+                {
+                    GatewayId = 1,
+                    IsInitial = false,
+                    ToRulebase = new Rulebase { Id = (long)rulebase1.Id, Name = rulebase1.Name!, Rules = rulebase1.Rules },
+                    FromRulebaseId = rulebase2.Id,
+                    NextRulebaseId = rulebase1.Id,
+                    FromRuleId = (int)rulebase2.Rules.Last().Id,
+                    IsSection = true,
+                    LinkType = 4
+                }
+            ]);
+
+            DeviceReport secondDevice = MockReportRules.CreateDeviceReport(2, "Device2",
+            [
+                new RulebaseLink
+                {
+                    GatewayId = 2,
+                    IsInitial = true,
+                    ToRulebase = new Rulebase { Id = (long)rulebase3.Id, Name = rulebase3.Name!, Rules = rulebase3.Rules },
+                    FromRulebaseId = 0,
+                    NextRulebaseId = rulebase3.Id,
+                    LinkType = 2
+                }
+            ]);
+
+            MockReportRules reportRules = new MockReportRules(new DynGraphqlQuery(""), new SimulatedUserConfig(), ReportType.ResolvedRules, () =>
+            [
+                new ManagementReport
+                {
+                    Id = 1,
+                    Name = "Management1",
+                    Devices = [firstDevice, secondDevice],
+                    Rulebases = [rulebase1, rulebase2, rulebase3]
+                }
+            ]);
+
+            reportRules.TryBuildMockRuleTree();
+
+            Assert.That(reportRules.ReportData.ElementsCount, Is.EqualTo(6));
+        }
+
+        [TestCase(PreferredCollapseState.Collapsed, false)]
+        [TestCase(PreferredCollapseState.Expanded, true)]
+        [TestCase(PreferredCollapseState.Intermediate, true)]
+        public void Test_TryBuildRuleTree_AppliesPreferredCollapseState(PreferredCollapseState preferredCollapseState, bool expectedExpandedState)
+        {
+            IServiceProvider? originalServices = FWO.Services.ServiceProvider.Services;
+            ServiceCollection services = new();
+            services.AddSingleton<IRuleTreeBuilder>(_ruleTreeBuilder);
+            FWO.Services.ServiceProvider.Services = services.BuildServiceProvider();
+
+            SimulatedUserConfig userConfig = new()
+            {
+                ReportingPersonalPreferredCollapseState = preferredCollapseState
+            };
+            try
+            {
+                MockReportRules reportRules = new(new DynGraphqlQuery(""), userConfig, ReportType.ResolvedRules, () => _managementReports);
+
+                reportRules.TryBuildMockRuleTree();
+
+                RuleTreeItem ruleTree = _ruleTreeBuilder.RuleTreeCache[(_managementReport!.Id, _deviceReport!.Id)];
+                Assert.That(ruleTree.Children, Is.Not.Empty);
+                RuleTreeItem expandableRule = ruleTree.Children.First();
+
+                Assert.That(expandableRule.IsExpanded, Is.EqualTo(expectedExpandedState));
+            }
+            finally
+            {
+                FWO.Services.ServiceProvider.Services = originalServices;
+            }
         }
     }
 }

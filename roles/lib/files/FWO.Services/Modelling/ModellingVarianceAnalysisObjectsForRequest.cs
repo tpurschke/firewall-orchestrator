@@ -220,18 +220,21 @@ namespace FWO.Services.Modelling
 
         private void AnalyseAppRoleForRequest(ModellingAppRole appRole, Management mgt, bool isSource = false)
         {
-            if (ResolveProdAppRole(appRole, mgt) == null)
+            if (!userConfig.ModRequestOnlyOwnObjects || appRole.AppId == owner.Id)
             {
-                if (TaskList.FirstOrDefault(x => x.Title == userConfig.GetText("new_app_role") + appRole.IdString && x.OnManagement?.Id == mgt.Id) == null)
+                if (ResolveProdAppRole(appRole, mgt) == null)
                 {
-                    RequestNewAppRole(appRole, mgt);
+                    if (TaskList.FirstOrDefault(x => x.Title == userConfig.GetText("new_app_role") + appRole.IdString && x.OnManagement?.Id == mgt.Id) == null)
+                    {
+                        RequestNewAppRole(appRole, mgt);
+                    }
                 }
-            }
-            else if (AppRoleChanged(appRole) &&
-                TaskList.FirstOrDefault(x => x.Title == userConfig.GetText("update_app_role") + appRole.IdString + userConfig.GetText("add_members") && x.OnManagement?.Id == mgt.Id) == null &&
-                DeleteObjectTasksList.FirstOrDefault(x => x.Title == userConfig.GetText("update_app_role") + appRole.IdString + userConfig.GetText("remove_members") && x.OnManagement?.Id == mgt.Id) == null)
-            {
-                RequestUpdateAppRole(appRole, mgt);
+                else if (AppRoleChanged(appRole) &&
+                    TaskList.FirstOrDefault(x => x.Title == userConfig.GetText("update_app_role") + appRole.IdString + userConfig.GetText("add_members") && x.OnManagement?.Id == mgt.Id) == null &&
+                    DeleteObjectTasksList.FirstOrDefault(x => x.Title == userConfig.GetText("update_app_role") + appRole.IdString + userConfig.GetText("remove_members") && x.OnManagement?.Id == mgt.Id) == null)
+                {
+                    RequestUpdateAppRole(appRole, mgt);
+                }
             }
 
             ReqElements.Add(new()
@@ -510,32 +513,38 @@ namespace FWO.Services.Modelling
             {
                 if (userConfig.ModRolloutResolveServiceGroups)
                 {
-                    foreach (ModellingService svc in ModellingServiceWrapper.Resolve(svcGrp.Services))
-                    {
-                        ReqElements.Add(new()
-                        {
-                            RequestAction = RequestAction.create.ToString(),
-                            Field = ElemFieldType.service.ToString(),
-                            Name = svc.Name,
-                            Port = svc.Port,
-                            PortEnd = svc.PortEnd,
-                            ProtoId = svc.ProtoId
-                        });
-                    }
+                    AddResolvedServiceGroup(svcGrp);
+                    continue;
                 }
-                else
+
+                if ((!userConfig.ModRequestOnlyOwnObjects || svcGrp.AppId == owner.Id) &&
+                    TaskList.FirstOrDefault(x => x.Title == userConfig.GetText("new_svc_grp") + svcGrp.Name && x.OnManagement?.Id == mgt.Id) == null)
                 {
-                    if (TaskList.FirstOrDefault(x => x.Title == userConfig.GetText("new_svc_grp") + svcGrp.Name && x.OnManagement?.Id == mgt.Id) == null)
-                    {
-                        RequestNewServiceGroup(svcGrp, mgt);
-                    }
-                    ReqElements.Add(new()
-                    {
-                        RequestAction = RequestAction.create.ToString(),
-                        Field = ElemFieldType.service.ToString(),
-                        GroupName = svcGrp.Name
-                    });
+                    RequestNewServiceGroup(svcGrp, mgt);
                 }
+
+                ReqElements.Add(new()
+                {
+                    RequestAction = RequestAction.create.ToString(),
+                    Field = ElemFieldType.service.ToString(),
+                    GroupName = svcGrp.Name
+                });
+            }
+        }
+
+        private void AddResolvedServiceGroup(ModellingServiceGroup svcGrp)
+        {
+            foreach (ModellingService svc in ModellingServiceWrapper.Resolve(svcGrp.Services))
+            {
+                ReqElements.Add(new()
+                {
+                    RequestAction = RequestAction.create.ToString(),
+                    Field = ElemFieldType.service.ToString(),
+                    Name = svc.Name,
+                    Port = svc.Port,
+                    PortEnd = svc.PortEnd,
+                    ProtoId = svc.ProtoId
+                });
             }
         }
 

@@ -50,11 +50,10 @@ namespace FWO.Basics
         public const string kUpdatable = "updatable";
         public const string kNAT = "NAT";
         public const string k_demo = "_demo";
+        public const string kClosed = "closed";
 
         public const string kPlaceholderMarker = "@@";
-        public const char kAppIdSeparator = '-'; // hard-coded could be moved to settings
         public const string kModellerGroup = "ModellerGroup_";
-        public const string kLdapGroupPattern = kModellerGroup + Placeholder.AppId;
         public const string kImportChangeNotify = "importChangeNotify";
         public const string kExternalRequest = "externalRequest";
         public const string kComplianceCheck = "complianceCheck";
@@ -73,6 +72,10 @@ namespace FWO.Basics
         public const string TestPDFHtmlTemplate = "<html><body><h1>test</h1><h2>test mit puppteer</h2></body></html>";
 
         public const int MaxUploadFileSize = 5 * 1024 * 1024; // 5 MB
+
+        // qad: these two strings should be replaced by customer specific setting values asap
+        public const string kField2 = "field-2";
+        public const string kDatumRegelpr = "Datum-Regelpruefung";
     }
 
     public struct PageName
@@ -124,10 +127,6 @@ namespace FWO.Basics
 
     public struct Placeholder
     {
-        public const string ExternalAppId = "@@ExternalAppId@@";
-        public const string AppId = "@@AppId@@";
-        public const string AppPrefix = "@@AppPrefix@@";
-
         public const string APPNAME = "@@APPNAME@@";
         public const string APPID = "@@APPID@@";
 
@@ -135,6 +134,7 @@ namespace FWO.Basics
         public const string CHANGEACTION = "@@CHANGEACTION@@";
         public const string COMMENT = "@@COMMENT@@";
         public const string CONN_NUMBER = "@@CONN_NUMBER@@";
+        public const string CONTENT = "@@CONTENT@@";
         public const string DAYS = "@@DAYS@@";
         public const string DESTINATIONS = "@@DESTINATIONS@@";
         public const string FAIL_NUMBER = "@@FAIL_NUMBER@@";
@@ -164,6 +164,7 @@ namespace FWO.Basics
         public const string REQUESTING_APPNAME = "@@REQUESTING_APPNAME@@";
         public const string REQUESTING_APPID = "@@REQUESTING_APPID@@";
         public const string RULE_NUMBER = "@@RULE_NUMBER@@";
+        public const string RULE_TABLE = "@@RULE_TABLE@@";
         public const string SERVICENAME = "@@SERVICENAME@@";
         public const string SERVICES = "@@SERVICES@@";
         public const string SOURCES = "@@SOURCES@@";
@@ -171,17 +172,19 @@ namespace FWO.Basics
         public const string TASKCOMMENT = "@@TASKCOMMENT@@";
         public const string TASKS = "@@TASKS@@";
         public const string TICKET_SUBJECT = "@@TICKET_SUBJECT@@";
+        public const string TIME_INTERVAL = "@@TIME_INTERVAL@@";
         public const string TYPE = "@@TYPE@@";
         public const string USER_NAME = "@@USER_NAME@@";
     }
 
-    public struct OwnerMappingSourceStm
+    public enum OwnerMappingSourceStm
     {
-        public const int IP_BASED = 1;
-        public const int CUSTOM_FIELD = 2;
-        public const int NAME_FIELD = 3;
-        public const int MANUEL = 4;
+        IpBased = 1,
+        CustomField = 2,
+        NameField = 3,
+        Manual = 4
     }
+
     public struct ImportType
     {
         public const int RULE = 1;
@@ -194,6 +197,16 @@ namespace FWO.Basics
         public const Char INSERT = 'I';
         public const Char CHANGE = 'C';
         public const Char DELETE = 'D';
+        public const Char DEACTIVATE = 'X';
+        public const Char REACTIVATE = 'R';
     }
 
+    public struct RuleActions
+    {
+        public const string Accept = "accept";
+        public const string Deny = "deny";
+        public const string Any = "any";
+        public const string Reject = "reject";
+        public const string Drop = "drop";
+    }
 }

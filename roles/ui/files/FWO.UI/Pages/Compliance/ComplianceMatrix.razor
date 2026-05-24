@@ -1,7 +1,9 @@
-﻿@using FWO.Services
+@using FWO.Data.Logging
+@using FWO.Services.Logging
 
 @page "/compliance/matrix"
 
+@attribute [Authorize(Roles = $"{Roles.Admin}, {Roles.FwAdmin}, {Roles.Auditor}")]
 @layout ComplianceLayout
 
 @inject ApiConnection apiConnection
@@ -214,7 +216,7 @@
     {
         try
         {
-            return (await apiConnection.SendQueryAsync<List<LinkedPolicy>>(ComplianceQueries.getPolicyIdsForCrit, new{ critId = selectedMatrix.Id })).Count == 0;;
+            return (await apiConnection.SendQueryAsync<List<LinkedPolicy>>(ComplianceQueries.getPolicyIdsForCrit, new{ critId = selectedMatrix.Id })).Count == 0;
         }
         catch (Exception exception)
         {
@@ -231,6 +233,15 @@
             {
                 await apiConnection.SendQueryAsync<ReturnId>(ComplianceQueries.removeCriterion,
                     new { id = selectedMatrix.Id, removed = DateTime.UtcNow });
+                await ChangeLogHelper.LogMatrixChange(new MatrixChangeLogRequest
+                {
+                    Family = ChangeLogFamily.Manual,
+                    Operation = ChangeLogOperation.SetRemoved,
+                    MatrixId = selectedMatrix.Id,
+                    MatrixName = selectedMatrix.Name,
+                    UserId = userConfig.User.DbId.ToString(),
+                    Origin = ChangeLogOrigin.UiSettings
+                });
                 matrices.Remove(selectedMatrix);
                 await InitMatrix();
                 deleteMatrixMode = false;

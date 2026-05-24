@@ -21,6 +21,7 @@ namespace FWO.Data.Modelling
         DeletedObjects = 22,
         EmptySvcGrps = 23,
         DocumentationOnly = 24,
+        ForeignNonProdObjects = 25,
 
         VarianceChecked = 31,
         NotImplemented = 32,
@@ -274,9 +275,9 @@ namespace FWO.Data.Modelling
             return DestinationAppServers.Count > 0 || DestinationAppRoles.Count > 0 || DestinationAreas.Count > 0 || DestinationOtherGroups.Count > 0;
         }
 
-        public bool IsRelevantForVarianceAnalysis(long dummyAppRoleId, bool rolloutRemoved = false)
+        public bool IsRelevantForVarianceAnalysis(long dummyAppRoleId, bool rolloutRemoved = false, bool withInterfaces = false)
         {
-            return !(IsInterface ||
+            return !((IsInterface && !(withInterfaces && IsPublished)) ||
                 GetBoolProperty(ConState.InterfaceRequested.ToString()) ||
                 GetBoolProperty(ConState.InterfaceRejected.ToString()) ||
                 GetBoolProperty(ConState.InterfaceDecommissioned.ToString()) ||
@@ -285,6 +286,32 @@ namespace FWO.Data.Modelling
                 DeletedObjectsFound(rolloutRemoved) ||
                 EmptyServiceGroupsFound());
         }
+
+        public bool IsRelevantForNotificationRequest(long dummyAppRoleId, bool rolloutRemoved = false)
+        {
+            return NotAlreadyRequested() &&
+                !IsDocumentationOnly() &&
+                IsRelevantForVarianceAnalysis(dummyAppRoleId, rolloutRemoved);
+        }
+
+        public bool NotAlreadyRequested()
+        {
+            return !RequestedOnFw;
+        }
+
+        public bool IsIntegrationStateIncludedForRequest(string marker, HashSet<string> includedRequestStateNames)
+        {
+            return ModIntegrationStateConfig.IsIncludedForRequest(ModIntegrationStateConfig.GetStateName(GetStringProperty(ModIntegrationStateConfig.EffectiveMarker(marker))), includedRequestStateNames);
+        }
+
+        public DateTime? GetIntegrationStateSetAt(string marker)
+        {
+            return ModIntegrationStateConfig.GetStateTimestamp(GetStringProperty(ModIntegrationStateConfig.EffectiveMarker(marker))) ??
+                ModIntegrationStateConfig.ParseTimestamp(GetStringProperty(ModIntegrationStateConfig.TimestampMarker(marker)));
+        }
+
+        public bool HasExtraConfigType(string extraConfigType)
+            => ExtraConfigs.Any(config => string.Equals(config.ExtraConfigType, extraConfigType, StringComparison.OrdinalIgnoreCase));
 
         public void AddProperty(string key, string value = "")
         {
@@ -422,7 +449,7 @@ namespace FWO.Data.Modelling
 
         private bool DeletedObjectsFound(bool rolloutRemoved = false)
         {
-            if(rolloutRemoved)
+            if (rolloutRemoved)
             {
                 return SourceAreas.Any(a => a.Content.IsDeleted) ||
                 DestinationAreas.Any(a => a.Content.IsDeleted);

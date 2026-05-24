@@ -1,4 +1,6 @@
 using System.Text.Json.Serialization;
+using FWO.Basics;
+using FWO.Data.Flow;
 using Newtonsoft.Json;
 
 namespace FWO.Data
@@ -80,6 +82,24 @@ namespace FWO.Data
         [JsonProperty("svc_rpcnr"), JsonPropertyName("svc_rpcnr")]
         public long? RpcNumber { get; set; }
 
+        [JsonProperty("flow_svcobj_id"), JsonPropertyName("flow_svcobj_id")]
+        public long? FlowServiceObjectId { get; set; }
+
+        [JsonProperty("flow_svcobject"), JsonPropertyName("flow_svcobject")]
+        public FlowSvcObject? FlowSvcObject { get; set; }
+
+        [JsonProperty("flow_svcgrp_id"), JsonPropertyName("flow_svcgrp_id")]
+        public long? FlowServiceGroupId { get; set; }
+
+        [JsonProperty("flow_svcgroup"), JsonPropertyName("flow_svcgroup")]
+        public FlowSvcGroup? FlowSvcGroup { get; set; }
+
+        [JsonProperty("flow_active"), JsonPropertyName("flow_active")]
+        public bool FlowActive { get; set; }
+
+        [JsonProperty("removed"), JsonPropertyName("removed")]
+        public long? Removed { get; set; }
+
         public long Number;
         public bool IsSurplus = false;
 
@@ -127,6 +147,18 @@ namespace FWO.Data
         public override int GetHashCode()
         {
             return Id.GetHashCode();
+        }
+
+        public static List<NetworkService> FlattenRuleServices(IEnumerable<NetworkService> services)
+        {
+            return services
+                .SelectMany(service =>
+                    service.Type.Name == ServiceType.Group
+                        ? service.ServiceGroupFlats.Select(groupFlat => groupFlat.Object)
+                        : new[] { service })
+                .OfType<NetworkService>()
+                .Where(service => service.Type.Name != ServiceType.Group)
+                .ToList();
         }
     }
 }

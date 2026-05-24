@@ -362,3 +362,53 @@ A complete 80K lines rework of FWO, including
 
 # 9.0.8 - 25.02.2026 DEVELOP
 - new config value for removed App Server handling
+
+# 9.0.10 - 28.02.2026 DEVELOP
+- new config value for User synchronization in owner data import
+
+# 9.0.11 - 04.03.2026 DEVELOP
+- new config value for requesting only own objects
+
+# 9.0.12 - 12.03.2026 DEVELOP
+- new config values for rule expiry notification
+
+# 9.0.13 - 12.03.2026 DEVELOP
+- mark lifecycle states as active
+
+# 9.0.14 - 17.03.2026 DEVELOP
+- prepare owner decommission notification
+
+# 9.0.15 - 19.03.2026 DEVELOP
+- rename OwnerSourceCustomFieldKey to CustomFieldOwnerKey in config
+
+# 9.0.16 - 31.03.2026 DEVELOP
+- remove not needed stm_owner_mapping_source
+- add Full re-initialize of RuleOwner mapping for IP-based rules
+- add matched_objects field in rule_owner table for track matched objects - IpBased
+
+# 9.0.18 - 03.04.2026 DEVELOP
+- add new column automatic_only to workflow states
+
+# 9.0.19 - 09.04.2026 DEVELOP
+- add owner additional_info jsonb field including owner edit UI support
+
+# 9.0.20 - 11.04.2026 DEVELOP
+- extend notification handling
+
+# 9.0.21 - 21.04.2026 DEVELOP
+- fix ldap users with special chars not being processed correctly in role handling
+- fix empty mail being sent for orphaned rule report
+- update dependencies (notably closing mailkit and pytest vuln)
+- fix time zone issues in importer
+
+# 9.0.23 - 27.04.2026 DEVELOP
+- enhance notifications by bcc
+- add display-only workflow label report column option
+- add default template for workflow tickets approved last week
+Removed deprecated configuration keys:
+- updateRuleOwnerMappingActive
+- updateRuleOwnerMappingStartAt
+These settings are no longer used due to the full automation of UpdateRuleOwner.
+
+# 9.0.24 - 27.04.2026 DEVELOP
+- introduce new modelling integration mode WorkflowNotifications

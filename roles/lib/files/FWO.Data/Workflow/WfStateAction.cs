@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Converters;
 
 namespace FWO.Data.Workflow
 {
@@ -15,7 +16,8 @@ namespace FWO.Data.Workflow
         UpdateConnectionOwner = 21,
         UpdateConnectionRelease = 22,
         DisplayConnection = 23,
-        UpdateConnectionReject = 24
+        UpdateConnectionReject = 24,
+        UpdateModelling = 25
         // CreateReport = 30
     }
 
@@ -28,6 +30,11 @@ namespace FWO.Data.Workflow
         OfferButton = 4,
         OwnerChange = 10,
         OnAssignment = 15
+    }
+
+    public enum ToBeCalled
+    {
+        PolicyCheck = 1
     }
 
     public class WfStateAction
@@ -63,6 +70,19 @@ namespace FWO.Data.Workflow
         public WfStateAction()
         { }
 
+        public WfStateAction(WfStateAction action)
+        {
+            Id = action.Id;
+            Name = action.Name;
+            ActionType = action.ActionType;
+            Scope = action.Scope;
+            TaskType = action.TaskType;
+            Phase = action.Phase;
+            Event = action.Event;
+            ButtonText = action.ButtonText;
+            ExternalParams = action.ExternalParams;
+        }
+
         public static bool IsReadonlyType(string actionTypeString)
         {
             if (Enum.TryParse<StateActionTypes>(actionTypeString, out StateActionTypes actionType))
@@ -76,6 +96,53 @@ namespace FWO.Data.Workflow
             }
             return false;
         }
+
+        public static bool TryParseAutoPromoteParams(string externalParams, out int? toStateId, out ConditionalAutoPromoteParams? conditionalParams)
+        {
+            toStateId = null;
+            conditionalParams = null;
+
+            if (string.IsNullOrWhiteSpace(externalParams))
+            {
+                return true;
+            }
+
+            if (int.TryParse(externalParams, out int parsedStateId))
+            {
+                toStateId = parsedStateId;
+                return true;
+            }
+
+            try
+            {
+                conditionalParams = System.Text.Json.JsonSerializer.Deserialize<ConditionalAutoPromoteParams>(externalParams);
+                return conditionalParams != null;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+    }
+
+    public class ConditionalAutoPromoteParams
+    {
+        [Newtonsoft.Json.JsonConverter(typeof(StringEnumConverter))]
+        [System.Text.Json.Serialization.JsonConverter(typeof(JsonStringEnumConverter))]
+        [JsonProperty("to_be_called"), JsonPropertyName("to_be_called")]
+        public ToBeCalled ToBeCalled { get; set; } = ToBeCalled.PolicyCheck;
+
+        [JsonProperty("policy_ids"), JsonPropertyName("policy_ids")]
+        public List<int> PolicyIds { get; set; } = [];
+
+        [JsonProperty("check_result_label"), JsonPropertyName("check_result_label")]
+        public string CheckResultLabel { get; set; } = "";
+
+        [JsonProperty("if_compliant_state"), JsonPropertyName("if_compliant_state")]
+        public int IfCompliantState { get; set; }
+
+        [JsonProperty("if_not_compliant_state"), JsonPropertyName("if_not_compliant_state")]
+        public int IfNotCompliantState { get; set; }
     }
 
     public class WfStateActionDataHelper

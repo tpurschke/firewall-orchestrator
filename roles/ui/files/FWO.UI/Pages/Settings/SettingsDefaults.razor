@@ -19,7 +19,7 @@
 @(userConfig.GetText("U5311"))
 <hr />
 
-@if(configData != null && InitComplete)
+@if (configData != null && InitComplete)
 {
     <form onsubmit="return false">
         <div class="form-group row" data-toggle="tooltip" title="@(userConfig.PureLine("H5411"))">
@@ -93,7 +93,7 @@
         <div class="form-group row" data-toggle="tooltip" title="@(userConfig.PureLine("H5413"))">
             <label class="col-form-label col-sm-4">@(userConfig.GetText("maxInitialFetchesRightSidebar")):</label>
             <div class="col-sm-2">
-                @if(configData!.AutoFillRightSidebar)
+                @if (configData!.AutoFillRightSidebar)
                 {
                     <input disabled type="number" min="0" @bind="configData!.MaxInitialFetchesRightSidebar" />
                 }
@@ -107,19 +107,6 @@
             <label class="col-form-label col-sm-4">@(userConfig.GetText("minCollapseAllDevices"))*:</label>
             <div class="col-sm-2">
                 <input type="number" min="0" @bind="configData!.MinCollapseAllDevices">
-            </div>
-        </div>
-        <hr />
-        <div class="form-group row" data-toggle="tooltip" title="@(userConfig.PureLine("H5447"))">
-            <label class="col-form-label col-sm-4">@(userConfig.GetText("unusedTolerance"))*:</label>
-            <div class="col-sm-2">
-                <input type="number" min="0" @bind="configData!.UnusedTolerance" />
-            </div>
-        </div>
-        <div class="form-group row" data-toggle="tooltip" title="@(userConfig.PureLine("H5448"))">
-            <label class="col-form-label col-sm-4">@(userConfig.GetText("creationTolerance"))*:</label>
-            <div class="col-sm-2">
-                <input type="number" min="0" @bind="configData!.CreationTolerance" />
             </div>
         </div>
         <hr />
@@ -152,6 +139,18 @@
                 <input type="time" step="60" @bind="configData!.DailyCheckStartAt" />
             </div>
         </div>
+        <div class="form-group row" data-toggle="tooltip" title="@(userConfig.PureLine("H5424a"))">
+            <label class="col-form-label col-sm-3">@(userConfig.GetText("dailyCheckModules")):</label>
+            <div class="form-group row col-sm-9">
+                @foreach (DailyCheckModule module in Enum.GetValues(typeof(DailyCheckModule)))
+                {
+                    <div class="form-group col-sm-3">
+                        <input id="cbx_daily_@module.ToString()" type="checkbox" @bind="dailyCheckModulesVisibleDict[module]" />
+                        <label for="cbx_daily_@module.ToString()" class="col-form-label">@(userConfig.GetText(module.ToString()))</label>
+                    </div>
+                }
+            </div>
+        </div>
         <div class="form-group row" data-toggle="tooltip" title="@(userConfig.PureLine("H5452"))">
             <label class="col-form-label col-sm-4">@(userConfig.GetText("maxImportDuration")):</label>
             <div class="col-sm-2">
@@ -175,7 +174,7 @@
             <label class="col-form-label col-sm-4">@(userConfig.GetText("ruleOwnershipMode")):</label>
             <div class="col-sm-2">
                 <Dropdown ElementType="RuleOwnershipMode" @bind-SelectedElement="configData!.RuleOwnershipMode"
-                        ElementToString="@(o => userConfig.GetText(o.ToString()))" Elements="Enum.GetValues(typeof(RuleOwnershipMode)).Cast<RuleOwnershipMode>()">
+                          ElementToString="@(o => userConfig.GetText(o.ToString()))" Elements="Enum.GetValues(typeof(RuleOwnershipMode)).Cast<RuleOwnershipMode>()">
                     <ElementTemplate Context="opt">
                         @(userConfig.GetText(opt.ToString()))
                     </ElementTemplate>
@@ -197,6 +196,27 @@
         </div>
     </form>
     <hr />
+    <div class="form-group row" data-toggle="tooltip" title="@(userConfig.PureLine("accesstoken_lifetime"))">
+        <label class="col-form-label col-sm-4">@(userConfig.GetText("accesstoken_lifetime")):</label>
+        <div class="col-sm">
+            <input type="number" min="1" max="720" @bind="configData!.AccessTokenLifetimeHours" />
+        </div>
+    </div>
+    <div class="form-group row" data-toggle="tooltip" title="@(userConfig.PureLine("refreshtoken_lifetime"))">
+        <label class="col-form-label col-sm-4">@(userConfig.GetText("refreshtoken_lifetime")):</label>
+        <div class="col-sm">
+            <input type="number" min="1" max="30" @bind="configData!.RefreshTokenLifetimeDays" />
+        </div>
+    </div>
+    @if (!IsTokenLifetimeValid())
+    {
+        <div class="form-group row">
+            <div class="col-sm-8 offset-sm-4">
+                <span class="text-danger"><span class="@Icons.Warning pe-1"></span>@(userConfig.GetText("U9037"))</span>
+            </div>
+        </div>
+    }
+    <hr />
     <AuthorizeView Roles="@Roles.Admin">
         <Authorized>
             <button type="button" class="btn btn-sm btn-primary" @onclick="Save" @onclick:preventDefault>@(userConfig.GetText("save"))</button>
@@ -211,7 +231,7 @@
 }
 else
 {
-    <Loading/>
+    <Loading />
 }
 
 
@@ -226,7 +246,9 @@ else
     private DateTime autoDiscStartDate = DateTime.Today;
     private DateTime autoDiscStartTime = DateTime.Now.AddSeconds(-DateTime.Now.Second);
     private List<Module> availableModules { get; set; } = [];
+    private List<DailyCheckModule> dailyCheckModules { get; set; } = [];
     private Dictionary<Module, bool> modulesVisibleDict = [];
+    private Dictionary<DailyCheckModule, bool> dailyCheckModulesVisibleDict = [];
     private bool InitComplete = false;
 
     protected override async Task OnInitializedAsync()
@@ -241,29 +263,52 @@ else
             selectedLanguage = globalConfig.UiLanguages.FirstOrDefault(l => l.Name == configData.DefaultLanguage) ?? new Language();
             autoDiscStartDate = autoDiscStartTime = configData.AutoDiscoverStartAt;
             availableModules = JsonSerializer.Deserialize<List<Module>>(string.IsNullOrEmpty(configData.AvailableModules) ? ModuleGroups.AllModulesNumList() : configData.AvailableModules) ?? throw new JsonException("Config data could not be parsed.");
+            dailyCheckModules = JsonSerializer.Deserialize<List<DailyCheckModule>>(string.IsNullOrEmpty(configData.DailyCheckModules) ? DailyCheckModuleGroups.AllModulesNumList() : configData.DailyCheckModules) ?? throw new JsonException("Config data could not be parsed.");
             modulesVisibleDict = [];
-            foreach(Module module in Enum.GetValues(typeof(Module)).Cast<Module>())
+            foreach (Module module in Enum.GetValues(typeof(Module)).Cast<Module>())
             {
                 modulesVisibleDict.Add(module, availableModules.Contains(module));
             }
+            dailyCheckModulesVisibleDict = [];
+            foreach(DailyCheckModule module in Enum.GetValues(typeof(DailyCheckModule)).Cast<DailyCheckModule>())
+            {
+                dailyCheckModulesVisibleDict.Add(module, dailyCheckModules.Contains(module));
+            }
             InitComplete = true;
         }
-        catch(Exception exception)
+        catch (Exception exception)
         {
             DisplayMessageInUi(exception, userConfig.GetText("read_config"), userConfig.GetText("E5301"), false);
         }
+    }
+
+    private bool IsTokenLifetimeValid()
+    {
+        if (configData == null)
+        {
+            return false;
+        }
+
+        int refreshTokenLifetimeHours = configData.RefreshTokenLifetimeDays * 24;
+        return configData.AccessTokenLifetimeHours <= refreshTokenLifetimeHours;
     }
 
     private async Task Save()
     {
         try
         {
-            if(configData != null)
+            if (configData != null)
             {
+                if (!IsTokenLifetimeValid())
+                {
+                    DisplayMessageInUi(null, userConfig.GetText("change_default"), userConfig.GetText("U9037"), true);
+                    return;
+                }
+
                 configData.DefaultLanguage = selectedLanguage.Name;
                 configData.AutoDiscoverStartAt = autoDiscStartDate.Date.Add(autoDiscStartTime.TimeOfDay);
                 availableModules = [];
-                foreach(Module module in modulesVisibleDict.Keys)
+                foreach (Module module in modulesVisibleDict.Keys)
                 {
                     if (modulesVisibleDict[module])
                     {
@@ -271,6 +316,15 @@ else
                     }
                 }
                 configData.AvailableModules = JsonSerializer.Serialize(availableModules);
+                dailyCheckModules = [];
+                foreach (DailyCheckModule module in dailyCheckModulesVisibleDict.Keys)
+                {
+                    if (dailyCheckModulesVisibleDict[module])
+                    {
+                        dailyCheckModules.Add(module);
+                    }
+                }
+                configData.DailyCheckModules = JsonSerializer.Serialize(dailyCheckModules);
 
                 await globalConfig.WriteToDatabase(configData, apiConnection);
                 DisplayMessageInUi(null, userConfig.GetText("change_default"), userConfig.GetText("U5301"), false);
@@ -280,7 +334,7 @@ else
                 throw new ArgumentException("Data saved before loaded. This should be impossible.");
             }
         }
-        catch(Exception exception)
+        catch (Exception exception)
         {
             DisplayMessageInUi(exception, userConfig.GetText("change_default"), "", true);
         }
@@ -288,19 +342,19 @@ else
 
     private void OnFileUploadEvent(FileUploadEventArgs? e)
     {
-        if(e is null)
+        if (e is null)
         {
             return;
         }
 
-        if (!e.Success && e.Error is not null )
+        if (!e.Success && e.Error is not null)
         {
             DisplayMessageInUi(e.Error.InternalException, userConfig.GetText("change_default"), e.Error.Message ?? "", true);
             return;
         }
 
         // Fileupload was successful and data is a base64 string
-        if(e.Success && e.Data is string && configData is not null)
+        if (e.Success && e.Data is string && configData is not null)
         {
             configData.CustomLogoData = e.Data;
         }

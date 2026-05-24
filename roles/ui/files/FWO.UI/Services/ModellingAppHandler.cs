@@ -1,4 +1,5 @@
 using FWO.Config.Api;
+using FWO.Config.Api.Data;
 using FWO.Data;
 using FWO.Data.Modelling;
 using FWO.Data.Workflow;
@@ -60,7 +61,6 @@ namespace FWO.Ui.Services
 
                 await PrepareConnections(Connections);
 
-                ConnToDelete = Connections.FirstOrDefault() ?? new ModellingConnection();
                 OverviewConnHandler = new ModellingConnectionHandler(apiConnection, userConfig, Application, Connections, new(), true,
                     false, DisplayMessageInUi, ReInit, IsOwner)
                 {
@@ -182,7 +182,18 @@ namespace FWO.Ui.Services
 
         public List<ModellingConnection> GetConnectionsToRequest()
         {
-            return [.. Connections.Where(x => x.IsRelevantForVarianceAnalysis(dummyAppRoleId, userConfig.ModRolloutRemovedAppServers)).OrderByDescending(y => y.IsCommonService)];
+            if (userConfig.ModIntegrationMode == ModIntegrationMode.WorkflowNotifications)
+            {
+                string stateMarker = ModIntegrationStateConfig.EffectiveMarker(userConfig.ModIntegrationStateMarker);
+                HashSet<string> includedRequestStateNames = ModIntegrationStateConfig.IncludedRequestStateNames(userConfig.ModIntegrationStates);
+                return [.. Connections.Where(x => !x.IsDocumentationOnly() && x.IsRelevantForVarianceAnalysis(dummyAppRoleId, userConfig.ModRolloutRemovedAppServers))
+                    .Where(x => x.IsIntegrationStateIncludedForRequest(stateMarker, includedRequestStateNames))
+                    .OrderByDescending(y => y.IsCommonService)];
+            }
+
+            return [.. Connections.Where(x => x.IsRelevantForVarianceAnalysis(dummyAppRoleId,
+                userConfig.ModRolloutRemovedAppServers, userConfig.ModRequestOnlyOwnObjects))
+                .OrderByDescending(y => y.IsCommonService)];
         }
 
         public bool HasModellingIssues(ModellingConnection conn)
@@ -281,17 +292,13 @@ namespace FWO.Ui.Services
                     DecommissionInterfaceMode = true;
                     return;
                 }
-                else
-                {
-                    Message = userConfig.GetText("U9014") + ConnToDelete.Name + "?";
-                    DeleteAllowed = true;
-                }
+                Message = userConfig.GetText("U9014") + ConnToDelete.Name + "?";
             }
             else
             {
                 Message = userConfig.GetText("U9001") + ConnToDelete.Name + "?";
-                DeleteAllowed = true;
             }
+            DeleteAllowed = true;
             DeleteConnMode = true;
         }
 
@@ -325,7 +332,7 @@ namespace FWO.Ui.Services
                 return true;
             }
 
-            DisplayMessageInUi(null, action, userConfig.GetText("C9012"), true);
+            DisplayMessageInUi(null, action, userConfig.GetText("E9104"), true);
             return false;
         }
     }

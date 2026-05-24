@@ -3,9 +3,9 @@
 @{
     Layout = "HelpLayout";
 }
-@section sidebar{
-    @{ 
-        await Html.RenderPartialAsync("HelpSettingsSidebar.cshtml"); 
+@section sidebar {
+    @{
+        await Html.RenderPartialAsync("HelpSettingsSidebar.cshtml");
     }
 }
 @using FWO.Config.Api
@@ -25,10 +25,13 @@
         <li>@(Html.Raw(userConfig.GetText("H5426")))</li>
         <li>@(Html.Raw(userConfig.GetText("H5427")))</li>
         <li>@(Html.Raw(userConfig.GetText("H5424")))</li>
+        <li>@(Html.Raw(userConfig.GetText("H5424a")))</li>
         <li>@(Html.Raw(userConfig.GetText("H5452")))</li>
         <li>@(Html.Raw(userConfig.GetText("H5453")))</li>
         <li>@(Html.Raw(userConfig.GetText("H5565")))</li>
         <li>@(Html.Raw(userConfig.GetText("H5454")))</li>
         <li>@(Html.Raw(userConfig.GetText("H5457")))</li>
+        <li>@(Html.Raw(userConfig.GetText("accesstoken_lifetime")))</li>
+        <li>@(Html.Raw(userConfig.GetText("refreshtoken_lifetime")))</li>
     </ul>
 </div>

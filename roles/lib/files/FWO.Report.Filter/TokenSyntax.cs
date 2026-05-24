@@ -135,6 +135,42 @@ namespace FWO.Report.Filter
                     NoWhiteSpaceRequiered: []
                 ),
 
+                TokenKind.TaskType => new TokenSyntax
+                (
+                    WhiteSpaceRequiered: ["tasktype", "task-type", "task_type"],
+                    NoWhiteSpaceRequiered: []
+                ),
+
+                TokenKind.Phase => new TokenSyntax
+                (
+                    WhiteSpaceRequiered: ["phase"],
+                    NoWhiteSpaceRequiered: []
+                ),
+
+                TokenKind.States => new TokenSyntax
+                (
+                    WhiteSpaceRequiered: ["states", "state", "state_ids", "state-ids"],
+                    NoWhiteSpaceRequiered: []
+                ),
+
+                TokenKind.OwnerState => new TokenSyntax
+                (
+                    WhiteSpaceRequiered: ["ownerstate", "owner-state", "owner_state", "owner_lc_state", "owner-lc-state"],
+                    NoWhiteSpaceRequiered: []
+                ),
+
+                TokenKind.Criticality => new TokenSyntax
+                (
+                    WhiteSpaceRequiered: ["criticality"],
+                    NoWhiteSpaceRequiered: []
+                ),
+
+                TokenKind.ReferenceDate => new TokenSyntax
+                (
+                    WhiteSpaceRequiered: ["reference_date", "reference-date", "referencedate"],
+                    NoWhiteSpaceRequiered: []
+                ),
+
                 TokenKind.Time => new TokenSyntax
                 (
                     WhiteSpaceRequiered: ["time"],

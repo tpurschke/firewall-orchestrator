@@ -31,10 +31,13 @@
                                         @(DisplayService.DisplayButton(userConfig, "edit", Icons.Edit))
                                     </button>
                                 }
-                                <button type="button" class="btn btn-sm btn-danger" disabled="@Readonly" @onclick="async () =>
-                                    { await AppHandler.RequestDeleteConnection(context); await AppHandlerChanged.InvokeAsync(AppHandler); }">
-                                    @(DisplayService.DisplayButton(userConfig, "delete", Icons.Delete))
-                                </button>
+                                @if (ShowDeleteButton(context))
+                                {
+                                    <button type="button" class="btn btn-sm btn-danger" disabled="@Readonly" @onclick="async () =>
+                                        { await AppHandler.RequestDeleteConnection(context); await AppHandlerChanged.InvokeAsync(AppHandler); }">
+                                        @(DisplayService.DisplayButton(userConfig, "delete", Icons.Delete))
+                                    </button>
+                                }
                                 @if(context.IsInterface)
                                 {
                                     <button type="button" class="btn btn-sm btn-secondary" @onclick="async () =>
@@ -92,7 +95,7 @@
                     </Template>
                 </Column>
             }
-            @if(ShowProductionState && (userConfig.VarianceAnalysisSync || userConfig.VarianceAnalysisRefresh || userConfig.VarianceAnalysisSleepTime > 0))
+            @if(ShowProductionState && ShowImplementationStateColumn)
             {
                 <Column TableItem="ModellingConnection" Title="@(userConfig.GetText("impl_state"))" Field="@(x => x.Id)" Sortable="true" Filterable="false">
                     <Template>
@@ -243,18 +246,20 @@
 
     private void ToggleSelection(ModellingConnection conn)
     {
-        if (SelectInterfaceView)
+        if (!SelectInterfaceView || !IsVisibleToOwner(conn))
         {
-            if (!SelectedConns.Remove(conn))
-            {
-                if (SelectionType != SelectionType.Multiple)
-                {
-                    SelectedConns = [];
-                }
-                SelectedConns.Add(conn);
-            }
-            SelectedConnsChanged.InvokeAsync(SelectedConns);
+            return;
         }
+
+        if (!SelectedConns.Remove(conn))
+        {
+            if (SelectionType != SelectionType.Multiple)
+            {
+                SelectedConns = [];
+            }
+            SelectedConns.Add(conn);
+        }
+        SelectedConnsChanged.InvokeAsync(SelectedConns);
     }
 
     private string getTableRowClass(ModellingConnection conn)
@@ -269,6 +274,9 @@
     private bool ShowActionsColumn => !SelectInterfaceView && !PopupMode &&
         (AppHandler != null || OrphanedMode);
 
+    private bool ShowImplementationStateColumn => userConfig.ModIntegrationMode == ModIntegrationMode.WorkflowNotifications ||
+        userConfig.VarianceAnalysisSync || userConfig.VarianceAnalysisRefresh || userConfig.VarianceAnalysisSleepTime > 0;
+
     private string DisplayConditional(ModellingConnection conn, string content)
     {
         if (conn.IsRequested)
@@ -276,6 +284,12 @@
             return $"<span class=\"text-secondary\">{content}</span>";
         }
         return content;
+    }
+
+    private bool ShowDeleteButton(ModellingConnection conn)
+    {
+        // Requested interfaces are handled in monitoring/request workflow, not deleted in-place.
+        return !(conn.IsInterface && conn.IsRequested && conn.TicketId != null);
     }
 
     public string DisplayModState(ModellingConnection connection)
@@ -286,6 +300,13 @@
 
     public string DisplayImplState(ModellingConnection connection)
     {
+        if(userConfig.ModIntegrationMode == ModIntegrationMode.WorkflowNotifications)
+        {
+            string stateMarker = ModIntegrationStateConfig.EffectiveMarker(userConfig.ModIntegrationStateMarker);
+            string markerValue = connection.GetStringProperty(stateMarker);
+            return string.IsNullOrWhiteSpace(markerValue) ? "" : System.Net.WebUtility.HtmlEncode(markerValue);
+        }
+
         List<string> modellingProps = CollectModellingProps(connection);
         if(modellingProps.Count > 0)
         {
@@ -305,7 +326,7 @@
         {
             return false;
         }
-        return interf.PermittedOwners.Select(o => o.Id).Contains(Application.Id);
+        return interf.PermittedOwnerWrappers.Any(wrapper => wrapper.Owner != null && wrapper.Owner.Id == Application.Id);
     }
 
     private List<string> CollectModellingProps(ModellingConnection connection)
@@ -351,6 +372,9 @@
                         break;
                     case nameof(ConState.DocumentationOnly):
                         relevantProps.Add($"<span class=\"text-warning\" data-toggle=\"tooltip\" title=\"{userConfig.PureLine("C9020")}\">{Exclamation()}</span>");
+                        break;
+                    case nameof(ConState.ForeignNonProdObjects):
+                        relevantProps.Add($"<span class=\"text-warning\" data-toggle=\"tooltip\" title=\"{userConfig.PureLine("C9030")}\">{Exclamation()}</span>");
                         break;
                     default:
                         break;

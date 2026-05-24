@@ -599,3 +599,17 @@ A complete 80K lines rework of FWO, including
 
 # 9.0.9 - 25.02.2026 DEVELOP
 - remove stale v8 code
+
+# 9.0.16 - 26.03.2026 MAIN
+- bug fixing
+- moving from docker to podman
+
+# 9.0.21 - 21.04.2026 MAIN
+- bug fixing
+- dependency updates (notably closing mailkit and pytest vulnerabilities)
+
+# 9.0.22 - 26.04.2026 MAIN
+- fixes missing source or destination in rule expiry notification report
+- fixes time zone issues with checkpoint time objects
+- fixes python tests failing on python 3.10
+- fixes owner import from custom file

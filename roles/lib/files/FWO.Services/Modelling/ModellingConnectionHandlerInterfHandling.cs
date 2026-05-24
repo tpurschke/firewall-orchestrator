@@ -1,14 +1,10 @@
-using FWO.Api.Client;
 using FWO.Api.Client.Queries;
 using FWO.Basics;
-using FWO.Config.Api;
-using FWO.Config.Api.Data;
 using FWO.Data;
 using FWO.Data.Modelling;
 using FWO.Logging;
 using FWO.Middleware.Client;
 using FWO.Services.Workflow;
-using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
 
 
@@ -117,9 +113,11 @@ namespace FWO.Services.Modelling
 
                 int successCount = 0;
                 int failCount = 0;
+                List<string> legacyOtherAddresses = EmailHelper.SplitAddresses(userConfig.ModDecommEmailOtherAddresses);
                 foreach (var app in appsToNotify)
                 {
-                    if (await emailHelper.SendEmailToOwnerResponsibles(app, subject, ConstructBody(app, reason, proposedInterface), userConfig.ModDecommEmailReceiver))
+                    if (await emailHelper.SendEmailToOwnerResponsibles(app, subject, ConstructBody(app, reason, proposedInterface),
+                        userConfig.ModDecommEmailReceiver, false, legacyOtherAddresses))
                     {
                         successCount++;
                     }
@@ -261,7 +259,8 @@ namespace FWO.Services.Modelling
             await DisplaySelectedInterface(interf);
         }
 
-        public async Task ReplaceInterface(Task<AuthenticationState> authenticationStateTask, MiddlewareClient middlewareClient)
+        public async Task ReplaceInterface(Task<AuthenticationState> authenticationStateTask, MiddlewareClient middlewareClient,
+            IRequestedRulePolicyChecker? requestedRulePolicyChecker = null)
         {
             try
             {
@@ -271,7 +270,7 @@ namespace FWO.Services.Modelling
                     await RemoveFromAllSelections();
                     if (await DeleteRequestedInterface())
                     {
-                        await UpdateTicket(authenticationStateTask, middlewareClient);
+                        await UpdateTicket(authenticationStateTask, middlewareClient, requestedRulePolicyChecker);
                     }
                     await RefreshParent();
                     Close();
@@ -319,7 +318,8 @@ namespace FWO.Services.Modelling
             return true;
         }
 
-        private async Task UpdateTicket(Task<AuthenticationState> authenticationStateTask, MiddlewareClient middlewareClient)
+        private async Task UpdateTicket(Task<AuthenticationState> authenticationStateTask, MiddlewareClient middlewareClient,
+            IRequestedRulePolicyChecker? requestedRulePolicyChecker = null)
         {
             if (ActConn.TicketId != null)
             {
@@ -327,7 +327,7 @@ namespace FWO.Services.Modelling
                 {
                     // change referred connId ?
                     string comment = $"{userConfig.GetText("U9016")}: {IntConnHandler?.ActConn.Name}";
-                    TicketCreator ticketCreator = new(apiConnection, userConfig, authenticationStateTask!.Result.User, middlewareClient, WorkflowPhases.implementation);
+                    TicketCreator ticketCreator = new(apiConnection, userConfig, authenticationStateTask!.Result.User, middlewareClient, WorkflowPhases.implementation, requestedRulePolicyChecker);
                     if (await ticketCreator.PromoteNewInterfaceImplTask((long)ActConn.TicketId, ExtStates.Done, comment))
                     {
                         DisplayMessageInUi(null, comment, userConfig.GetText("U9013"), false);
@@ -351,7 +351,7 @@ namespace FWO.Services.Modelling
             ActConn.InterfaceIsRequested = interf.IsRequested;
             ActConn.InterfaceIsRejected = interf.GetBoolProperty(ConState.Rejected.ToString());
             ActConn.InterfaceIsDecommissioned = interf.GetBoolProperty(ConState.Decommissioned.ToString());
-            ActConn.InterfaceNoPermission = interf.PermittedOwnerWrappers.Any(w => w.Owner != null && w.Owner.Id == ActConn.AppId);
+            ActConn.InterfaceNoPermission = EvaluateInterfaceNoPermission(interf, ActConn.AppId ?? Application.Id);
             ActConn.TicketId = interf.TicketId;
             if (SrcReadOnly)
             {
