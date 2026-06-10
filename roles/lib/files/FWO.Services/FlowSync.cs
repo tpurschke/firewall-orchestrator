@@ -1,9 +1,9 @@
 using FWO.Api.Client;
 using FWO.Api.Client.Queries;
 using FWO.Basics;
-using FWO.Config.Api;
 using FWO.Data;
 using FWO.Data.Flow;
+using FWO.Config.Api;
 using FWO.Logging;
 
 namespace FWO.Services
@@ -21,7 +21,7 @@ namespace FWO.Services
         private readonly GlobalConfig globalConfig;
 
         /// <summary>
-        /// Creates a new flow sync service with API access and global configuration.
+        /// Creates a new flow sync service with API access.
         /// </summary>
         public FlowSync(ApiConnection apiConnection, GlobalConfig globalConfig)
         {
@@ -69,6 +69,22 @@ namespace FWO.Services
                 return false;
             }
 
+            List<int> configuredManagementRanking = FlowNamingHelper.ParseManagementRanking(globalConfig.FlowNamingSourceManagementRanking);
+            List<int> preferredManagementRanking = FlowNamingHelper.NormalizeManagementRanking(
+                configuredManagementRanking,
+                pendingByManagement.Select(group => group.Key));
+            bool useManagementNamesForFlow = configuredManagementRanking.Count > 0;
+            if (useManagementNamesForFlow)
+            {
+                Dictionary<int, int> rankingPositions = preferredManagementRanking
+                    .Select((managementId, index) => new { managementId, index })
+                    .ToDictionary(item => item.managementId, item => item.index);
+
+                pendingByManagement = [.. pendingByManagement
+                    .OrderBy(group => rankingPositions.GetValueOrDefault(group.Key, int.MaxValue))
+                    .ThenBy(group => group.Max(import => import.ControlId))];
+            }
+
             bool syncedAny = false;
 
             foreach (var managementGroup in pendingByManagement)
@@ -78,7 +94,7 @@ namespace FWO.Services
 
                 try
                 {
-                    await SyncManagementAsync(mgmId, importsForManagement);
+                    await SyncManagementAsync(mgmId, importsForManagement, useManagementNamesForFlow);
                     syncedAny = true;
                 }
                 catch (Exception exception)
@@ -94,7 +110,7 @@ namespace FWO.Services
         /// Synchronizes a single management: fetches normalized objects, calculates hashes,
         /// inserts missing flows, updates mappings, and marks imports as complete.
         /// </summary>
-        private async Task SyncManagementAsync(int mgmId, List<ImportControl> importsForManagement)
+        private async Task SyncManagementAsync(int mgmId, List<ImportControl> importsForManagement, bool useManagementNamesForFlow)
         {
             var managementData = (await apiConnection.SendQueryAsync<List<FlowSyncManagementData>>(FlowQueries.getFlowSyncManagementData, new { mgmId }))?.FirstOrDefault();
 
@@ -105,8 +121,6 @@ namespace FWO.Services
             }
 
             var flowData = await GetFlowSyncDataAsync(mgmId);
-            int mgmFlowNamingSourceId = globalConfig.FlowNamingSourceManagementId ?? 0;
-            bool useManagementNamesForFlow = mgmFlowNamingSourceId == mgmId;
 
             // Process simple objects first, as they are used in groups and accesses
             await ProcessNetworkObjectsAsync(managementData.NetworkObjects.Where(o => o.Type.Name != ObjectType.Group), flowData, useManagementNamesForFlow);
@@ -120,7 +134,7 @@ namespace FWO.Services
             // Refresh flow data to include newly inserted groups
             flowData = await GetFlowSyncDataAsync(mgmId);
             // Finally, process accesses which reference all object types
-            await ProcessRulesAsync(managementData.Rules, flowData);
+            await ProcessRulesAsync(mgmId, managementData.Rules, flowData);
 
             // remove flow mappings from all normalized entries that are set to removed
             await apiConnection.SendQueryAsync<MutationResult>(FlowQueries.updateFlowMappingsForRemoved, new { mgmId });
@@ -207,7 +221,7 @@ namespace FWO.Services
                     NwObjHash = hash,
                     IpStart = obj.IP,
                     IpEnd = obj.IpEnd,
-                    State = "implemented",
+                    State = FlowState.Implemented,
                     RemovedDate = null,
                     ShowInRequestModule = true,
                     Name = useManagementNamesForFlow ? obj.Name : null
@@ -320,7 +334,7 @@ namespace FWO.Services
                     PortEnd = svc.DestinationPortEnd,
                     IpProtoId = svc.ProtoId!.Value,
                     SvcObjHash = hash,
-                    State = "implemented",
+                    State = FlowState.Implemented,
                     RemovedDate = null,
                     ShowInRequestModule = true
                 };
@@ -425,7 +439,7 @@ namespace FWO.Services
                     StartTime = timeObj.StartTime,
                     EndTime = timeObj.EndTime,
                     TimeObjHash = hash,
-                    State = "implemented",
+                    State = FlowState.Implemented,
                     RemovedDate = null,
                     ShowInRequestModule = true
                 };
@@ -535,7 +549,7 @@ namespace FWO.Services
                 {
                     Name = useManagementNamesForFlow ? group.Name : null,
                     NwGrpHash = hash,
-                    State = "implemented",
+                    State = FlowState.Implemented,
                     RemovedDate = null,
                     ShowInRequestModule = true,
                     NwGroupMembers = new FlowNwGroupInsertMembersContainer
@@ -649,7 +663,7 @@ namespace FWO.Services
                 {
                     SvcGrpHash = hash,
                     Name = useManagementNamesForFlow ? group.Name : null,
-                    State = "implemented",
+                    State = FlowState.Implemented,
                     RemovedDate = null,
                     ShowInRequestModule = true,
                     SvcGroupMembers = new FlowSvcGroupInsertMembersContainer
@@ -692,7 +706,7 @@ namespace FWO.Services
         /// <summary>
         /// Inserts missing flow accesses and updates normalized rule mappings.
         /// </summary>
-        private async Task ProcessRulesAsync(IEnumerable<Rule> rules, FlowSyncFlowData flowData)
+        private async Task ProcessRulesAsync(int mgmId, IEnumerable<Rule> rules, FlowSyncFlowData flowData)
         {
             Dictionary<string, FlowAccessInsert> pendingAccessInserts = [];
             Dictionary<string, List<FlowRuleMappingUpdate>> newFlowMappings = [];
@@ -720,7 +734,7 @@ namespace FWO.Services
                     newFlowMappings.GetValueOrDefault(inserted.Hash, []).ForEach(m => m.FlowId = inserted.Id);
                 }
 
-                Log.WriteInfo(LogMessageTitle, $"Inserted {insertedAccesses.Count} new flow accesses for management. Skipped: {skippedRules}.");
+                Log.WriteInfo(LogMessageTitle, $"Inserted {insertedAccesses.Count} new flow accesses for management {mgmId}. Skipped: {skippedRules}.");
             }
 
             // update normalized rules with flow mappings
@@ -738,7 +752,7 @@ namespace FWO.Services
 
                 var updateCount = await SendUpdateManyAsync(FlowQueries.updateRuleFlowMappings, updates);
 
-                Log.WriteInfo(LogMessageTitle, $"Updated flow mappings for {updateCount} rules");
+                Log.WriteInfo(LogMessageTitle, $"Updated flow mappings for {updateCount} rules in management {mgmId}");
             }
         }
 
@@ -910,6 +924,7 @@ namespace FWO.Services
             {
                 if (!TryAddRuleNetworkLocation(location.Object, flowData, sourceIds, sourceGroupIds, sourceHashes))
                 {
+                    Log.WriteDebug(LogMessageTitle, $"Skipping rule {rule.Id} because source object {location.Object.Id} does not have a valid hash and cannot be added to the flow access.");
                     return false;
                 }
             }
@@ -918,6 +933,7 @@ namespace FWO.Services
             {
                 if (!TryAddRuleNetworkLocation(location.Object, flowData, destinationIds, destinationGroupIds, destinationHashes))
                 {
+                    Log.WriteDebug(LogMessageTitle, $"Skipping rule {rule.Id} because destination object {location.Object.Id} does not have a valid hash and cannot be added to the flow access.");
                     return false;
                 }
             }
@@ -926,17 +942,20 @@ namespace FWO.Services
             {
                 if (!TryAddRuleService(wrapper.Content, flowData, serviceIds, serviceGroupIds, serviceHashes))
                 {
+                    Log.WriteDebug(LogMessageTitle, $"Skipping rule {rule.Id} because service object {wrapper.Content.Id} does not have a valid hash and cannot be added to the flow access.");
                     return false;
                 }
             }
 
             if (sourceHashes.Count == 0 || destinationHashes.Count == 0 || serviceHashes.Count == 0)
             {
+                Log.WriteDebug(LogMessageTitle, $"Skipping rule {rule.Id} because one or more required objects do not have valid hashes.");
                 return false;
             }
 
             if (!TryAddRuleTimeObjects(rule.RuleTimes, flowData, timeIds))
             {
+                Log.WriteDebug(LogMessageTitle, $"Skipping rule {rule.Id} because time objects do not have valid hashes and cannot be added to the flow access.");
                 return false;
             }
 
@@ -962,15 +981,15 @@ namespace FWO.Services
                     AccessHash = accessHash,
                     RequesterId = null,
                     OwnerId = rule.OwnerId,
-                    State = "implemented",
+                    State = FlowState.Implemented,
                     RemovedDate = null,
-                    AccessSources = BuildAccessMembersContainer(sourceIds.Select(id => new NwRef { NwObjId = id })),
-                    AccessSourceGroups = BuildAccessMembersContainer(sourceGroupIds.Select(id => new NwGroupRef { NwGroupId = id })),
-                    AccessDestinations = BuildAccessMembersContainer(destinationIds.Select(id => new NwRef { NwObjId = id })),
-                    AccessDestinationGroups = BuildAccessMembersContainer(destinationGroupIds.Select(id => new NwGroupRef { NwGroupId = id })),
-                    AccessServices = BuildAccessMembersContainer(serviceIds.Select(id => new SvcRef { SvcObjId = id })),
-                    AccessServiceGroups = BuildAccessMembersContainer(serviceGroupIds.Select(id => new SvcGroupRef { SvcGroupId = id })),
-                    AccessTimeObjects = BuildAccessMembersContainer(timeIds.Select(id => new TimeRef { TimeObjId = id }))
+                    AccessSources = FlowAccessInsertHelper.BuildMembersContainer(sourceIds.Select(id => new NwRef { NwObjId = id })),
+                    AccessSourceGroups = FlowAccessInsertHelper.BuildMembersContainer(sourceGroupIds.Select(id => new NwGroupRef { NwGroupId = id })),
+                    AccessDestinations = FlowAccessInsertHelper.BuildMembersContainer(destinationIds.Select(id => new NwRef { NwObjId = id })),
+                    AccessDestinationGroups = FlowAccessInsertHelper.BuildMembersContainer(destinationGroupIds.Select(id => new NwGroupRef { NwGroupId = id })),
+                    AccessServices = FlowAccessInsertHelper.BuildMembersContainer(serviceIds.Select(id => new SvcRef { SvcObjId = id })),
+                    AccessServiceGroups = FlowAccessInsertHelper.BuildMembersContainer(serviceGroupIds.Select(id => new SvcGroupRef { SvcGroupId = id })),
+                    AccessTimeObjects = FlowAccessInsertHelper.BuildMembersContainer(timeIds.Select(id => new TimeRef { TimeObjId = id }))
                 };
 
                 pendingAccessInserts.Add(accessHash, accessInsert);
@@ -1102,15 +1121,6 @@ namespace FWO.Services
             }
 
             return true;
-        }
-
-        /// <summary>
-        /// Wraps access member inserts into a container for the mutation input.
-        /// </summary>
-        private static FlowAccessInsertMembersContainer BuildAccessMembersContainer<T>(IEnumerable<T> items) where T : class
-        {
-            var list = items.ToList();
-            return new FlowAccessInsertMembersContainer { Data = [.. list.Cast<object>()] };
         }
 
         /// <summary>

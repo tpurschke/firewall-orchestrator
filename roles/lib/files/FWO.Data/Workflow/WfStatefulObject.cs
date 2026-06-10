@@ -1,5 +1,6 @@
 using FWO.Basics;
 using Newtonsoft.Json;
+using System.Net;
 using System.Text.Json.Serialization;
 
 namespace FWO.Data.Workflow
@@ -44,6 +45,7 @@ namespace FWO.Data.Workflow
         private int stateId;
         private int oldStateId;
         private bool stateChanged = false;
+        private bool stateChangedByCreation = false;
         private string? optComment;
 
         public string? OptComment()
@@ -66,10 +68,24 @@ namespace FWO.Data.Workflow
             return oldStateId;
         }
 
+        public bool StateChangedByCreation()
+        {
+            return stateChangedByCreation;
+        }
+
+        public void MarkCreatedStateChanged(int newStateId)
+        {
+            StateId = 0;
+            ResetStateChanged();
+            StateId = newStateId;
+            stateChangedByCreation = true;
+        }
+
         public void ResetStateChanged()
         {
             oldStateId = stateId;
             stateChanged = false;
+            stateChangedByCreation = false;
         }
 
         public WfStatefulObject()
@@ -80,6 +96,7 @@ namespace FWO.Data.Workflow
             stateId = obj.stateId;
             oldStateId = obj.oldStateId;
             stateChanged = obj.stateChanged;
+            stateChangedByCreation = obj.stateChangedByCreation;
             optComment = obj.optComment;
             CurrentHandler = obj.CurrentHandler;
             RecentHandler = obj.RecentHandler;
@@ -99,9 +116,11 @@ namespace FWO.Data.Workflow
             string allComments = "";
             foreach (var comment in Comments)
             {
+                string creatorName = asMarkup ? WebUtility.HtmlEncode(comment.Comment.Creator.Name) : comment.Comment.Creator.Name;
+                string commentText = asMarkup ? WebUtility.HtmlEncode(comment.Comment.CommentText) : comment.Comment.CommentText;
                 allComments += comment.Comment.CreationDate.ToShortDateString() + " "
-                            + comment.Comment.Creator.Name + ": "
-                            + comment.Comment.CommentText + (asMarkup ? "<br>" : "\r\n");
+                            + creatorName + ": "
+                            + commentText + (asMarkup ? "<br>" : "\r\n");
             }
             return allComments;
         }
