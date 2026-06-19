@@ -304,7 +304,6 @@ def _create_normalized_rule_from_access_rule(rule: OPNsenseAccessRule) -> RuleNo
     rule_name = rule.description or ""
 
     return RuleNormalized(
-        rule_num=0,
         rule_num_numeric=0,
         rule_disabled=rule.disabled,
         rule_src_neg=rule.source_neg,
@@ -558,7 +557,7 @@ def _upsert_rulebase_rule(
 
 def _create_rulebases_from_access_rules(os_config: OPNsenseConfig, mgm_uid: str) -> list[Rulebase]:
     rbs_dict: dict[str, Rulebase] = {}
-    rule_num = 0
+    rule_order = 0
 
     for rule in os_config.access_rules:
         r_normalized = _create_normalized_rule_from_access_rule(rule)
@@ -567,9 +566,8 @@ def _create_rulebases_from_access_rules(os_config: OPNsenseConfig, mgm_uid: str)
             FWOLogger.warning(f"[*] skipping OPNsense rule without uid:\n    {rule}")
             continue
         # update rule priority
-        r_normalized.rule_num = int(rule_num)
-        r_normalized.rule_num_numeric = float(rule_num)
-        rule_num += RULE_NUM_NUMERIC_STEPS
+        r_normalized.rule_num_numeric = float(rule_order)
+        rule_order += RULE_NUM_NUMERIC_STEPS
         rulebase_name = _access_rule_rulebase_name(rule, os_config)
         if rulebase_name is not None:
             _upsert_rulebase_rule(rbs_dict, rulebase_name, mgm_uid, rule_uid, r_normalized)

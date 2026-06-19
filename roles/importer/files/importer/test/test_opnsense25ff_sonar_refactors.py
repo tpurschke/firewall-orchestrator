@@ -85,5 +85,5 @@ def test_create_rulebases_from_access_rules_groups_expected_rules() -> None:
     assert set(rulebases) == {"floating", "lan_group"}
     assert set(rulebases["floating"].rules) == {"floating-rule-uid"}
     assert set(rulebases["lan_group"].rules) == {"grouped-rule-uid"}
-    assert rulebases["floating"].rules["floating-rule-uid"].rule_num == 0
-    assert rulebases["lan_group"].rules["grouped-rule-uid"].rule_num == 2 * RULE_NUM_NUMERIC_STEPS
+    assert rulebases["floating"].rules["floating-rule-uid"].rule_num_numeric == 0
+    assert rulebases["lan_group"].rules["grouped-rule-uid"].rule_num_numeric == 2 * RULE_NUM_NUMERIC_STEPS
