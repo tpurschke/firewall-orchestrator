@@ -329,7 +329,7 @@
 
     private async Task CheckImplTasks()
     {
-        List<Device> foundDevices = await PathAnalysis.GetAllDevices(WfHandler.ActReqTask.Elements, apiConnection);
+        List<Device> foundDevices = await PathAnalysis.GetAllDevices(WfHandler.ActReqTask.Elements, apiConnection, userConfig.PathAnalysisMode);
         deviceCheck = [];
         foreach(var dev in foundDevices)
         {

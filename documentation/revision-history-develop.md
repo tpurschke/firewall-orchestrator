@@ -472,3 +472,9 @@ This PR hardens FWO installation and security-sensitive workflows. It restricts 
 
 # 9.1.11 - 24.06.2026 DEVELOP
 - fix: rule_owner_mapping - standardize constraint name
+
+# 9.4 - 26.06.2026 DEVELOP
+- add static path analysis import based on converted TSQ JSON data
+- add gateway device mapping with import alerts for unmapped path analysis gateways
+- add path analysis settings page for static import and gateway routing table modes
+- add REST endpoint for importing converted path analysis JSON data

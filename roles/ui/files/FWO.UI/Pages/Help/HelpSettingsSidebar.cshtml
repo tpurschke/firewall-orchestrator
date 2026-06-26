@@ -64,6 +64,9 @@
                 <a class="nav-link" href="/help/settings/compliance/?lang=@($"{userConfig.GetUserLanguage()}")">
                     <span class="@Icons.Compliance"></span> @(userConfig.GetText("compliance"))
                 </a>
+                <a class="nav-link" href="/help/settings/modules/pathanalysis/?lang=@($"{userConfig.GetUserLanguage()}")">
+                    <span class="@Icons.Network"></span> @(userConfig.GetText("path_analysis"))
+                </a>
                 <p></p>
                 <h5>@(userConfig.GetText("workflow"))</h5>
                 <a class="nav-link" href="/help/settings/stateactions/?lang=@($"{userConfig.GetUserLanguage()}")">

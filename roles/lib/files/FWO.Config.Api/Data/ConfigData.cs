@@ -274,6 +274,9 @@ namespace FWO.Config.Api.Data
         [JsonProperty("reqActivatePathAnalysis"), JsonPropertyName("reqActivatePathAnalysis")]
         public bool ReqActivatePathAnalysis { get; set; } = true;
 
+        [JsonProperty("pathAnalysisMode"), JsonPropertyName("pathAnalysisMode")]
+        public PathAnalysisMode PathAnalysisMode { get; set; } = PathAnalysisMode.GatewayRoutingTable;
+
         [JsonProperty("reqShowCompliance"), JsonPropertyName("reqShowCompliance")]
         public bool ReqShowCompliance { get; set; } = false;
 
@@ -342,6 +345,15 @@ namespace FWO.Config.Api.Data
 
         [JsonProperty("importSubnetDataStartAt"), JsonPropertyName("importSubnetDataStartAt")]
         public DateTime ImportSubnetDataStartAt { get; set; } = DateTime.Now;
+
+        [JsonProperty("importPathAnalysisDataPath"), JsonPropertyName("importPathAnalysisDataPath")]
+        public string ImportPathAnalysisDataPath { get; set; } = "[]";
+
+        [JsonProperty("importPathAnalysisDataSleepTime"), JsonPropertyName("importPathAnalysisDataSleepTime")]
+        public int ImportPathAnalysisDataSleepTime { get; set; } = 0;
+
+        [JsonProperty("importPathAnalysisDataStartAt"), JsonPropertyName("importPathAnalysisDataStartAt")]
+        public DateTime ImportPathAnalysisDataStartAt { get; set; } = DateTime.Now;
 
         [JsonProperty("modNamingConvention"), JsonPropertyName("modNamingConvention")]
         public string ModNamingConvention { get; set; } = "";

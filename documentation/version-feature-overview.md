@@ -211,3 +211,9 @@ For a feature-centric, thematically grouped view see
 - Importer/customizing-script HTTP calls now use connect/read timeouts.
 - FortiOS (REST) VIP/destination-NAT objects normalized to their external IP.
 - Explicit `[Authorize]` on the password-change REST endpoint.
+
+### 9.4 — 26.06.2026 (DEVELOP)
+- Static path analysis import from converted TSQ JSON data.
+- Gateway device mapping with alerts for unmapped gateways.
+- Path analysis settings page for import mode configuration.
+- REST endpoint for converted path analysis JSON imports.

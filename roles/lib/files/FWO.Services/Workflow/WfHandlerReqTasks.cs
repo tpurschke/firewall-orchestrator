@@ -382,7 +382,7 @@ namespace FWO.Services.Workflow
                     case PathAnalysisOptions.WriteToDeviceList:
                         if (apiConnection != null)
                         {
-                            ActReqTask.SetDeviceList(await PathAnalysis.GetAllDevices(ActReqTask.Elements, apiConnection));
+                            ActReqTask.SetDeviceList(await PathAnalysis.GetAllDevices(ActReqTask.Elements, apiConnection, userConfig.PathAnalysisMode));
                         }
                         break;
                     case PathAnalysisOptions.DisplayFoundDevices:

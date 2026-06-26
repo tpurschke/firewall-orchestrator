@@ -77,6 +77,7 @@ insert into config (config_key, config_value, config_user) VALUES ('reqUseFlowDb
 insert into config (config_key, config_value, config_user) VALUES ('reqFlowIntegration', '{"select_objects":"Both","select_services":"Both","select_time_objects":"Both","time_object_precision":"seconds"}', 0);
 insert into config (config_key, config_value, config_user) VALUES ('reqAllowManualOwnerAdmin', 'False', 0);
 insert into config (config_key, config_value, config_user) VALUES ('reqActivatePathAnalysis', 'True', 0);
+insert into config (config_key, config_value, config_user) VALUES ('pathAnalysisMode', 'GatewayRoutingTable', 0);
 insert into config (config_key, config_value, config_user) VALUES ('reqShowCompliance', 'False', 0);
 insert into config (config_key, config_value, config_user) VALUES ('unusedTolerance', '400', 0);
 insert into config (config_key, config_value, config_user) VALUES ('creationTolerance', '90', 0);
@@ -89,6 +90,9 @@ insert into config (config_key, config_value, config_user) VALUES ('importSubnet
 insert into config (config_key, config_value, config_user) VALUES ('importSubnetDataSleepTime', '0', 0);
 insert into config (config_key, config_value, config_user) VALUES ('importAppDataPath', '[]', 0);
 insert into config (config_key, config_value, config_user) VALUES ('importSubnetDataPath', '[]', 0);
+insert into config (config_key, config_value, config_user) VALUES ('importPathAnalysisDataStartAt', '00:00:00', 0);
+insert into config (config_key, config_value, config_user) VALUES ('importPathAnalysisDataSleepTime', '0', 0);
+insert into config (config_key, config_value, config_user) VALUES ('importPathAnalysisDataPath', '[]', 0);
 insert into config (config_key, config_value, config_user) VALUES ('modNamingConvention', '{"networkAreaRequired":false,"useAppPart":false,"fixedPartLength":0,"freePartLength":0,"networkAreaPattern":"","appRolePattern":""}', 0);
 insert into config (config_key, config_value, config_user) VALUES ('modCommonAreas', '[]', 0);
 insert into config (config_key, config_value, config_user) VALUES ('modAppServerTypes', '[{"Id":0,"Name":"Default"}]', 0);

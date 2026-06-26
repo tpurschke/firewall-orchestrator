@@ -254,7 +254,7 @@ namespace FWO.Services.Workflow
         {
             if (apiConnection != null)
             {
-                foreach (var device in await PathAnalysis.GetAllDevices(reqTask.Elements, apiConnection))
+                foreach (var device in await PathAnalysis.GetAllDevices(reqTask.Elements, apiConnection, userConfig.PathAnalysisMode))
                 {
                     if (reqTask.ImplementationTasks.FirstOrDefault(x => x.DeviceId == device.Id) == null)
                     {

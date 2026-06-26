@@ -41,6 +41,7 @@ namespace FWO.Basics
         public const string kImportAppData = "importAppData";
         public const string kAdjustAppServerNames = "adjustAppServerNames";
         public const string kImportAreaSubnetData = "importAreaSubnetData";
+        public const string kImportPathAnalysisData = "importPathAnalysisData";
         public const string kImportZoneMatrixData = "importZoneMatrixData";
         public const string kVarianceAnalysis = "varianceAnalysis";
         public const string kManual = "manual";

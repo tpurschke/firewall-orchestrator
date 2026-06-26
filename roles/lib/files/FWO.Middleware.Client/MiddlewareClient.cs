@@ -1,4 +1,5 @@
 using FWO.Api.Client;
+using FWO.Data;
 using FWO.Data.Middleware;
 using RestSharp;
 
@@ -285,6 +286,13 @@ namespace FWO.Middleware.Client
             RestRequest request = new("Scheduler/Run", Method.Post);
             request.AddJsonBody(parameters);
             return await restClient.ExecuteAsync<bool>(request);
+        }
+
+        public async Task<RestResponse<PathAnalysisImportResult>> ImportPathAnalysisData(PathAnalysisImportParameters parameters)
+        {
+            RestRequest request = new("PathAnalysis/Import", Method.Post);
+            request.AddJsonBody(parameters);
+            return await restClient.ExecuteAsync<PathAnalysisImportResult>(request);
         }
 
         public async Task<RestResponse<bool>> RunComplianceCheck()

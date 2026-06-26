@@ -1,0 +1,10 @@
+subscription subscribeImportPathAnalysisDataConfigChanges {
+  config (where: { _or: [
+    {config_key: {_eq: "importPathAnalysisDataSleepTime"}},
+    {config_key: {_eq: "importPathAnalysisDataStartAt"}},
+    {config_key: {_eq: "importPathAnalysisDataPath"}}
+    ]}){
+      config_key
+      config_value
+  }
+}

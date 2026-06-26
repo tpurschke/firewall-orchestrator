@@ -1,0 +1,198 @@
+@page "/settings/modules/pathanalysis"
+
+@using System.Text.Json
+@using FWO.Basics
+@using FWO.Data
+@using FWO.Logging
+
+@attribute [Authorize(Roles = $"{Roles.Admin}, {Roles.Auditor}")]
+
+@inject GlobalConfig globalConfig
+@inject UserConfig userConfig
+
+<div class="input-group">
+    <h3>@(userConfig.GetText("path_analysis"))</h3>
+    <HelpLink Page="settings/modules/pathanalysis" />
+</div>
+<hr />
+
+@if (configData != null)
+{
+    <form onsubmit="return false">
+        <div class="form-group row mt-2" data-toggle="tooltip" title="@(userConfig.PureLine("H5683"))">
+            <label class="col-form-label col-sm-4">@userConfig.GetText("pathAnalysisMode"):</label>
+            <div class="col-sm-4">
+                <Dropdown ElementType="PathAnalysisMode" ElementToString="GetPathAnalysisModeText"
+                          SelectedElement="@configData.PathAnalysisMode"
+                          SelectedElementChanged="@(mode => { configData.PathAnalysisMode = mode; StateHasChanged(); })"
+                          Elements="PathAnalysisModes">
+                    <ElementTemplate Context="mode">
+                        @GetPathAnalysisModeText(mode)
+                    </ElementTemplate>
+                </Dropdown>
+            </div>
+        </div>
+        @if (configData.PathAnalysisMode == PathAnalysisMode.StaticImport)
+        {
+            <hr />
+            <div class="form-group row" data-toggle="tooltip" title="@(userConfig.PureLine("H5680"))">
+                <label class="col-form-label col-sm-4">@userConfig.GetText("importPathAnalysisDataPath"):</label>
+                <div class="col-sm-6">
+                    <EditList ElementType="string" Elements="PathAnalysisDataPaths.ToArray()" ElementsToAdd="PathsToAdd"
+                              ElementsToDelete="PathsToDelete" StdLayout="false">
+                        <Display>
+                            <div class="row">
+                                <div class="col-sm-12 border bg-transparent">@context</div>
+                            </div>
+                        </Display>
+                    </EditList>
+                    <div class="row col-sm-12 mt-1">
+                        <input type="text" class="col-sm-10" @bind="ActPath" placeholder="@(ImportPathPolicy.kAllowedCustomizationRoot)/..." />
+                        <button type="button" class="col-sm-2 btn btn-sm btn-primary" disabled="@(string.IsNullOrWhiteSpace(ActPath))" @onclick="AddPath"
+                                @onclick:preventDefault>@(DisplayService.DisplayButton(userConfig, "add", Icons.Add))</button>
+                    </div>
+                </div>
+            </div>
+            <div class="form-group row mt-2" data-toggle="tooltip" title="@(userConfig.PureLine("H5681"))">
+                <label class="col-form-label col-sm-4">@(userConfig.GetText("importPathAnalysisDataSleepTime")):</label>
+                <input type="number" min="0" class="col-sm-2" @bind="configData.ImportPathAnalysisDataSleepTime" />
+            </div>
+            <div class="form-group row mt-2" data-toggle="tooltip" title="@(userConfig.PureLine("H5682"))">
+                <label class="col-form-label col-sm-4">@(userConfig.GetText("importPathAnalysisDataStartAt")):</label>
+                <input type="time" step="60" class="col-sm-2" @bind="PathAnalysisDataTime" />
+                <input type="date" class="col-sm-2" @bind="PathAnalysisDataDate" />
+            </div>
+        }
+    </form>
+    <hr />
+    <ExecutionModeAuthorizeView Roles="@Roles.Admin">
+        <Authorized>
+            <button type="button" class="btn btn-sm btn-primary" @onclick="Save"
+                    @onclick:preventDefault>@(DisplayService.DisplayButton(userConfig, "save", Icons.Save))</button>
+        </Authorized>
+        <NotAuthorized>
+            <button type="button" class="btn btn-sm btn-primary" disabled>@(DisplayService.DisplayButton(userConfig, "save", Icons.Save))</button>
+        </NotAuthorized>
+    </ExecutionModeAuthorizeView>
+}
+else
+{
+    <Loading />
+}
+
+@code {
+    [CascadingParameter]
+    Action<Exception?, string, string, bool> DisplayMessageInUi { get; set; } = DefaultInit.DoNothing;
+
+    [Inject]
+    private ApiConnection apiConnection { get; set; } = default!;
+
+    private ConfigData? configData;
+    private List<PathAnalysisMode> PathAnalysisModes = [PathAnalysisMode.GatewayRoutingTable, PathAnalysisMode.StaticImport];
+    private List<string> PathAnalysisDataPaths = [];
+    private List<string> PathsToAdd = [];
+    private List<string> PathsToDelete = [];
+    private string ActPath = "";
+    private DateTime PathAnalysisDataDate = DateTime.Today;
+    private DateTime PathAnalysisDataTime = DateTime.Now.AddSeconds(-DateTime.Now.Second);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            configData = await globalConfig.GetEditableConfig();
+            PathAnalysisDataPaths = JsonSerializer.Deserialize<List<string>>(configData.ImportPathAnalysisDataPath) ?? [];
+            PathAnalysisDataDate = PathAnalysisDataTime = configData.ImportPathAnalysisDataStartAt;
+        }
+        catch (Exception exception)
+        {
+            DisplayMessageInUi(exception, userConfig.GetText("read_config"), userConfig.GetText("E5301"), false);
+        }
+    }
+
+    private void AddPath()
+    {
+        if (!string.IsNullOrWhiteSpace(ActPath))
+        {
+            PathsToAdd.Add(ActPath);
+            ActPath = "";
+        }
+    }
+
+    private async Task Save()
+    {
+        try
+        {
+            if (configData == null)
+            {
+                throw new ArgumentException("Data saved before loaded. This should be impossible.");
+            }
+
+            string oldMode = globalConfig.PathAnalysisMode.ToString();
+            string oldPath = globalConfig.ImportPathAnalysisDataPath;
+            PrepareConfigData();
+            await globalConfig.WriteToDatabase(configData, apiConnection);
+            WriteAudit(oldMode, oldPath);
+            PathsToDelete = [];
+            PathsToAdd = [];
+            DisplayMessageInUi(null, userConfig.GetText("path_analysis"), userConfig.GetText("U5301"), false);
+        }
+        catch (Exception exception)
+        {
+            DisplayMessageInUi(exception, userConfig.GetText("path_analysis"), "", true);
+        }
+    }
+
+    private void PrepareConfigData()
+    {
+        foreach (string path in PathsToDelete)
+        {
+            PathAnalysisDataPaths.Remove(path);
+        }
+        foreach (string path in PathsToAdd)
+        {
+            PathAnalysisDataPaths.Add(ImportPathPolicy.RemoveAllowedExtension(path));
+        }
+        ValidateImportPaths(PathAnalysisDataPaths);
+        configData!.ImportPathAnalysisDataPath = JsonSerializer.Serialize(PathAnalysisDataPaths);
+        configData.ImportPathAnalysisDataStartAt = PathAnalysisDataDate.Date.Add(PathAnalysisDataTime.TimeOfDay);
+    }
+
+    private static void ValidateImportPaths(List<string> importPaths)
+    {
+        foreach (string importPath in importPaths)
+        {
+            ImportPathPolicy.ValidateImportSourceShape(importPath);
+        }
+    }
+
+    private string GetPathAnalysisModeText(PathAnalysisMode mode)
+    {
+        return userConfig.GetText($"pathAnalysisMode_{mode}");
+    }
+
+    private void WriteAudit(string oldMode, string oldPath)
+    {
+        List<string> changes = [];
+        AddSettingChange(changes, nameof(ConfigData.PathAnalysisMode), oldMode, configData!.PathAnalysisMode.ToString());
+        AddSettingChange(changes, nameof(ConfigData.ImportPathAnalysisDataPath), oldPath, configData.ImportPathAnalysisDataPath);
+        if (changes.Count == 0)
+        {
+            return;
+        }
+
+        Log.WriteAudit(
+            Title: "Path Analysis Settings",
+            Text: $"Path analysis settings changed at {DateTimeOffset.Now:O}: {string.Join("; ", changes)}",
+            UserName: userConfig.User.Name,
+            UserDN: userConfig.User.Dn);
+    }
+
+    private static void AddSettingChange(List<string> changes, string settingName, string oldValue, string newValue)
+    {
+        if (oldValue != newValue)
+        {
+            changes.Add($"{settingName}: '{oldValue}' -> '{newValue}'");
+        }
+    }
+}

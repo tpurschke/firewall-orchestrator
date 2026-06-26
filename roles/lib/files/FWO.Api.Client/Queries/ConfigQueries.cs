@@ -22,6 +22,7 @@ namespace FWO.Api.Client.Queries
         public static readonly string subscribeDailyCheckConfigChanges;
         public static readonly string subscribeImportAppDataConfigChanges;
         public static readonly string subscribeImportIpDataConfigChanges;
+        public static readonly string subscribeImportPathAnalysisDataConfigChanges;
         public static readonly string subscribeImportNotifyConfigChanges;
         public static readonly string subscribeVarianceAnalysisConfigChanges;
         public static readonly string subscribeComplianceCheckConfigChanges;
@@ -51,6 +52,7 @@ namespace FWO.Api.Client.Queries
                 subscribeDailyCheckConfigChanges = GetQueryText("config/subscribeDailyCheckConfigChanges.graphql");
                 subscribeImportAppDataConfigChanges = GetQueryText("config/subscribeImportAppDataConfigChanges.graphql");
                 subscribeImportIpDataConfigChanges = GetQueryText("config/subscribeImportSubnetDataConfigChanges.graphql");
+                subscribeImportPathAnalysisDataConfigChanges = GetQueryText("config/subscribeImportPathAnalysisDataConfigChanges.graphql");
                 subscribeImportNotifyConfigChanges = GetQueryText("config/subscribeImportNotifyConfigChanges.graphql");
                 subscribeVarianceAnalysisConfigChanges = GetQueryText("config/subscribeVarianceAnalysisConfigChanges.graphql");
                 subscribeComplianceCheckConfigChanges = GetQueryText("config/subscribeComplianceCheckConfigChanges.graphql");

@@ -72,7 +72,7 @@
         string result = "";
         if (CheckIpAdresses(source, destination))
         {
-            result = await PathAnalysis.GetDeviceNamesForSinglePath(source, destination, apiConnection);
+            result = await PathAnalysis.GetDeviceNamesForSinglePath(source, destination, apiConnection, userConfig.PathAnalysisMode);
         }
         workInProgress = false;
         return result;
