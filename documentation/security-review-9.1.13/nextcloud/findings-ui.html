@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>findings-ui</title>
+<style>body{font-family:sans-serif;max-width:60em;margin:2em auto;padding:0 1em;line-height:1.5;color:#222}table{border-collapse:collapse;margin:1em 0;width:auto}th,td{border:1px solid #888;padding:4px 10px;text-align:left;vertical-align:top}th{background:#f0f0f0}code{background:#f4f4f4;padding:1px 4px;border-radius:3px;font-family:monospace;font-size:.9em}h1,h2,h3,h4{line-height:1.25}hr{border:0;border-top:1px solid #ccc;margin:2em 0}</style>
+</head>
+<body>
+<h1>Security Review — UI Role (FWO 9.1.13)</h1>
+<h2>Summary</h2>
+<p>The FWO UI (Blazor Server, <code>roles/ui/files/FWO.UI</code>) is, on balance, a solidly engineered front-end with several strong security controls: JWTs are cryptographically validated before claims are trusted (<code>AuthStateProvider.ApplyJwtAsync</code>), the <code>importer</code> and <code>anonymous</code> roles are explicitly rejected at UI login, access/refresh tokens are persisted with ASP.NET Core <code>ProtectedBrowserStorage</code> (encrypted, server-keyed — never plain <code>localStorage</code>), a dedicated <code>UrlSanitizerMiddleware</code> blocks unsafe/absolute redirect URLs, JS interop contains no <code>eval</code>/<code>innerHTML</code> sinks, and no hardcoded secrets, <code>Process.Start</code>, reflection, or <code>BinaryFormatter</code> usage exist in the role. Page-level authorization is applied via <code>@attribute [Authorize(Roles=…)]</code> on privileged pages, and ultimate data-access authorization is enforced server-side by Hasura permissions bound to the JWT (the UI is a thin client), so the few pages without a page-level attribute do not by themselves grant privileged data access.</p>
+<p>The one recurring weakness is <strong>output encoding</strong>: user- and firewall-import-controlled strings (network-object/rule names, workflow comments, connection reasons, admin-editable config texts) are rendered to the DOM via <code>@((MarkupString)…)</code> / <code>new MarkupString(…)</code> without HTML-encoding at the render site. The codebase relies instead on *input-time* allowlist sanitizers (<code>StringExtensions.SanitizeMand</code>, <code>SanitizeCommentMand</code>) which — critically — permit the <code>&lt;</code> and <code>&gt;</code> characters. Practical exploitation is constrained (the sanitizers strip <code>=</code>, <code>&quot;</code> and <code>&#x27;</code>, and DOM-inserted <code>&lt;script&gt;</code> does not execute in modern browsers), so this is a markup-injection / defense-in-depth defect rather than a slam-dunk stored XSS. Several render sites already do encode correctly (<code>MonitorScheduler</code>, <code>RequestFwChangePopup.DisplayTitle</code>, <code>WfStatefulObject.DisplayAllComments</code>), making the omissions inconsistent rather than systematic.</p>
+<table>
+<thead><tr><th>Severity</th><th>Count</th></tr></thead>
+<tbody>
+<tr><td>Critical</td><td>0</td></tr>
+<tr><td>High</td><td>0</td></tr>
+<tr><td>Medium</td><td>2</td></tr>
+<tr><td>Low</td><td>3</td></tr>
+<tr><td>Informational</td><td>3</td></tr>
+</tbody></table>
+<h2>Findings</h2>
+<h3>[MEDIUM] Import-controlled rule / object names rendered as raw HTML in reports</h3>
+<ul>
+<li><strong>ID:</strong> UI-01</li>
+<li><strong>Category:</strong> XSS / Output Encoding (stored, constrained)</li>
+<li><strong>Location:</strong> <code>roles/ui/files/FWO.UI/Pages/Reporting/Reports/ComplianceReport.razor:51</code> (and <code>:24,33,42,60,79,97,115,133,142,169</code>); <code>roles/ui/files/FWO.UI/Pages/Reporting/ReportedRules.razor:108,121,126</code>; <code>roles/ui/files/FWO.UI/Pages/Reporting/Reports/RulesReport.razor:121,139,148</code>; <code>roles/ui/files/FWO.UI/Pages/NetworkModelling/ManualAppServer.razor:60</code>; <code>roles/ui/files/FWO.UI/Pages/NetworkModelling/SearchNwObject.razor:38</code>; <code>roles/ui/files/FWO.UI/Pages/NetworkModelling/EditConn.razor</code> (numerous <code>DisplayWithIcon()</code> sites)</li>
+<li><strong>Description:</strong> These pages emit report/object display strings via <code>@((MarkupString)…)</code>. The underlying helpers return values verbatim with no HTML encoding — <code>RuleDisplayBase.DisplayName(Rule)</code> returns <code>rule.Name ?? &quot;&quot;</code> (<code>roles/lib/files/FWO.Report/Display/RuleDisplayBase.cs:86</code>), <code>RuleViewData.Name/Comment/ViolationDetails</code> are raw (<code>roles/lib/files/FWO.Report/Data/ViewData/RuleViewData.cs:57,67,70</code>), and <code>ModellingObject.DisplayHtml()</code> wraps <code>Display()</code> (containing object <code>Name</code>) in a <code>&lt;span&gt;</code> without encoding (<code>roles/lib/files/FWO.Data/Modelling/ModellingObject.cs:41</code>). Rule/object names/zones/comments originate from <strong>firewall device configs ingested by the importer</strong> and from <strong>CSV app-server imports</strong> (<code>FileUploadService.cs</code>), neither of which HTML-encodes. The modelling write path calls <code>Sanitize()</code>, but the sanitizer (<code>roles/lib/files/FWO.Basics/StringExtensionsSanitizer.cs:199</code>, <code>StandardSanitizationRegex = [^\w\.\*\-\:\?@/\(\)\[\]\{\}\$\+&lt;&gt;#\$ ]</code>) is an allowlist that <strong>retains <code>&lt;</code>, <code>&gt;</code>, <code>/</code>, <code>(</code>, <code>)</code></strong> and only removes <code>=</code>, <code>&quot;</code>, <code>&#x27;</code>.</li>
+<li><strong>Impact:</strong> An actor who can influence a firewall object/rule name (or upload a crafted CSV, or is a low-privilege modeller) can inject HTML markup rendered in the browser of any reviewer/auditor/admin opening the report — UI redressing, content spoofing, phishing links. Full script execution is blocked in practice because <code>=</code>/quotes are stripped and DOM-inserted <code>&lt;script&gt;</code> does not run (hence Medium, not High). Blast radius is cross-role (report author → report reader).</li>
+<li><strong>Recommendation:</strong> Encode at render time — render plain text as <code>@value</code> instead of <code>@((MarkupString)value)</code>, or <code>WebUtility.HtmlEncode(...)</code> before building the <code>MarkupString</code> (as already done in <code>MonitorScheduler.razor:77</code>). Where a <code>Display*</code> helper must emit markup, encode the interpolated data segments inside the helper. Do not rely on the input allowlist; at minimum drop <code>&lt;</code>/<code>&gt;</code> from <code>StandardSanitizationRegex</code>.</li>
+</ul>
+<h3>[MEDIUM] Workflow comments / connection reasons rendered as raw HTML</h3>
+<ul>
+<li><strong>ID:</strong> UI-02</li>
+<li><strong>Category:</strong> XSS / Output Encoding (stored, constrained)</li>
+<li><strong>Location:</strong> <code>roles/ui/files/FWO.UI/Pages/NetworkModelling/RequestFwChangePopup.razor:69</code> (via <code>DisplayTaskDetails</code>, concatenating <code>task.Comments.First().Comment.CommentText</code> unencoded); <code>roles/ui/files/FWO.UI/Pages/NetworkModelling/EditConn.razor:53</code> (<code>ConnHandler.ActConn.Reason</code> as <code>MarkupString</code>)</li>
+<li><strong>Description:</strong> <code>DisplayTaskDetails</code> builds an HTML string splicing raw <code>CommentText</code> between <code>&lt;br&gt;</code> separators, returned to the <code>MarkupString</code> at line 69. <code>EditConn.razor:53</code> renders a connection <code>Reason</code> verbatim. Both are user-supplied and sanitized only by <code>SanitizeCommentMand</code> (<code>StringExtensionsSanitizer.cs:111</code>, <code>CommentRegex = [&quot;&#x27;&#x27;]</code>) which strips only quotes — <code>&lt;</code>/<code>&gt;</code> pass through. The same file's <code>DisplayTitle</code> already encodes correctly, so this is inconsistent.</li>
+<li><strong>Impact:</strong> A workflow participant can inject markup into a ticket comment / connection reason later rendered for an approver/implementer/auditor. Script execution constrained by quote/<code>=</code> stripping; realistic impact is UI spoofing / content injection.</li>
+<li><strong>Recommendation:</strong> HTML-encode comment and reason before interpolation (reuse the <code>WebUtility.HtmlEncode</code> pattern from <code>DisplayTitle</code>), or render the reason as plain <code>@ConnHandler.ActConn.Reason</code>.</li>
+</ul>
+<h3>[LOW] Admin-editable localization / config texts rendered as raw HTML</h3>
+<ul>
+<li><strong>ID:</strong> UI-03</li>
+<li><strong>Category:</strong> XSS / Output Encoding (privileged-injection)</li>
+<li><strong>Location:</strong> <code>roles/ui/files/FWO.UI/Pages/Start.razor:14,17,18,20,21,23,24</code>; <code>roles/ui/files/FWO.UI/Pages/Reporting/ReportCreateTicket.razor:16</code>; <code>roles/ui/files/FWO.UI/Pages/NetworkModelling/RequestRecertPopup.razor:42</code> (<code>userConfig.ModRecertText</code>)</li>
+<li><strong>Description:</strong> Custom UI texts are returned by <code>UserConfig.GetText</code>/<code>Convert</code> (<code>roles/lib/files/FWO.Config.Api/UserConfig.cs:189,333</code>), which <code>HtmlDecode</code>s the value and injects <code>&lt;a href&gt;</code> link rewriting, then pages render the result as <code>MarkupString</code>. Intentional (help text supports HTML), but anyone who can edit custom/recert texts can store arbitrary markup shown to every user.</li>
+<li><strong>Impact:</strong> Requires a privileged admin role — stored-XSS-by-admin / second-order concern. Not directly exploitable by unprivileged users.</li>
+<li><strong>Recommendation:</strong> If rich text is required, run stored text through a vetted allowlist sanitizer (the same <code>StripDangerousHtmlTags</code> used for the welcome message) before rendering.</li>
+</ul>
+<h3>[LOW] Custom logo base64 injected directly into an image <code>src</code> data-URI</h3>
+<ul>
+<li><strong>ID:</strong> UI-04</li>
+<li><strong>Category:</strong> Output Encoding / Content Injection</li>
+<li><strong>Location:</strong> <code>roles/ui/files/FWO.UI/Pages/Login.razor:23</code> (<code>&lt;img src=&quot;data:image/png;base64, @(globalConfig.CustomLogoData)&quot; …&gt;</code>)</li>
+<li><strong>Description:</strong> The admin-uploaded logo is stored as base64 (<code>FileUploadService.ImportCustomLogo</code>) and interpolated into a <code>data:</code> URI on the pre-auth login page. Upload validates extension (substring check — see UI-06) and size but not actual PNG magic bytes, and the base64 is not constrained before landing in <code>src</code>. Blazor attribute-encodes <code>&quot;</code>, limiting break-out.</li>
+<li><strong>Impact:</strong> Requires admin; realistic impact is a broken image / mismatched content type, not script execution (hard-coded <code>image/png</code> in <code>&lt;img&gt;</code>). Low.</li>
+<li><strong>Recommendation:</strong> Validate uploaded content is a genuine image (magic bytes) and well-formed base64; consider serving the logo from a controller endpoint rather than inlining.</li>
+</ul>
+<h3>[LOW] Token/refresh response body logged on error paths</h3>
+<ul>
+<li><strong>ID:</strong> UI-05</li>
+<li><strong>Category:</strong> Sensitive Data Exposure (logging)</li>
+<li><strong>Location:</strong> <code>roles/ui/files/FWO.UI/Services/TokenService.cs:214</code>, <code>:277</code></li>
+<li><strong>Description:</strong> On failed token refresh/revoke, raw middleware <code>response.Content</code> is logged; on an unexpected partial success this could contain token material. All other logging in the role is clean (only <code>ex.Message</code>/status codes; no JWT/password/secret values logged anywhere in scope).</li>
+<li><strong>Impact:</strong> Low — only on error, body is usually an error string; logs may be less protected than the token store.</li>
+<li><strong>Recommendation:</strong> Log only <code>StatusCode</code>/<code>ErrorMessage</code> on these paths, or redact the body.</li>
+</ul>
+<h3>[INFORMATIONAL] Upload extension check uses substring match</h3>
+<ul>
+<li><strong>ID:</strong> UI-06</li>
+<li><strong>Category:</strong> Input Validation</li>
+<li><strong>Location:</strong> <code>roles/ui/files/FWO.UI/Services/FileUploadService.cs:63</code> (<code>!AllowedFileFormats.Contains(fileExtension)</code>)</li>
+<li><strong>Description:</strong> Uses <code>string.Contains</code>, so a substring extension can pass. Impact minimal: uploaded bytes are only stored (CSV parsed as text, logo re-encoded), never executed or written to a path-controlled location; <code>Path.GetExtension</code> used (no traversal).</li>
+<li><strong>Recommendation:</strong> Compare against an explicit, case-insensitive exact-extension allowlist.</li>
+</ul>
+<h3>[INFORMATIONAL] <code>AllowedHosts</code> wildcard and commented-out HTTPS/HSTS</h3>
+<ul>
+<li><strong>ID:</strong> UI-07</li>
+<li><strong>Category:</strong> Hardening / Configuration</li>
+<li><strong>Location:</strong> <code>roles/ui/files/FWO.UI/appsettings.json</code> (<code>&quot;AllowedHosts&quot;: &quot;*&quot;</code>); <code>roles/ui/files/FWO.UI/Program.cs:135-139</code> (<code>UseHsts()</code>/<code>UseHttpsRedirection()</code> commented out)</li>
+<li><strong>Description:</strong> Host-header and transport hardening are disabled at the app layer — likely deliberate because TLS terminates at the installer-deployed reverse proxy.</li>
+<li><strong>Recommendation:</strong> Set <code>AllowedHosts</code> to expected host(s), confirm the proxy enforces HTTPS+HSTS, and document the assumption.</li>
+</ul>
+<h3>[INFORMATIONAL] Pages relying on in-code role checks rather than <code>[Authorize]</code></h3>
+<ul>
+<li><strong>ID:</strong> UI-08</li>
+<li><strong>Category:</strong> Authorization (defense-in-depth)</li>
+<li><strong>Location:</strong> e.g. <code>roles/ui/files/FWO.UI/Pages/Monitoring/MonitorUiLog.razor:6</code> (gates "see all users" via <code>userConfig.CanUseAnyRole(Roles.Admin, Roles.Auditor)</code> at line 72), <code>Pages/Settings/SettingsUser.razor</code>, <code>Pages/Settings/SettingsMain.razor</code>, <code>Pages/Start.razor</code></li>
+<li><strong>Description:</strong> A few routable pages omit <code>@attribute [Authorize]</code>. They remain behind the app-wide <code>AuthorizeView</code> in <code>App.razor</code> (authenticated-only), and sensitive data is filtered server-side by Hasura JWT permissions (tenant/user scoped). No tenant-isolation bypass identified — consistency/defense-in-depth item only.</li>
+<li><strong>Recommendation:</strong> Add explicit <code>@attribute [Authorize(...)]</code> with the intended role set to every routable page.</li>
+</ul>
+<h2>Positive Observations</h2>
+<ul>
+<li><strong>JWT validated before trust</strong> and <code>Importer</code>/<code>Anonymous</code> roles denied UI login (<code>AuthStateProvider.ApplyJwtAsync</code>).</li>
+<li><strong>Encrypted token storage</strong> via <code>ProtectedSessionStorage</code> (<code>SessionStorageWrapper</code>, <code>TokenService</code>, <code>ExecutionModeStorage</code>) — never plain browser storage.</li>
+<li><strong>Server-side refresh-token revocation on logout</strong> (<code>TokenService.RevokeTokens</code>).</li>
+<li><strong>Dedicated URL sanitizer middleware</strong> blocking non-http(s) schemes, <code>javascript:</code>, script/event-handler/dangerous-tag patterns, with help-path allowlist and length cap.</li>
+<li><strong>Correct output encoding already used</strong> in <code>MonitorScheduler.razor:77</code>, <code>RequestFwChangePopup.DisplayTitle</code>, <code>WfStatefulObject.DisplayAllComments(asMarkup:true)</code>; login welcome message passed through <code>StripDangerousHtmlTags</code>.</li>
+<li><strong>No dangerous sinks:</strong> no <code>eval</code>/<code>innerHTML</code>, <code>Process.Start</code>, reflection, or <code>BinaryFormatter</code>; deserialization is <code>System.Text.Json</code> into typed models on config/DB data.</li>
+<li><strong>No hardcoded secrets / keys / connection strings / default creds</strong>; no logging of JWT/password/secret values (aside from UI-05).</li>
+<li><strong>Internal-only navigation:</strong> every <code>NavigateTo</code> uses fixed internal paths with typed IDs/enums — no user-controlled redirect targets.</li>
+</ul>
+</body>
+</html>

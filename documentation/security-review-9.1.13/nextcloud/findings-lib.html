@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>findings-lib</title>
+<style>body{font-family:sans-serif;max-width:60em;margin:2em auto;padding:0 1em;line-height:1.5;color:#222}table{border-collapse:collapse;margin:1em 0;width:auto}th,td{border:1px solid #888;padding:4px 10px;text-align:left;vertical-align:top}th{background:#f0f0f0}code{background:#f4f4f4;padding:1px 4px;border-radius:3px;font-family:monospace;font-size:.9em}h1,h2,h3,h4{line-height:1.25}hr{border:0;border-top:1px solid #ccc;margin:2em 0}</style>
+</head>
+<body>
+<h1>Security Review — Lib (Shared Libraries) Role (FWO 9.1.13)</h1>
+<h2>Summary</h2>
+<p>The shared libraries are structurally sound in most higher-risk areas: JWT validation (<code>FWO.Middleware.Client/JwtReader.cs</code>) uses RSA signatures with full issuer/audience/lifetime/signature checks; all JSON deserialization uses <code>System.Text.Json</code> or Newtonsoft <strong>without</strong> polymorphic <code>TypeNameHandling</code> (no insecure-deserialization/RCE surface); GraphQL calls are fully parameterized (variables, not string concatenation → no query injection); no hardcoded secrets, no <code>BinaryFormatter</code>, no <code>Process.Start</code>, no LDAP filter construction, and no <code>System.Random</code> used for keys/IVs. The AES IV is generated per-message with the platform CSPRNG.</p>
+<p>The dominant weakness is that <strong>TLS certificate validation is disabled across every network client in this role</strong>. The reusable <code>RestApiClient</code> base defaults to not checking certificates, and every concrete client (Check Point, FortiManager, Middleware, Tufin SecureChange) inherits that default, while the GraphQL client and the SMTP mailer hard-code accept-any-certificate callbacks. These are shared libraries transporting firewall admin credentials, JWTs, and SMTP credentials, so a single MITM position yields credential theft and data tampering. The secondary weakness is unauthenticated AES-CBC (no MAC) with the key used as raw UTF-8 bytes and no KDF.</p>
+<table>
+<thead><tr><th>Severity</th><th>Count</th></tr></thead>
+<tbody>
+<tr><td>Critical</td><td>0</td></tr>
+<tr><td>High</td><td>3</td></tr>
+<tr><td>Medium</td><td>2</td></tr>
+<tr><td>Low</td><td>2</td></tr>
+<tr><td>Informational</td><td>2</td></tr>
+</tbody></table>
+<h2>Findings</h2>
+<h3>[HIGH] GraphQL API client disables TLS certificate validation unconditionally</h3>
+<ul>
+<li><strong>ID:</strong> LIB-01</li>
+<li><strong>Category:</strong> TLS/MITM</li>
+<li><strong>Location:</strong> <code>roles/lib/files/FWO.Api.Client/GraphQlApiConnection.cs:40</code> and <code>:48</code></li>
+<li><strong>Description:</strong> <code>CreateClient</code> sets <code>ServerCertificateCustomValidationCallback = (message, cert, chain, errors) =&gt; true</code> and, for websockets, <code>RemoteCertificateValidationCallback += (message, cert, chain, errors) =&gt; true</code>. Both accept every certificate; there is no flag to enforce validation. This is the primary data-plane connection to the Hasura GraphQL API and carries the bearer JWT in the <code>Authorization</code> header.</li>
+<li><strong>Impact:</strong> A network MITM can transparently intercept the TLS session, steal the JWT (session hijack at the authenticated role), and read/tamper with all policy/config data over GraphQL.</li>
+<li><strong>Recommendation:</strong> Remove the accept-all callbacks; use default chain/host validation. For a private CA/pinned cert, trust that CA explicitly. Any "insecure" mode must be an explicit, off-by-default flag with a prominent warning.</li>
+</ul>
+<h3>[HIGH] All REST clients accept any TLS certificate by default (RestApiClient)</h3>
+<ul>
+<li><strong>ID:</strong> LIB-02</li>
+<li><strong>Category:</strong> TLS/MITM</li>
+<li><strong>Location:</strong> <code>roles/lib/files/FWO.Api.Client/RestApiClient.cs:16</code> and <code>:29-36</code></li>
+<li><strong>Description:</strong> The base constructor defaults <code>checkCertificates = false</code>, and <code>CreateRestClient</code> installs <code>RemoteCertificateValidationCallback += (…, sslErrors) =&gt; !CheckCertificates || sslErrors == SslPolicyErrors.None;</code>. With the default this is <code>!false || …</code> → always <code>true</code>. Every subclass constructs the base without <code>checkCertificates: true</code>: <code>MiddlewareClient.cs:11</code>, <code>CheckPointAPI.cs:20</code>, <code>FortiManagerAPI.cs:10</code>, <code>SCClient.cs:13</code>. No caller anywhere enables cert checking.</li>
+<li><strong>Impact:</strong> Every REST integration is MITM-able by default: Middleware client (JWTs/auth), Check Point and FortiManager auto-discovery (firewall admin credentials in the login body — see LIB-03), and Tufin SecureChange (Basic-auth ticketing creds). Enables credential/token theft and response tampering.</li>
+<li><strong>Recommendation:</strong> Default <code>checkCertificates = true</code> (fail-closed); allow disabling only per-connection via explicit admin opt-in, surfaced in UI/logs. Internal Middleware calls should always validate against the deployed CA.</li>
+</ul>
+<h3>[HIGH] SMTP mailer disables TLS certificate validation ("accept all SSL certificates")</h3>
+<ul>
+<li><strong>ID:</strong> LIB-03</li>
+<li><strong>Category:</strong> TLS/MITM</li>
+<li><strong>Location:</strong> <code>roles/lib/files/FWO.Mail/MailerMailKit.cs:71</code> and <code>:80</code></li>
+<li><strong>Description:</strong> For both <code>StartTls</code> and <code>Tls</code> modes the code sets <code>smtp.ServerCertificateValidationCallback = (s, c, h, e) =&gt; true;</code> (<code>//accept all SSL certificates</code>) before connecting, then sends the SMTP username and decrypted password via <code>AuthenticateAsync</code> (line 91). Disabled validation means the "encrypted" transport does not authenticate the server.</li>
+<li><strong>Impact:</strong> A MITM can present any cert, terminate TLS, and capture the SMTP credentials, then relay/alter outbound mail. Credential theft + email spoofing.</li>
+<li><strong>Recommendation:</strong> Remove the accept-all callbacks so MailKit validates normally. If a self-signed internal relay must be supported, add an explicit off-by-default option and prefer trusting the relay CA/cert.</li>
+</ul>
+<h3>[MEDIUM] Unauthenticated AES-CBC encryption without a key-derivation function</h3>
+<ul>
+<li><strong>ID:</strong> LIB-04</li>
+<li><strong>Category:</strong> Crypto</li>
+<li><strong>Location:</strong> <code>roles/lib/files/FWO.Encryption/AesEnc.cs:130-148</code> (encrypt), <code>:170-207</code> (decrypt), key load <code>:103-116</code></li>
+<li><strong>Description:</strong> <code>AesEnc</code> protects stored secrets (device/import credentials, SMTP password, Tufin creds) with AES-CBC+PKCS7. (1) <strong>No authentication</strong> — CBC has no integrity/MAC; ciphertext is malleable and undetected if tampered (no HMAC/AEAD). (2) <strong>Raw key, no KDF</strong> — <code>aes.Key = Encoding.UTF8.GetBytes(key)</code> (lines 133, 186) uses the main-key file bytes directly with no salt/stretching. The IV itself is correctly generated per-message via <code>aes.GenerateIV()</code> (CSPRNG) and prepended; the issue is authentication + key handling, not the IV.</li>
+<li><strong>Impact:</strong> No integrity on secrets at rest; ciphertext manipulation undetected. Binding the AES key to raw file bytes forgoes defense-in-depth and amplifies any partial key exposure.</li>
+<li><strong>Recommendation:</strong> Move to AEAD (<code>AesGcm</code>/<code>ChaCha20Poly1305</code>) or add encrypt-then-MAC (HMAC-SHA256) over IV+ciphertext. Derive the encryption key from main-key material via HKDF/PBKDF2 with a stored salt. Version the ciphertext format for migration.</li>
+</ul>
+<h3>[MEDIUM] Group-readable main encryption key file</h3>
+<ul>
+<li><strong>ID:</strong> LIB-05</li>
+<li><strong>Category:</strong> Secrets / Key storage</li>
+<li><strong>Location:</strong> <code>roles/lib/files/FWO.Encryption/AesEnc.cs:103-116</code>; path <code>roles/lib/files/FWO.Basics/GlobalConstants.cs:10</code>; installer mode <code>0640</code> at <code>roles/common/tasks/main.yml:466-473</code></li>
+<li><strong>Description:</strong> The single symmetric main key decrypting every stored secret is written to <code>/etc/fworch/secrets/main_key</code> with mode <code>0640</code> (owner+group readable), whereas the adjacent importer password file is <code>0600</code> (<code>roles/common/tasks/main.yml:443</code>). Any account in the file's group can read the master key. (Key material and its reader live in Lib; the mode is set by the installer role.)</li>
+<li><strong>Impact:</strong> Broader-than-necessary local exposure of the master decryption key; a co-located/compromised group member can decrypt all managed-device credentials and integration secrets.</li>
+<li><strong>Recommendation:</strong> Tighten to <code>0600</code> (or a documented least-privilege group if truly required) and confirm the runtime user does not need group-wide access.</li>
+</ul>
+<h3>[LOW] Full JWT logged on validation failure / expiry</h3>
+<ul>
+<li><strong>ID:</strong> LIB-06</li>
+<li><strong>Category:</strong> Secrets / Logging</li>
+<li><strong>Location:</strong> <code>roles/lib/files/FWO.Middleware.Client/JwtReader.cs:90,107,116,125,134,143</code></li>
+<li><strong>Description:</strong> Expiry and every failure branch log the raw JWT (e.g. <code>Jwt lifetime expired: {jwtString}</code>, <code>Jwt signature could not be verified. Potential attack: {jwtString}</code>). A JWT is a bearer credential; even expired/invalid tokens carry claims, and echoing attacker-supplied tokens aids log injection/claim leakage.</li>
+<li><strong>Impact:</strong> Sensitive token material/claims disclosed to logs; possible session material exposure under clock skew.</li>
+<li><strong>Recommendation:</strong> Log only a JTI/correlation id or a truncated hash plus the reason; do not log full tokens.</li>
+</ul>
+<h3>[LOW] Outbound request body logged at debug in SecureChange client</h3>
+<ul>
+<li><strong>ID:</strong> LIB-07</li>
+<li><strong>Category:</strong> Secrets / Logging</li>
+<li><strong>Location:</strong> <code>roles/lib/files/FWO.ExternalSystems/Tufin.SecureChange/SCClient.cs:31-46</code></li>
+<li><strong>Description:</strong> <code>DebugApiCallText</code> logs the full request body (<code>body = $&quot;data: &#x27;{p.Value}&#x27;&quot;</code>). The <code>Authorization</code> header is correctly excluded, but ticket bodies can carry sensitive topology data and future task types could place credentials in the body. Emitted whenever debug logging is on.</li>
+<li><strong>Impact:</strong> Potential disclosure of sensitive request content to logs.</li>
+<li><strong>Recommendation:</strong> Redact/truncate the body, or gate full-body logging behind an explicit off-by-default "trace payloads" switch.</li>
+</ul>
+<h3>[INFORMATIONAL] TryEncrypt/TryDecrypt swallow crypto errors silently (fail-open)</h3>
+<ul>
+<li><strong>ID:</strong> LIB-08</li>
+<li><strong>Category:</strong> Crypto / Robustness</li>
+<li><strong>Location:</strong> <code>roles/lib/files/FWO.Encryption/AesEnc.cs:23-75,118-128</code></li>
+<li><strong>Description:</strong> <code>TryDecrypt</code> catches all exceptions and, when <code>returnOrigin</code> is set, returns the original ciphertext; <code>TryEncrypt</code> decides "already encrypted" solely by attempting a decrypt. With a missing/wrong key, callers (e.g. <code>smtp.AuthenticateAsync</code>, device login) may receive ciphertext-as-plaintext and send it over the wire, masking key/rotation failures.</li>
+<li><strong>Impact:</strong> Fail-open behavior can leak ciphertext into credential fields and obscure misconfiguration.</li>
+<li><strong>Recommendation:</strong> Distinguish "plaintext passthrough" from "decrypt failed (missing/wrong key)"; do not return ciphertext as a usable secret; surface key-load failures to callers that must not proceed.</li>
+</ul>
+<h3>[INFORMATIONAL] Newtonsoft round-trip parse/re-serialize of report JSON (reviewed, safe)</h3>
+<ul>
+<li><strong>ID:</strong> LIB-09</li>
+<li><strong>Category:</strong> Deserialization (defensive note)</li>
+<li><strong>Location:</strong> <code>roles/lib/files/FWO.Report/ReportDevicesBase.cs:253-257</code></li>
+<li><strong>Description:</strong> <code>JsonConvert.DeserializeObject(...)</code> + <code>SerializeObject(..., Formatting.Indented)</code> only pretty-prints JSON the code just built. No <code>TypeNameHandling</code> → no gadget/polymorphic risk. Recorded to document it was reviewed and is safe.</li>
+<li><strong>Impact:</strong> None.</li>
+<li><strong>Recommendation:</strong> Optional: use <code>System.Text.Json</code> <code>WriteIndented</code> to avoid the round trip.</li>
+</ul>
+<h2>Positive Observations</h2>
+<ul>
+<li>Strict JWT validation (RSA key, signature/lifetime/audience/issuer enforced; no alg-confusion/"none").</li>
+<li>No insecure deserialization anywhere in the role (no <code>TypeNameHandling</code>, <code>BinaryFormatter</code>, XML/XXE).</li>
+<li>No injection surface in shared clients (parameterized GraphQL variables; no <code>Process.Start</code>; no dynamic LDAP filters).</li>
+<li>Correct IV handling in <code>AesEnc</code> (fresh CSPRNG IV per message, prepended; no reuse).</li>
+<li>No hardcoded secrets/default credentials; JWT and main keys loaded from files.</li>
+<li>Defensive <code>FWO.Basics/ImportPathPolicy.cs</code> checks import paths for world-writable/unsafe components.</li>
+<li>Credential-aware logging in places (<code>SCClient</code> omits <code>Authorization</code>; GraphQL query logging redacts variables).</li>
+</ul>
+</body>
+</html>

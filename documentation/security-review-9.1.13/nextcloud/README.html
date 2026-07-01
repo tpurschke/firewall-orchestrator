@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>README</title>
+<style>body{font-family:sans-serif;max-width:60em;margin:2em auto;padding:0 1em;line-height:1.5;color:#222}table{border-collapse:collapse;margin:1em 0;width:auto}th,td{border:1px solid #888;padding:4px 10px;text-align:left;vertical-align:top}th{background:#f0f0f0}code{background:#f4f4f4;padding:1px 4px;border-radius:3px;font-family:monospace;font-size:.9em}h1,h2,h3,h4{line-height:1.25}hr{border:0;border-top:1px solid #ccc;margin:2em 0}</style>
+</head>
+<body>
+<h1>Security Code Review — Firewall Orchestrator (FWO) 9.1.13</h1>
+<table>
+<thead><tr><th></th><th></th></tr></thead>
+<tbody>
+<tr><td><strong>Produkt</strong></td><td>Firewall Orchestrator (FWO)</td></tr>
+<tr><td><strong>Version</strong></td><td>9.1.13</td></tr>
+<tr><td><strong>Basis</strong></td><td><code>develop</code>-Linie (HEAD trägt Versionsbump auf 9.1.13)</td></tr>
+<tr><td><strong>Review-Branch</strong></td><td><code>security-review/9.1.13</code></td></tr>
+<tr><td><strong>Datum</strong></td><td>2026-07-01</td></tr>
+<tr><td><strong>Geprüfte Komponenten</strong></td><td>UI (Blazor/C#), Middleware (ASP.NET/C#), Importer (Python), Lib (C# Shared Libraries)</td></tr>
+<tr><td><strong>Methode</strong></td><td>Statisches Code-Review durch 4 spezialisierte Sub-Agenten, je eine Ansible-Rolle</td></tr>
+<tr><td><strong>Art</strong></td><td>Read-only Audit — keine Änderungen am Anwendungscode</td></tr>
+</tbody></table>
+<p>Detailberichte je Rolle:</p>
+<ul>
+<li><a href="findings-ui.html">UI</a></li>
+<li><a href="findings-middleware.html">Middleware</a></li>
+<li><a href="findings-importer.html">Importer</a></li>
+<li><a href="findings-lib.html">Lib (Shared Libraries)</a></li>
+</ul>
+<hr>
+<h2>1. Management Summary</h2>
+<p>Das Firewall Orchestrator zeigt in den zentralen, sicherheitskritischen Bereichen ein <strong>grundsätzlich solides Sicherheitsniveau</strong>. Die Authentifizierungs- und Autorisierungsarchitektur ist durchdacht umgesetzt: JWTs werden mit RS256 und installationsindividuellen RSA-2048-Schlüsseln signiert und vollständig validiert (Signatur, Issuer, Audience, Laufzeit); jeder Middleware-Endpunkt ist mit expliziter Rollenprüfung geschützt (kein <code>[AllowAnonymous]</code>); Refresh-Tokens werden per CSPRNG erzeugt, nur als Hash gespeichert und sind Einmal-Tokens; LDAP-Filter werden korrekt nach RFC 4515 escaped; die GraphQL-Schnittstelle wird durchgängig parametrisiert (keine Injection); und es wurden <strong>keine hartcodierten Produktiv-Secrets, keine unsichere Deserialisierung (kein <code>TypeNameHandling</code>/<code>BinaryFormatter</code>/<code>pickle</code>) und keine Command-Injection-Pfade</strong> gefunden.</p>
+<p><strong>Es wurden keine kritischen Schwachstellen (Critical) und keine Remote-Code-Execution- Pfade identifiziert.</strong> Der dominierende Befund ist stattdessen ein <strong>systemisches, komponentenübergreifendes Muster: Die TLS-Zertifikatsprüfung ist in nahezu allen Netzwerk-Clients standardmäßig deaktiviert.</strong> Dies betrifft die Verbindungen zur GraphQL-/Hasura-API, zum Middleware-Server, zu den Firewall-Management-APIs (Check Point, FortiManager, FortiOS), zum LDAP-/AD-Server, zum SMTP-Relay sowie den SSH-Kanal zu Cisco ASA. In dieser Standardkonfiguration kann ein Angreifer mit einer Position im Netzwerkpfad (On-Path/MITM) den jeweiligen Kanal aufbrechen, um <strong>privilegierte Firewall-Anmeldedaten, LDAP-Credentials, JWTs und SMTP-Zugangsdaten abzugreifen oder übertragene Konfigurations-/Policy-Daten zu manipulieren</strong>. Da FWO per Definition privilegierte Zugänge zu allen verwalteten Firewalls bündelt, ist die Vertraulichkeit und Integrität dieser Transportkanäle das wichtigste Handlungsfeld.</p>
+<p>Ein zweites übergreifendes Thema ist die <strong>Absicherung gespeicherter Secrets</strong>: Die zentrale Verschlüsselung nutzt AES-CBC ohne Authentifizierung (kein MAC/AEAD) und leitet den Schlüssel ohne KDF direkt aus den Rohbytes der Schlüsseldatei ab; zusätzlich verhält sich die Entschlüsselung „fail-open" (gibt bei Fehler den Chiffretext zurück statt zu scheitern). In der UI existiert ein wiederkehrender Output-Encoding-Mangel (Rendern importierter/Nutzer-Strings via <code>MarkupString</code> ohne HTML-Encoding), dessen praktische Ausnutzbarkeit jedoch durch die Eingabe-Sanitizer eingeschränkt ist.</p>
+<h3>Gesamtbewertung der Findings</h3>
+<table>
+<thead><tr><th>Schweregrad</th><th>Anzahl</th></tr></thead>
+<tbody>
+<tr><td>Critical</td><td>0</td></tr>
+<tr><td><strong>High</strong></td><td><strong>6</strong></td></tr>
+<tr><td>Medium</td><td>9</td></tr>
+<tr><td>Low</td><td>11</td></tr>
+<tr><td>Informational</td><td>11</td></tr>
+<tr><td><strong>Summe</strong></td><td><strong>37</strong></td></tr>
+</tbody></table>
+<h3>Findings je Rolle</h3>
+<table>
+<thead><tr><th>Rolle</th><th>Critical</th><th>High</th><th>Medium</th><th>Low</th><th>Info</th><th>Bericht</th></tr></thead>
+<tbody>
+<tr><td>UI</td><td>0</td><td>0</td><td>2</td><td>3</td><td>3</td><td><a href="findings-ui.html">findings-ui.md</a></td></tr>
+<tr><td>Middleware</td><td>0</td><td>1</td><td>3</td><td>3</td><td>3</td><td><a href="findings-middleware.html">findings-middleware.md</a></td></tr>
+<tr><td>Importer</td><td>0</td><td>2</td><td>2</td><td>3</td><td>3</td><td><a href="findings-importer.html">findings-importer.md</a></td></tr>
+<tr><td>Lib</td><td>0</td><td>3</td><td>2</td><td>2</td><td>2</td><td><a href="findings-lib.html">findings-lib.md</a></td></tr>
+<tr><td><strong>Summe</strong></td><td><strong>0</strong></td><td><strong>6</strong></td><td><strong>9</strong></td><td><strong>11</strong></td><td><strong>11</strong></td><td></td></tr>
+</tbody></table>
+<hr>
+<h2>2. Übergreifende Themen (Cross-Cutting)</h2>
+<h3>2.1 TLS-/Transport-Sicherheit standardmäßig deaktiviert — *Leitbefund*</h3>
+<p>Sieben der elf High-/Medium-Findings mit Transportbezug beschreiben denselben Kern: Zertifikats- bzw. Host-Key-Prüfung ist ausgeschaltet oder standardmäßig aus.</p>
+<table>
+<thead><tr><th>Betroffener Kanal</th><th>Finding(s)</th></tr></thead>
+<tbody>
+<tr><td>GraphQL-/Hasura-API (trägt das JWT)</td><td>LIB-01</td></tr>
+<tr><td>Alle REST-Clients (Middleware, Check Point, FortiManager, Tufin)</td><td>LIB-02</td></tr>
+<tr><td>SMTP-Versand (überträgt SMTP-Credentials)</td><td>LIB-03</td></tr>
+<tr><td>LDAP/AD-Bind (überträgt Nutzer-Credentials)</td><td>MW-01</td></tr>
+<tr><td>Firewall-Management-APIs (CP/FortiManager/FortiOS), Default aus</td><td>IMP-02</td></tr>
+<tr><td>Cisco-ASA-SSH (Host-Key-Prüfung immer aus)</td><td>IMP-01</td></tr>
+</tbody></table>
+<p><strong>Empfehlung:</strong> Zertifikatsprüfung überall standardmäßig aktivieren (fail-closed); Ausnahmen nur als explizite, pro-Verbindung wählbare, standardmäßig deaktivierte Opt-in-Option mit sichtbarem Warnhinweis. Interne Kanäle gegen die ausgerollte CA validieren.</p>
+<h3>2.2 Absicherung gespeicherter Secrets (Krypto)</h3>
+<p>Die gemeinsam genutzte Verschlüsselung (C#: <code>FWO.Encryption/AesEnc.cs</code>, Python: <code>fwo_encrypt.py</code>) nutzt <strong>AES-CBC ohne MAC/AEAD</strong>, leitet den Schlüssel <strong>ohne KDF</strong> aus den Roh-UTF-8-Bytes ab und verhält sich bei Fehlern <strong>fail-open</strong>. Findings: <strong>LIB-04, MW-03, IMP-03, LIB-08</strong>. <strong>Empfehlung:</strong> Migration auf AEAD (AES-GCM) oder Encrypt-then-MAC (HMAC-SHA256), Schlüsselableitung via HKDF/PBKDF2 mit Salt, versioniertes Chiffreformat, Fail-closed.</p>
+<h3>2.3 Secrets/Token in Logs</h3>
+<p>Session-Tokens, JWTs und Request-Bodies gelangen an mehreren Stellen in Debug-/Error-Logs. Findings: <strong>IMP-05, IMP-06, LIB-06, LIB-07, MW-07, UI-05</strong>. <strong>Empfehlung:</strong> Token/Header/Bodies vor dem Loggen redigieren (wie bereits in der FWO-API-Redaction umgesetzt); vollständige Payloads nur hinter explizitem Trace-Schalter.</p>
+<h3>2.4 Output-Encoding in der UI</h3>
+<p>Import-/nutzergesteuerte Strings werden via <code>MarkupString</code> ohne HTML-Encoding gerendert; die Absicherung erfolgt nur eingangsseitig durch Allowlist-Sanitizer, die <code>&lt;</code>/<code>&gt;</code> durchlassen. Findings: <strong>UI-01, UI-02, UI-03, UI-04</strong>. <strong>Empfehlung:</strong> Am Render-Ort HTML-encoden (<code>WebUtility.HtmlEncode</code>, Muster ist bereits an mehreren Stellen vorhanden); <code>&lt;</code>/<code>&gt;</code> aus <code>StandardSanitizationRegex</code> entfernen.</p>
+<hr>
+<h2>3. High-Findings im Detail (priorisiert)</h2>
+<table>
+<thead><tr><th>#</th><th>ID</th><th>Titel</th><th>Ort</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><strong>LIB-01</strong></td><td>GraphQL-Client deaktiviert TLS-Zertifikatsprüfung bedingungslos (JWT abgreifbar)</td><td><code>FWO.Api.Client/GraphQlApiConnection.cs:40,48</code></td></tr>
+<tr><td>2</td><td><strong>LIB-02</strong></td><td><code>RestApiClient</code> akzeptiert jedes TLS-Zertifikat per Default; alle REST-Clients erben das</td><td><code>FWO.Api.Client/RestApiClient.cs:16,29-36</code></td></tr>
+<tr><td>3</td><td><strong>LIB-03</strong></td><td>SMTP-Mailer „accept all SSL certificates", dann Versand der Credentials</td><td><code>FWO.Mail/MailerMailKit.cs:71,80</code></td></tr>
+<tr><td>4</td><td><strong>MW-01</strong></td><td>LDAP-TLS-Zertifikatsprüfung deaktiviert (MITM aller Binds inkl. Credential-Prüfung)</td><td><code>FWO.Middleware.Server/LdapBasic.cs:52</code></td></tr>
+<tr><td>5</td><td><strong>IMP-01</strong></td><td>SSH-Host-Key-Prüfung für Cisco-ASA-Import komplett aus (ASA-Admin-/Enable-Secret abgreifbar)</td><td><code>fw_modules/ciscoasa9/fwcommon.py:49</code></td></tr>
+<tr><td>6</td><td><strong>IMP-02</strong></td><td>TLS-Zertifikatsprüfung für alle Vendor-APIs standardmäßig aus (Default <code>importCheckCertificates=False</code>)</td><td><code>cp_getter.py:37</code>, <code>fmgr_getter.py:34</code>, <code>fos_getter.py:54</code></td></tr>
+</tbody></table>
+<p>Alle sechs High-Findings sind Ausprägungen desselben Grundproblems (Abschnitt 2.1) und lassen sich mit einer koordinierten Maßnahme „Zertifikatsprüfung fail-closed" adressieren.</p>
+<hr>
+<h2>4. Empfohlene Maßnahmen (Roadmap)</h2>
+<p><strong>Sofort (High — Transportsicherheit):</strong></p>
+<ol>
+<li>In allen Netzwerk-Clients die accept-any-Callbacks entfernen und Zertifikatsprüfung</li>
+</ol>
+<p>standardmäßig aktivieren (LIB-01/02/03, MW-01). Unsichere Modi nur als explizites, standardmäßig deaktiviertes Opt-in.</p>
+<ol>
+<li><code>importCheckCertificates</code> standardmäßig auf <code>True</code> setzen und mit Trust-Store versehen</li>
+</ol>
+<p>(IMP-02); SSH-Host-Key-Prüfung für ASA aktivieren (IMP-01).</p>
+<p><strong>Kurzfristig (Medium):</strong></p>
+<ol>
+<li>Krypto härten: AEAD/Encrypt-then-MAC + KDF, Fail-closed (LIB-04, MW-03, IMP-03).</li>
+<li>Fehlermeldungen der Auth-/Token-Endpunkte generalisieren, keine <code>Exception.Message</code></li>
+</ol>
+<p>an Clients zurückgeben (MW-02).</p>
+<ol>
+<li>Delegations-Token an Mandantengrenzen binden, Legacy-<code>GetForUser</code> ablösen (MW-04).</li>
+<li>UI-Output am Render-Ort HTML-encoden; <code>&lt;</code>/<code>&gt;</code> aus dem Sanitizer entfernen</li>
+</ol>
+<p>(UI-01, UI-02).</p>
+<ol>
+<li>Datei-/URL-Import einschränken (Allowlist Host+Schema, <code>file://</code> verbieten) (IMP-04).</li>
+</ol>
+<p><strong>Mittelfristig (Low/Hardening):</strong></p>
+<ol>
+<li>Token/Bodies aus Logs redigieren (IMP-05/06, LIB-06/07, MW-07, UI-05).</li>
+<li><code>main_key</code>-Datei auf <code>0600</code> verschärfen (LIB-05).</li>
+<li><code>AllowedHosts</code> einschränken, HSTS/HTTPS-Erzwingung bestätigen (MW-06, UI-07);</li>
+</ol>
+<p>committed Test-JWT-Keys durch ephemere Test-Keys ersetzen (MW-05); explizite <code>[Authorize]</code>-Attribute auf allen routbaren Seiten (UI-08).</p>
+<hr>
+<h2>5. Methodik, Geltungsbereich &amp; Grenzen</h2>
+<p><strong>Methodik.</strong> Vier spezialisierte Sub-Agenten führten parallel je ein statisches Security-Review einer Ansible-Rolle durch, jeweils mit auf Sprache/Framework zugeschnittenen Bedrohungsklassen (u. a. XSS/AuthZ für die Blazor-UI; JWT/LDAP/Krypto für die Middleware; Command-Injection/TLS/SSRF/Deserialisierung für den Python-Importer; Krypto/TLS-Clients/Deserialisierung für die Shared Libraries). Befunde wurden per grep lokalisiert und anschließend durch Lesen des umliegenden Codes auf tatsächliche Ausnutzbarkeit verifiziert (False Positives wurden verworfen, z. B. <code>RecertCheck.cs:114</code>).</p>
+<p><strong>Geltungsbereich.</strong> Geprüft wurden die Rollen <code>roles/ui</code>, <code>roles/middleware</code>, <code>roles/importer</code> und <code>roles/lib</code> im Stand von Version 9.1.13. Mehrere Findings verweisen begründet auf angrenzende Rollen (z. B. DB-Seed <code>fworch-fill-stm.sql</code>, Installer <code>roles/common/tasks/main.yml</code>), wenn dort das Standardverhalten gesetzt wird.</p>
+<p><strong>Grenzen.</strong> Es handelt sich um ein rein statisches Review ohne dynamische Tests, Penetrationstest oder Laufzeit-/Deployment-Analyse. Nicht im Fokus: Datenbank-/Hasura- Permissions im Detail, Ansible-Installer-Härtung, Abhängigkeits-/Supply-Chain-Analyse (CVEs in NuGet/PyPI-Paketen) sowie die eigentliche Reverse-Proxy-/TLS-Terminierung. Schweregrade sind Experteneinschätzungen nach Ausnutzbarkeit und Auswirkung im FWO-Kontext; sie ersetzen keine formale CVSS-Bewertung.</p>
+</body>
+</html>

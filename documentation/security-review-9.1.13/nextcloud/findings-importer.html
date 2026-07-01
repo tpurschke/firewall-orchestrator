@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>findings-importer</title>
+<style>body{font-family:sans-serif;max-width:60em;margin:2em auto;padding:0 1em;line-height:1.5;color:#222}table{border-collapse:collapse;margin:1em 0;width:auto}th,td{border:1px solid #888;padding:4px 10px;text-align:left;vertical-align:top}th{background:#f0f0f0}code{background:#f4f4f4;padding:1px 4px;border-radius:3px;font-family:monospace;font-size:.9em}h1,h2,h3,h4{line-height:1.25}hr{border:0;border-top:1px solid #ccc;margin:2em 0}</style>
+</head>
+<body>
+<h1>Security Review — Importer Role (FWO 9.1.13)</h1>
+<h2>Summary</h2>
+<p>The Importer role is a Python data-ingestion component that pulls firewall/manager configuration from vendor management APIs (Check Point R8x, FortiManager, FortiOS REST) or SSH (Cisco ASA), or from files/URLs, and persists the normalized result to the FWO GraphQL API. Overall the code shows good security habits: GraphQL mutations are fully parameterized (queries loaded from <code>.graphql</code> files, device data passed as <code>variables</code>, never string-interpolated) — no injection into the data layer; sensitive HTTP headers and GraphQL variables are redacted before logging; login payloads are excluded from debug logs; there is no <code>eval</code>/<code>exec</code>/<code>pickle</code>/<code>yaml.load</code>/dynamic import; and no XML is parsed.</p>
+<p>The dominant weakness is transport security toward managed firewalls. TLS certificate validation for all vendor management-API traffic is driven by <code>importCheckCertificates</code>, which <strong>ships disabled by default</strong> (DB seed and C# config default both <code>False</code>). In that default state every HTTPS call is made with <code>verify=False</code>, and the Cisco ASA SSH path disables host-key verification unconditionally (<code>auth_strict_key: False</code>) regardless of that setting. An on-path attacker can MITM the importer↔firewall channel to capture privileged firewall credentials or tamper with ingested policy. Secondary issues: a fail-open secret-decryption helper and session tokens leaking into high-verbosity debug logs.</p>
+<table>
+<thead><tr><th>Severity</th><th>Count</th></tr></thead>
+<tbody>
+<tr><td>Critical</td><td>0</td></tr>
+<tr><td>High</td><td>2</td></tr>
+<tr><td>Medium</td><td>2</td></tr>
+<tr><td>Low</td><td>3</td></tr>
+<tr><td>Informational</td><td>3</td></tr>
+</tbody></table>
+<h2>Findings</h2>
+<h3>[HIGH] SSH host-key verification disabled for Cisco ASA imports</h3>
+<ul>
+<li><strong>ID:</strong> IMP-01</li>
+<li><strong>Category:</strong> TLS/MITM (SSH transport)</li>
+<li><strong>Location:</strong> <code>roles/importer/files/importer/fw_modules/ciscoasa9/fwcommon.py:49</code></li>
+<li><strong>Description:</strong> <code>_connect_to_device</code> sets <code>&quot;auth_strict_key&quot;: False</code> on the scrapli <code>GenericDriver</code>, disabling SSH host-key checking entirely. Unlike the HTTPS path, this is not gated by <code>importCheckCertificates</code> — always off. The importer then sends the ASA login username/password (<code>mgm_details.import_user</code>/<code>mgm_details.secret</code>) and, in <code>_ensure_enable_mode</code>, the enable password (<code>mgm_details.cloud_client_secret</code>, <code>fwcommon.py:107</code>) over that unauthenticated channel.</li>
+<li><strong>Impact:</strong> An on-path/spoofing attacker can impersonate the ASA, complete the handshake, and harvest ASA admin credentials and enable secret — full firewall control; can also feed a forged running-config to poison FWO's policy view.</li>
+<li><strong>Recommendation:</strong> Enable strict host-key checking with a managed known-hosts store, or at minimum gate the relaxed behavior behind an admin setting with secure-by-default.</li>
+</ul>
+<h3>[HIGH] TLS certificate validation disabled by default for all vendor API traffic</h3>
+<ul>
+<li><strong>ID:</strong> IMP-02</li>
+<li><strong>Category:</strong> TLS/MITM</li>
+<li><strong>Location:</strong> <code>roles/importer/files/importer/fw_modules/checkpointR8x/cp_getter.py:37</code>, <code>roles/importer/files/importer/fw_modules/fortiadom5ff/fmgr_getter.py:34</code>, <code>roles/importer/files/importer/fw_modules/fortiosmanagementREST/fos_getter.py:54</code>, <code>roles/importer/files/importer/fwo_file_import.py:90</code> (driver: <code>fwo_globals.py:2</code>; default: <code>roles/database/files/sql/creation/fworch-fill-stm.sql:15</code>, <code>roles/lib/files/FWO.Config.Api/Data/ConfigData.cs:67</code>)</li>
+<li><strong>Description:</strong> All vendor HTTPS calls pass <code>verify=fwo_globals.verify_certs</code>, populated from DB key <code>importCheckCertificates</code> (<code>import_main_loop.py:180</code> / <code>import_mgm.py:93</code>: <code>== &quot;True&quot;</code>). That key ships <code>&#x27;False&#x27;</code> in the DB seed and defaults <code>false</code> in <code>ConfigData.cs</code>, so out of the box <code>verify_certs</code> is <code>False</code> and every Check Point/FortiManager/FortiOS request skips cert validation. <code>urllib3.disable_warnings()</code> suppresses the warning that would reveal the insecure state.</li>
+<li><strong>Impact:</strong> In default config an on-path attacker can MITM the importer↔manager TLS channel, steal decrypted management credentials sent at login, and tamper with returned configuration to falsify FWO's policy/compliance view. Warning suppression hides it.</li>
+<li><strong>Recommendation:</strong> Default <code>importCheckCertificates</code> to <code>True</code> with a proper trust store; scope exceptions per-management; log a clear warning whenever verification is disabled.</li>
+</ul>
+<h3>[MEDIUM] Secret decryption fails open, returning ciphertext instead of erroring</h3>
+<ul>
+<li><strong>ID:</strong> IMP-03</li>
+<li><strong>Category:</strong> Secrets / Cryptography</li>
+<li><strong>Location:</strong> <code>roles/importer/files/importer/fwo_encrypt.py:39-44</code> (consumed at <code>model_controllers/management_controller.py:198,206</code>)</li>
+<li><strong>Description:</strong> <code>decrypt()</code> wraps decryption in a broad <code>except Exception</code> that logs a warning and <strong>returns the original (still-encrypted) input</strong> rather than raising. The caller guards with <code>try/except -&gt; SecretDecryptionFailedError</code>, but <code>decrypt()</code> never raises, so a wrong <code>main_key</code>, corrupted key, or tampered ciphertext is silently swallowed and raw ciphertext propagates as <code>mgm_details.secret</code>. AES is CBC without any authentication tag (<code>fwo_encrypt.py:21</code>) — no integrity check on either side.</li>
+<li><strong>Impact:</strong> Key/rotation errors or ciphertext tampering are masked; importer then logs in using ciphertext-as-password (opaque auth failures), and line 43 dumps a full traceback around the crypto op. Fail-open crypto weakens tamper detection of stored credentials.</li>
+<li><strong>Recommendation:</strong> Re-raise on failure; never return ciphertext as plaintext. Move to an authenticated cipher (AES-GCM) or HMAC over ciphertext, coordinated with the middleware.</li>
+</ul>
+<h3>[MEDIUM] Unrestricted local file read / URL fetch from config-controlled path</h3>
+<ul>
+<li><strong>ID:</strong> IMP-04</li>
+<li><strong>Category:</strong> Path Traversal / SSRF</li>
+<li><strong>Location:</strong> <code>roles/importer/files/importer/fwo_file_import.py:79-104</code> (path source: <code>common.py:387</code> <code>get_config_uri</code>, from <code>mgm_details.hostname</code>/<code>domain_name</code>)</li>
+<li><strong>Description:</strong> <code>read_file</code> takes <code>import_state.import_file_name</code>; if it starts with <code>http(s)://</code> it fetches over the network, if <code>file://</code> or a bare path it opens that arbitrary local path with <code>open(filename)</code>. The value comes from the management's hostname/domain field or the <code>-i/--in_file</code> CLI arg. No host allow-listing on the URL branch (SSRF, incl. cloud-metadata/internal services) and no confinement of the local-file branch (a <code>file:///etc/...</code> value reads any file the importer user can read, then surfaces it as "config").</li>
+<li><strong>Impact:</strong> A config-write actor can make the importer fetch arbitrary internal URLs (SSRF) or read arbitrary local files (e.g. <code>/usr/local/fworch/etc/secrets/*</code>). Requires DB/config write privilege, hence Medium.</li>
+<li><strong>Recommendation:</strong> Confine the file branch to a resolved-and-validated import directory; validate/allow-list URL host+scheme; reject <code>file://</code> outside the import area.</li>
+</ul>
+<h3>[LOW] FortiManager session token logged at debug level 3</h3>
+<ul>
+<li><strong>ID:</strong> IMP-05</li>
+<li><strong>Category:</strong> Secrets (logging)</li>
+<li><strong>Location:</strong> <code>roles/importer/files/importer/fw_modules/fortiadom5ff/fmgr_getter.py:38-60</code></li>
+<li><strong>Description:</strong> After login the session id is injected into the JSON-RPC payload (<code>json_payload[&quot;session&quot;] = sid</code>). Non-login calls are logged with the full payload at debug 3 unless it contains the substring <code>&quot;pass&quot;</code> (line 49). Post-login payloads contain <code>session</code> but not <code>pass</code>, so the FortiManager session token is logged verbatim.</li>
+<li><strong>Impact:</strong> Anyone with read access to importer debug logs can recover and replay a live FortiManager session token.</li>
+<li><strong>Recommendation:</strong> Redact <code>session</code> (and known token keys) before logging, mirroring the FWO-API redaction.</li>
+</ul>
+<h3>[LOW] Check Point session id (X-chkp-sid) logged on API error path</h3>
+<ul>
+<li><strong>ID:</strong> IMP-06</li>
+<li><strong>Category:</strong> Secrets (logging)</li>
+<li><strong>Location:</strong> <code>roles/importer/files/importer/fw_modules/checkpointR8x/cp_getter.py:24-51</code></li>
+<li><strong>Description:</strong> The CP session id is placed in the <code>X-chkp-sid</code> header. On a <code>RequestException</code> for a non-credential payload, the exception text includes the full <code>request_headers</code> (lines 49-51) containing the live sid; non-login payloads are also logged at debug 10 (line 30). No header redaction on this vendor path.</li>
+<li><strong>Impact:</strong> Check Point session tokens can leak into error/debug logs and be replayed while valid.</li>
+<li><strong>Recommendation:</strong> Redact <code>X-chkp-sid</code> (and credential headers) before including headers in exception text/debug output.</li>
+</ul>
+<h3>[LOW] Native/normalized config dumped to a predictable shared temp path</h3>
+<ul>
+<li><strong>ID:</strong> IMP-07</li>
+<li><strong>Category:</strong> Path/File handling (information exposure)</li>
+<li><strong>Location:</strong> <code>roles/importer/files/importer/fwo_base.py:223-236</code>, <code>model_controllers/fwconfigmanagerlist_controller.py:125</code> (<code>IMPORT_TMP_PATH</code> = <code>fwo_const.py:24</code>)</li>
+<li><strong>Description:</strong> At debug level &gt;=7 the full native config (sensitive policy/object data) and normalized config are written to fixed, predictable filenames under <code>/usr/local/fworch/tmp/import/mgm_id_&lt;id&gt;_config_native.json</code>. The dir is created with default <code>mkdir(parents=True)</code> (<code>common.py:157</code>); no explicit restrictive mode/umask, predictable names.</li>
+<li><strong>Impact:</strong> On a shared host, other local users may read exported firewall configs if the tmp dir isn't tightly permissioned; predictable names enable symlink nuisance (path not attacker-supplied).</li>
+<li><strong>Recommendation:</strong> Create the import tmp dir <code>0o700</code> and write dumps owner-only; gate behind an explicit "dump sensitive config" toggle rather than a generic debug level.</li>
+</ul>
+<h3>[INFORMATIONAL] FortiOS access token passed in URL query string</h3>
+<ul>
+<li><strong>ID:</strong> IMP-08</li>
+<li><strong>Category:</strong> Secrets (transport)</li>
+<li><strong>Location:</strong> <code>roles/importer/files/importer/fw_modules/fortiosmanagementREST/fos_getter.py:50-55</code></li>
+<li><strong>Description:</strong> The token is passed via <code>params={&quot;access_token&quot;: access_token}</code> (query string) — FortiOS API design. The token is *not* embedded in the logged URL (only <code>api_url</code> without params logged at line 79), so importer-side logging is clean, but query-string tokens tend to land in FortiGate/proxy access logs.</li>
+<li><strong>Impact:</strong> Token exposure via upstream access logs, outside the importer's control.</li>
+<li><strong>Recommendation:</strong> Prefer <code>Authorization: Bearer</code> if the FortiOS version supports it; else document as a vendor constraint.</li>
+</ul>
+<h3>[INFORMATIONAL] Weak SSH key-exchange algorithm enabled for ASA</h3>
+<ul>
+<li><strong>ID:</strong> IMP-09</li>
+<li><strong>Category:</strong> Weak crypto (transport)</li>
+<li><strong>Location:</strong> <code>roles/importer/files/importer/fw_modules/ciscoasa9/fwcommon.py:50</code></li>
+<li><strong>Description:</strong> ASA SSH transport enables <code>KexAlgorithms=+diffie-hellman-group14-sha1</code> (legacy SHA-1 KEX). Commonly needed for old ASA firmware, so a compatibility trade-off, but it weakens the handshake and compounds IMP-01.</li>
+<li><strong>Impact:</strong> Slightly weaker SSH negotiation; low standalone impact.</li>
+<li><strong>Recommendation:</strong> Restrict to devices that require it; prefer stronger KEX where supported.</li>
+</ul>
+<h3>[INFORMATIONAL] Broad exception handling around security-relevant operations</h3>
+<ul>
+<li><strong>ID:</strong> IMP-10</li>
+<li><strong>Category:</strong> Error handling</li>
+<li><strong>Location:</strong> e.g. <code>fwo_encrypt.py:42</code>, <code>fwo_config.py:28</code>, numerous <code>except Exception:</code> in <code>cp_getter.py</code>/<code>fmgr_getter.py</code></li>
+<li><strong>Description:</strong> Many paths catch bare <code>Exception</code>. Most re-log/re-raise and are benign, but combined with IMP-03's fail-open decrypt the pattern can mask security-relevant failures (decryption, TLS).</li>
+<li><strong>Impact:</strong> Reduced visibility of failures; potential to proceed in a degraded/insecure state.</li>
+<li><strong>Recommendation:</strong> Catch specific exception types where feasible; fail closed on crypto/auth/TLS errors.</li>
+</ul>
+<h2>Positive Observations</h2>
+<ul>
+<li>GraphQL queries/mutations loaded from static <code>.graphql</code> files and executed with parameterized <code>variables</code>; device data never interpolated into query text — no data-layer injection.</li>
+<li>Sensitive headers (<code>authorization</code>, <code>x-hasura-admin-secret</code>) and GraphQL variables redacted before logging (<code>fwo_api.py:466-486</code>).</li>
+<li>Login payloads deliberately excluded from debug logs on CP and FortiManager paths (<code>cp_getter.py:29</code>, <code>fmgr_getter.py:39,49</code>).</li>
+<li>No <code>eval</code>/<code>exec</code>/<code>compile</code>/<code>os.system</code>/<code>subprocess</code>/<code>pickle</code>/<code>marshal</code>/<code>jsonpickle</code>/<code>yaml.load</code>; no XML parsing (no XXE surface).</li>
+<li>Vendor module selection uses an explicit <code>match</code> statement, not dynamic import from device-controlled strings (<code>common.py:290-305</code>).</li>
+<li>Config integrity hashing uses SHA-256, not MD5/SHA-1 (<code>fwo_base.py:308-311</code>).</li>
+<li>Management secrets decrypted only in memory, not written into GraphQL payloads or normal logs; decryption skipped for URL/fileless managements (<code>management_controller.py:193-209</code>).</li>
+</ul>
+</body>
+</html>

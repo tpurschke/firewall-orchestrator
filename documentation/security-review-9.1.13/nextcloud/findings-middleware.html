@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>findings-middleware</title>
+<style>body{font-family:sans-serif;max-width:60em;margin:2em auto;padding:0 1em;line-height:1.5;color:#222}table{border-collapse:collapse;margin:1em 0;width:auto}th,td{border:1px solid #888;padding:4px 10px;text-align:left;vertical-align:top}th{background:#f0f0f0}code{background:#f4f4f4;padding:1px 4px;border-radius:3px;font-family:monospace;font-size:.9em}h1,h2,h3,h4{line-height:1.25}hr{border:0;border-top:1px solid #ccc;margin:2em 0}</style>
+</head>
+<body>
+<h1>Security Review — Middleware Role (FWO 9.1.13)</h1>
+<h2>Summary</h2>
+<p>The Middleware role is the highest-value target in FWO (it mints the JWTs that the whole platform trusts), and overall it is in reasonably good shape. The JWT design is sound: tokens are signed with RS256 using an RSA-2048 private key that is generated per-installation and stored outside the source tree (<code>/etc/secrets</code>), and the token validator enforces signature, issuer, audience and lifetime. Authorization is consistently applied — every REST action carries an explicit <code>[Authorize(Roles=...)]</code> attribute, there are no <code>[AllowAnonymous]</code> endpoints, role-assignment and user-mutation endpoints are admin-only, the password-change endpoint has an explicit IDOR check, and refresh tokens are stored/rotated as SHA-256 hashes with single-use semantics. LDAP filter construction is properly escaped (RFC 4515), process execution uses <code>ArgumentList</code> with <code>UseShellExecute=false</code>, and import file paths are confined to an allow-listed root with extension allow-listing.</p>
+<p>The one clear defect is that LDAP TLS is established with certificate validation unconditionally disabled (callback returns <code>true</code>), which undermines the confidentiality and integrity of every LDAP bind — including the credential-validation binds that back authentication. The remainder of the findings are lower-severity hardening items (exception messages returned to callers, a committed test key pair shipped in the role, CBC-without-MAC symmetric encryption of stored secrets, permissive <code>AllowedHosts</code>, and admin token delegation without tenant scoping).</p>
+<table>
+<thead><tr><th>Severity</th><th>Count</th></tr></thead>
+<tbody>
+<tr><td>Critical</td><td>0</td></tr>
+<tr><td>High</td><td>1</td></tr>
+<tr><td>Medium</td><td>3</td></tr>
+<tr><td>Low</td><td>3</td></tr>
+<tr><td>Informational</td><td>3</td></tr>
+</tbody></table>
+<h2>Findings</h2>
+<h3>[High] LDAP TLS certificate validation is disabled (accept-any-cert)</h3>
+<ul>
+<li><strong>ID:</strong> MW-01</li>
+<li><strong>Category:</strong> Cryptography / TLS / Authentication</li>
+<li><strong>Location:</strong> <code>FWO.Middleware.Server/LdapBasic.cs:52</code></li>
+<li><strong>Description:</strong> When an LDAP connection is configured with TLS, the connection is built</li>
+</ul>
+<p>with a remote-certificate-validation callback that unconditionally returns <code>true</code>: <code>if (Tls) ldapOptions.ConfigureRemoteCertificateValidationCallback((...) =&gt; true);</code>. Every LDAP bind performed by the middleware — search-user binds, write-user binds, and critically the per-user credential-validation binds in <code>CredentialsValid</code> / <code>GetLdapEntry</code> — flows over this connection. Because the certificate is never verified, the "TLS" protection is reduced to opportunistic encryption with no authentication of the server endpoint.</p>
+<ul>
+<li><strong>Impact:</strong> An attacker positioned on the network path between the middleware and an</li>
+</ul>
+<p>LDAP/AD server (ARP/DNS spoofing, rogue DHCP, compromised switch, malicious upstream) can transparently man-in-the-middle the TLS session. They can then (a) harvest cleartext user credentials as they are bound for validation, (b) harvest the privileged search-user and write-user credentials, and (c) forge bind results to authenticate as an arbitrary user. This defeats authentication for the entire platform, and is particularly severe for externally-federated LDAPs reached over untrusted networks.</p>
+<ul>
+<li><strong>Recommendation:</strong> Perform real certificate validation. Validate against the system /</li>
+</ul>
+<p>a configured trust store, reject on <code>SslPolicyErrors</code> other than <code>None</code>, and only relax validation behind an explicit, per-LDAP-connection opt-in flag (e.g. "trust self-signed") that is off by default and clearly surfaced in the UI. Do not ship a build with the callback hardcoded to <code>true</code>.</p>
+<h3>[Medium] Authentication and token endpoints return raw exception messages to callers</h3>
+<ul>
+<li><strong>ID:</strong> MW-02</li>
+<li><strong>Category:</strong> Information Disclosure / Authentication</li>
+<li><strong>Location:</strong> <code>FWO.Middleware.Server/Controllers/AuthenticationTokenController.cs:84</code>,</li>
+</ul>
+<p><code>:130</code>, <code>:175</code>, <code>:238</code> (all <code>catch { return BadRequest(ex.Message); }</code>); <code>FWO.Middleware.Server/Controllers/AuthenticationServerController.cs:56</code></p>
+<ul>
+<li><strong>Description:</strong> The token-issuance endpoints (<code>Get</code>, <code>GetForUser</code>, <code>GetTokenPair</code>,</li>
+</ul>
+<p><code>GetTokenPairForUser</code>) and the LDAP <code>TestConnection</code> endpoint catch exceptions and return the raw <code>Exception.Message</code> (and for <code>GetForUser</code>, wrapped LDAP/validation error text) in the HTTP response body. These are unauthenticated or low-privilege reachable surfaces.</p>
+<ul>
+<li><strong>Impact:</strong> An attacker probing the login endpoint can extract internal detail —</li>
+</ul>
+<p>LDAP server addresses/ports, DN structure, decrypt/bind failure specifics, whether a username exists in a directory — that aids reconnaissance and username enumeration against the authentication backend. It also risks leaking stack/config details on unexpected exceptions.</p>
+<ul>
+<li><strong>Recommendation:</strong> Return a generic, constant error ("Invalid credentials" /</li>
+</ul>
+<p>"Authentication failed") to the client for auth failures and log the detailed exception server-side only. Avoid differentiating "user not found" from "bad password" in the response.</p>
+<h3>[Medium] Stored secrets use AES-CBC without authentication (no MAC)</h3>
+<ul>
+<li><strong>ID:</strong> MW-03</li>
+<li><strong>Category:</strong> Cryptography</li>
+<li><strong>Location:</strong> <code>FWO.Encryption/AesEnc.cs:130</code> (encrypt), <code>:170</code> (decrypt) — consumed by</li>
+</ul>
+<p>the middleware in <code>LdapBasic.cs:110</code> (<code>TryBind</code>) and <code>LdapGroupHandling.cs:95</code></p>
+<ul>
+<li><strong>Description:</strong> LDAP search/write-user passwords and other stored secrets are encrypted</li>
+</ul>
+<p>with AES-256-CBC and a random IV prepended to the ciphertext, but there is no authentication tag / HMAC over the ciphertext. The mode is unauthenticated encryption. Additionally the key is taken as the raw UTF-8 bytes of the main-key file (<code>Encoding.UTF8.GetBytes(key)</code>), so key strength depends entirely on the file contents rather than a KDF. (This code lives in <code>roles/lib</code>, outside the strict middleware path, but it is the encryption the middleware relies on for every LDAP credential.)</p>
+<ul>
+<li><strong>Impact:</strong> CBC without a MAC is malleable and exposes the system to padding-oracle /</li>
+</ul>
+<p>bit-flipping classes of attack if any decryption oracle is exposed, and provides no tamper detection on secrets at rest. An attacker with write access to the stored ciphertext can silently corrupt or manipulate it.</p>
+<ul>
+<li><strong>Recommendation:</strong> Migrate to an authenticated cipher (AES-GCM / <code>AesGcm</code>, or</li>
+</ul>
+<p>encrypt-then-MAC with HMAC-SHA256). Derive the AES key from the main key material with a KDF (e.g. HKDF/PBKDF2) and enforce a fixed key length, instead of using the raw file bytes.</p>
+<h3>[Medium] Admin token delegation issues tokens for any user without tenant scoping</h3>
+<ul>
+<li><strong>ID:</strong> MW-04</li>
+<li><strong>Category:</strong> Authorization / Privilege Delegation</li>
+<li><strong>Location:</strong> <code>FWO.Middleware.Server/Controllers/AuthenticationTokenController.cs:99</code></li>
+</ul>
+<p>(<code>GetTokenPairForUser</code>) and <code>:189</code> (<code>GetAsyncForUser</code>)</p>
+<ul>
+<li><strong>Description:</strong> These endpoints let a user who authenticates with the global <code>admin</code></li>
+</ul>
+<p>role obtain a fully-usable access token (with the target user's roles, tenant and visibility claims) for <strong>any</strong> target user identified by name or DN, without the target user's password. The only gate is that the caller holds <code>Roles.Admin</code>. There is no tenant boundary — a global admin can impersonate any user in any tenant. The refresh token is (correctly, per #4654) withheld for the <code>GetTokenPairForUser</code> variant, but the legacy <code>GetForUser</code> variant still mints a full-lifetime access token.</p>
+<ul>
+<li><strong>Impact:</strong> This is by-design admin functionality, but it means a single compromised or</li>
+</ul>
+<p>malicious global-admin credential yields silent impersonation of every user/tenant, bypassing tenant isolation. The <code>GetForUser</code> legacy path additionally grants a full-lifetime access token, widening the window.</p>
+<ul>
+<li><strong>Recommendation:</strong> Keep the capability admin-gated but (a) ensure every issued</li>
+</ul>
+<p>delegated token is audit-logged with actor + target (this is done — good), (b) consider restricting delegation to within the admin's tenant unless the admin is a global/tenant0 admin, and (c) deprecate/remove the legacy <code>GetForUser</code>/<code>Get</code> string-returning variants in favor of the delegated, non-refreshable <code>GetTokenPairForUser</code> path with a short lifetime.</p>
+<h3>[Low] Committed fixed JWT key pair shipped inside the middleware role</h3>
+<ul>
+<li><strong>ID:</strong> MW-05</li>
+<li><strong>Category:</strong> Secrets Management / JWT</li>
+<li><strong>Location:</strong> <code>roles/middleware/files/jwt_test_private_key.pem</code>,</li>
+</ul>
+<p><code>roles/middleware/files/jwt_test_public_key.pem</code>; deployment in <code>roles/middleware/tasks/create_auth_secrets.yml:60-78</code></p>
+<ul>
+<li><strong>Description:</strong> A real RSA-2048 private/public key pair is committed to the repository.</li>
+</ul>
+<p>It is only deployed when the installer variable <code>testkeys</code> is true; the default (<code>inventory/group_vars/middlewareserver.yml: testkeys: no</code>) generates a fresh random key, and a "SECURITY WARNING" banner is printed when test keys are enabled (<code>roles/common/tasks/main.yml:41</code>). So this is not a production-key-exposure by default.</p>
+<ul>
+<li><strong>Impact:</strong> Any installation deployed with <code>testkeys=yes</code> (test/CI/demo, or an operator</li>
+</ul>
+<p>who copies test inventory) uses a globally-known private key. Anyone with the repo can forge arbitrary JWTs — including <code>admin</code> / <code>middleware-server</code> roles — against such an installation, achieving full auth bypass and privilege escalation.</p>
+<ul>
+<li><strong>Recommendation:</strong> Keep the strong default and warning. Additionally, treat the checked-in</li>
+</ul>
+<p>private key as sensitive: consider generating ephemeral test keys at test time instead of committing a static private key, and add a guard that refuses to start with the known test key outside of an explicitly-flagged test environment.</p>
+<h3>[Low] Permissive <code>AllowedHosts</code> wildcard</h3>
+<ul>
+<li><strong>ID:</strong> MW-06</li>
+<li><strong>Category:</strong> Configuration / Hardening</li>
+<li><strong>Location:</strong> <code>FWO.Middleware.Server/appsettings.json</code> (<code>&quot;AllowedHosts&quot;: &quot;*&quot;</code>)</li>
+<li><strong>Description:</strong> The host-filtering middleware is configured to accept any Host header.</li>
+</ul>
+<p>Combined with HTTPS redirection being commented out in <code>Program.cs:155</code> (<code>//app.UseHttpsRedirection();</code>), the server relies entirely on the surrounding reverse proxy / network placement for host and transport hardening.</p>
+<ul>
+<li><strong>Impact:</strong> Increases exposure to Host-header spoofing / cache-poisoning-style issues if</li>
+</ul>
+<p>the service is ever reachable directly rather than only via the intended proxy.</p>
+<ul>
+<li><strong>Recommendation:</strong> Restrict <code>AllowedHosts</code> to the expected middleware hostname(s) and</li>
+</ul>
+<p>confirm TLS termination/redirection is enforced at the proxy for all environments.</p>
+<h3>[Low] Verbose authentication logging of user identifiers and directory topology</h3>
+<ul>
+<li><strong>ID:</strong> MW-07</li>
+<li><strong>Category:</strong> Sensitive Data in Logs</li>
+<li><strong>Location:</strong> <code>FWO.Middleware.Server/Controllers/AuthenticationTokenController.cs:487</code>,</li>
+</ul>
+<p><code>:496</code>, <code>:565</code>, <code>:602</code>, <code>:630</code>; <code>FWO.Middleware.Server/LdapBasic.cs:283</code>, <code>:356</code>, <code>:362</code></p>
+<ul>
+<li><strong>Description:</strong> Authentication paths log usernames, full DNs, resolved group DNs,</li>
+</ul>
+<p>target LDAP address:port, and "found user with matching uid but different pwd" messages. No passwords or tokens are logged (verified), and much of this is intentional audit content, so this is low severity — but at <code>Info</code>/<code>Debug</code> level it does emit a fairly complete picture of the directory topology and per-user membership.</p>
+<ul>
+<li><strong>Impact:</strong> Anyone with read access to logs gains a map of users, groups and directory</li>
+</ul>
+<p>structure, useful for lateral-movement reconnaissance.</p>
+<ul>
+<li><strong>Recommendation:</strong> Keep DN/group detail at <code>Debug</code> only, ensure production log level and</li>
+</ul>
+<p>log-file permissions are restrictive, and avoid the "matching uid but different pwd" wording that confirms account existence.</p>
+<h3>[Informational] LDAP filter escaping and DN comparison are implemented correctly</h3>
+<ul>
+<li><strong>ID:</strong> MW-08</li>
+<li><strong>Category:</strong> LDAP Injection</li>
+<li><strong>Location:</strong> <code>FWO.Middleware.Server/LdapBasic.cs:135</code> (<code>EscapeFilterValue</code>), <code>:178</code></li>
+</ul>
+<p>(<code>EscapeSearchPattern</code>), <code>:187</code>/<code>:210</code> (filter builders); <code>FWO.Middleware.Server/LdapGroupHandling.cs:446</code></p>
+<ul>
+<li><strong>Description:</strong> All user-influenced values interpolated into LDAP search filters are</li>
+</ul>
+<p>passed through RFC 4515 escaping (<code>\</code>, <code>*</code>, <code>(</code>, <code>)</code>, <code>NUL</code>), with wildcard-preserving segment escaping for search patterns. DN membership comparisons use a normalizing comparer (<code>DistName.NormalizeDnForComparison</code>) rather than naive string equality. No injectable filter construction was found. Noted as a positive.</p>
+<ul>
+<li><strong>Impact:</strong> None.</li>
+<li><strong>Recommendation:</strong> Maintain this pattern for any new filter-building code.</li>
+</ul>
+<h3>[Informational] Import script execution is not shell-interpolated and paths are confined</h3>
+<ul>
+<li><strong>ID:</strong> MW-09</li>
+<li><strong>Category:</strong> Command Injection / Path Traversal</li>
+<li><strong>Location:</strong> <code>FWO.Middleware.Server/DataImportBase.cs:66-127</code>;</li>
+</ul>
+<p><code>FWO.Basics/ImportPathPolicy.cs</code></p>
+<ul>
+<li><strong>Description:</strong> <code>RunImportScript</code> uses <code>ProcessStartInfo</code> with <code>UseShellExecute = false</code></li>
+</ul>
+<p>and an explicit <code>ArgumentList</code> (arguments parsed with a custom quote-aware splitter, no shell), so classic shell metacharacter injection is not possible. The executable and data paths are validated by <code>ImportPathPolicy</code>, which resolves the full path and rejects anything outside <code>/usr/local/fworch/scripts/customizing</code>, and restricts extensions to <code>.json</code>/<code>.py</code>. Noted as a positive.</p>
+<ul>
+<li><strong>Impact:</strong> None.</li>
+<li><strong>Recommendation:</strong> Continue routing all import-source paths through <code>ImportPathPolicy</code>.</li>
+</ul>
+<h3>[Informational] JWT validation and refresh-token handling are well designed</h3>
+<ul>
+<li><strong>ID:</strong> MW-10</li>
+<li><strong>Category:</strong> JWT / Session Management</li>
+<li><strong>Location:</strong> <code>FWO.Middleware.Server/Program.cs:103-117</code>;</li>
+</ul>
+<p><code>FWO.Middleware.Server/JwtWriter.cs</code>; <code>FWO.Middleware.Server/Controllers/AuthenticationTokenController.cs:772-855</code></p>
+<ul>
+<li><strong>Description:</strong> Tokens are signed with RS256 (<code>SecurityAlgorithms.RsaSha256</code>); no <code>none</code></li>
+</ul>
+<p>algorithm or HS/RS confusion path exists. The validator enforces <code>RequireSignedTokens</code>, <code>RequireExpirationTime</code>, <code>ValidateAudience</code>, <code>ValidateIssuer</code>, <code>ValidateLifetime</code>, with a fixed issuer/audience and the RSA public key. Refresh tokens are 64 bytes from <code>RandomNumberGenerator</code>, stored only as SHA-256 hashes, single-use (revoke-before-reissue with an affected-row check), and delegated tokens deliberately omit refresh tokens (#4654). Anonymous tokens are short-lived (15 min). Noted as a positive.</p>
+<ul>
+<li><strong>Impact:</strong> None.</li>
+<li><strong>Recommendation:</strong> None; keep the anonymous/access lifetimes conservative.</li>
+</ul>
+<h2>Positive Observations</h2>
+<ul>
+<li><strong>RS256 with per-install keys.</strong> Asymmetric signing, no symmetric-key or <code>none</code>-algorithm</li>
+</ul>
+<p>weaknesses; production keys are generated fresh and stored under <code>/etc/secrets</code>, not in source.</p>
+<ul>
+<li><strong>Strict, consistent authorization.</strong> Every controller action has an explicit</li>
+</ul>
+<p><code>[Authorize(Roles=...)]</code>; no <code>[AllowAnonymous]</code>; user/role/tenant mutations are admin-only.</p>
+<ul>
+<li><strong>IDOR protection on password change</strong> (<code>CallerCanChangePassword</code> verifies the caller's</li>
+</ul>
+<p><code>x-hasura-user-id</code> claim against the target).</p>
+<ul>
+<li><strong>Refresh-token hygiene</strong> — CSPRNG generation, hashed-at-rest storage, single-use</li>
+</ul>
+<p>rotation, delegated tokens non-refreshable.</p>
+<ul>
+<li><strong>Robust LDAP filter escaping</strong> (RFC 4515) and normalized DN comparison for membership.</li>
+<li><strong>Roles are sourced only from internal LDAPs</strong> (<code>HasRoleHandling</code>), so an external</li>
+</ul>
+<p>federated directory cannot grant platform roles, and deterministic LDAP selection avoids a rogue-source auth bypass.</p>
+<ul>
+<li><strong>Safe process execution and path confinement</strong> for the import subsystem.</li>
+<li><strong>Comprehensive audit logging</strong> (<code>Log.WriteAudit</code>) on token issuance, delegation, refresh,</li>
+</ul>
+<p>revoke, and LDAP/role/user administration, including actor and target identity — without logging passwords or token secrets.</p>
+</body>
+</html>
