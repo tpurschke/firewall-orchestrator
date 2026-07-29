@@ -24,6 +24,23 @@ namespace FWO.Config.Api
         public UiUser User { private set; get; }
         public string ExecutionMode { get; private set; } = GlobalConst.kUserRolesSelection;
 
+        /// <summary>
+        /// Creates a text-only user configuration for unauthenticated UI/bootstrap display.
+        /// This does not load direct configuration properties for operational code.
+        /// </summary>
+        public static UserConfig ForTextOnly(GlobalConfig globalConfig, bool registerOnChangeHandler = true)
+        {
+            return new UserConfig(globalConfig, registerOnChangeHandler);
+        }
+
+        /// <summary>
+        /// Creates an initialized configuration for middleware and scheduled jobs that need global settings.
+        /// </summary>
+        public static UserConfig ForGlobalSettings(GlobalConfig globalConfig, ApiConnection apiConnection, string language = GlobalConst.kEnglish, bool owningApiConnection = false)
+        {
+            return new UserConfig(globalConfig, apiConnection, new UiUser { DbId = 0, Language = language }, owningApiConnection);
+        }
+
         public static async Task<UserConfig> ConstructAsync(GlobalConfig globalConfig, ApiConnection apiConnection, int userId, bool owningApiConnection = false)
         {
             UiUser[] users = await apiConnection.SendQueryAsync<UiUser[]>(AuthQueries.getUserByDbId, new { userId = userId });
@@ -47,7 +64,7 @@ namespace FWO.Config.Api
         }
 
         // Warning: only for Texts, ConfigItems contain Default content, correct ConfigItems are only in this.globalConfig
-        public UserConfig(GlobalConfig globalConfig, bool registerOnChangeHandler = true) : base()
+        private UserConfig(GlobalConfig globalConfig, bool registerOnChangeHandler = true) : base()
         {
             User = new UiUser();
             Translate = globalConfig.LangDict[globalConfig.DefaultLanguage];
@@ -67,16 +84,26 @@ namespace FWO.Config.Api
         private void OnGlobalConfigChange(Config config, ConfigItem[] changedItems)
         {
             if (IsDisposed) return;
-            // Get properties that belong to the user config 
-            IEnumerable<PropertyInfo> properties = GetType().GetProperties()
-                .Where(prop => prop.GetCustomAttribute<UserConfigDataAttribute>() != null);
-
-            // Exclude all properties from update that belong to the user config
+            HashSet<string> userConfigKeys = GetUserConfigKeys();
+            HashSet<string> personalOverrideKeys = RawConfigItems.Select(configItem => configItem.Key).ToHashSet();
             ConfigItem[] relevantChangedItems = changedItems.Where(configItem =>
-                !properties.Any(prop => ((JsonPropertyNameAttribute)prop.GetCustomAttribute(typeof(JsonPropertyNameAttribute))!).Name == configItem.Key)).ToArray();
+                !userConfigKeys.Contains(configItem.Key) || !personalOverrideKeys.Contains(configItem.Key)).ToArray();
 
             Update(relevantChangedItems);
             InvokeOnChange(this, changedItems);
+        }
+
+        /// <summary>
+        /// Gets all config keys that can be overridden per user.
+        /// </summary>
+        private HashSet<string> GetUserConfigKeys()
+        {
+            return GetType().GetProperties()
+                .Where(prop => prop.GetCustomAttribute<UserConfigDataAttribute>() != null)
+                .Select(prop => prop.GetCustomAttribute<JsonPropertyNameAttribute>()?.Name)
+                .Where(name => name != null)
+                .Cast<string>()
+                .ToHashSet();
         }
 
         public async Task SetUserInformation(string userDn, ApiConnection apiConnection)

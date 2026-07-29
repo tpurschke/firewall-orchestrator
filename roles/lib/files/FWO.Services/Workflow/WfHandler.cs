@@ -159,10 +159,11 @@ namespace FWO.Services.Workflow
                     {
                         await apiConnection.RunWithRole(Roles.MiddlewareServer, async () =>
                         {
+                            List<WfState> states = await apiConnection.SendQueryAsync<List<WfState>>(RequestQueries.getStates);
                             ActionHandler = new(apiConnection, this, UserGroups, usedInMwServer, RequestedRulePolicyChecker, WorkflowRecipientResolver);
-                            await ActionHandler.Init();
+                            await ActionHandler.Init(states);
                             dbAcc = new WfDbAccess(DisplayMessageInUi, userConfig, apiConnection, ActionHandler, true) { };
-                            await stateMatrixDict.Init(Phase, apiConnection);
+                            await stateMatrixDict.Init(Phase, apiConnection, states);
                             MasterStateMatrix = stateMatrixDict.Matrices[WfTaskType.master.ToString()];
                         });
                     }
@@ -188,18 +189,19 @@ namespace FWO.Services.Workflow
 
         private async Task LoadInitialData(ApiConnection activeApiConnection, bool fetchData, List<int>? ownerIds, bool allStates, bool fullTickets)
         {
+            List<WfState> states = await activeApiConnection.SendQueryAsync<List<WfState>>(RequestQueries.getStates);
             ActionHandler = new(activeApiConnection, this, UserGroups, usedInMwServer, RequestedRulePolicyChecker, WorkflowRecipientResolver);
-            await ActionHandler.Init();
+            await ActionHandler.Init(states);
             dbAcc = new WfDbAccess(DisplayMessageInUi, userConfig, activeApiConnection, ActionHandler,
                 AuthUser == null || userConfig.CanUseAnyRole(Roles.Admin, Roles.Auditor))
             { };
             Devices = await activeApiConnection.SendQueryAsync<List<Device>>(DeviceQueries.getDeviceDetails);
             AllOwners = await activeApiConnection.SendQueryAsync<List<FwoOwner>>(OwnerQueries.getOwners);
-            await stateMatrixDict.Init(Phase, activeApiConnection);
+            await stateMatrixDict.Init(Phase, activeApiConnection, states);
             MasterStateMatrix = stateMatrixDict.Matrices[WfTaskType.master.ToString()];
             if (fetchData)
             {
-                TicketList = await dbAcc.FetchTickets(MasterStateMatrix, ownerIds, allStates, fullTickets);
+                TicketList = await dbAcc.FetchTickets(MasterStateMatrix, ownerIds, allStates, fullTickets, GetVisibilityTicketFilter());
             }
             ReloadTasks = !fullTickets;
             PrioList = System.Text.Json.JsonSerializer.Deserialize<List<WfPriority>>(userConfig.ReqPriorities) ?? throw new JsonException("Config data could not be parsed.");
@@ -229,6 +231,15 @@ namespace FWO.Services.Workflow
                 DisplayMessageInUi(exception, userConfig.GetText("state_matrix"), "", true);
                 return new();
             }
+        }
+
+        public HashSet<int> GetWorkflowExclusiveVisibilityGroupIds()
+        {
+            HashSet<int> exclusiveVisibilityGroupIds = stateMatrixDict.Matrices.Values
+                .SelectMany(matrix => matrix.ExclusiveVisibilityGroupIds)
+                .ToHashSet();
+            exclusiveVisibilityGroupIds.UnionWith(MasterStateMatrix.ExclusiveVisibilityGroupIds);
+            return exclusiveVisibilityGroupIds;
         }
 
         public void SetContinueEnv(ObjAction action)

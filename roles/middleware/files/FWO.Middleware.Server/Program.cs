@@ -5,16 +5,19 @@ using FWO.Config.Api;
 using FWO.Config.File;
 using FWO.Logging;
 using FWO.Middleware.Server;
+using FWO.Middleware.Server.OpenApi;
 using FWO.Middleware.Server.Services;
 using FWO.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.Extensions.Options;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 using Quartz;
-using System.Reflection;
+using Scalar.AspNetCore;
 
 object changesLock = new(); // LOCK
+const string kApiDocsPageRoute = "/api-docs";
+const string kApiDocsRoute = "/api-docs/{documentName}.json";
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
@@ -46,6 +49,7 @@ while (true)
 }
 
 GraphQlApiSubscription<List<Ldap>>.SubscriptionUpdate connectedLdapsSubscriptionUpdate = (List<Ldap> ldapsChanges) => { lock (changesLock) { connectedLdaps = ldapsChanges; } };
+
 GraphQlApiSubscription<List<Ldap>> connectedLdapsSubscription = apiConnection.GetSubscription<List<Ldap>>(GraphqlExceptionHandler.Handle, connectedLdapsSubscriptionUpdate, AuthQueries.getLdapConnectionsSubscription);
 Log.WriteInfo("Found ldap connection to server", string.Join("\n", connectedLdaps.ConvertAll(ldap => $"{ldap.Address}:{ldap.Port}")));
 
@@ -85,12 +89,15 @@ builder.Services.AddSingleton<UpdateFlowsSchedulerService>();
 builder.Services.AddControllers()
   .AddJsonOptions(jsonOptions =>
   {
-      //jsonOptions.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
-      jsonOptions.JsonSerializerOptions.PropertyNamingPolicy = null;
+      ApiDocumentationJsonOptions.Configure(jsonOptions);
   });
 
 builder.Services.AddSingleton<JwtWriter>(jwtWriter);
 builder.Services.AddSingleton<List<Ldap>>(connectedLdaps);
+builder.Services.AddSingleton<FlowCatalogService>();
+builder.Services.AddSingleton<FlowComplianceService>();
+builder.Services.AddSingleton<FlowRequestService>();
+builder.Services.AddApiExamples();
 
 builder.Services.AddAuthentication(confOptions =>
 {
@@ -112,29 +119,51 @@ builder.Services.AddAuthentication(confOptions =>
         IssuerSigningKey = ConfigFile.JwtPublicKey
     };
 });
-builder.Services.AddSwaggerGen(c =>
+builder.Services.AddOpenApi("v1", options =>
 {
-    c.SwaggerDoc("v1", new OpenApiInfo
+    options.AddOperationTransformer<OpenApiOperationNameTransformer>();
+    options.AddOperationTransformer<OpenApiAuthorizationOperationTransformer>();
+    options.AddOperationTransformer<OpenApiApiExampleOperationTransformer>();
+    options.AddDocumentTransformer((document, context, cancellationToken) =>
     {
-        Title = "FWO Middleware API Documentation",
-        Description = "A documentation of the REST API interface for the FWO Middleware.",
-        Version = "v1"
-    });
-    string documentationPath = Path.Combine(AppContext.BaseDirectory, $"{Assembly.GetExecutingAssembly().GetName().Name}.xml");
-    c.IncludeXmlComments(documentationPath);
+        document.Info = new OpenApiInfo
+        {
+            Title = "FWO Middleware API Documentation",
+            // Top-level Markdown headings ("# ...") in the description are rendered by Scalar as
+            // their own sidebar sections at the same level as the auto-generated "Introduction".
+            // The "Authentication" section documents the single, top-level bearer scheme.
+            Description =
+                "This is the REST API interface for the Firewall Orchestrator (FWO) Middleware Server. " +
+                "The middleware server brokers communication between the FWO UI, the data layer and the " +
+                "automation routines. It exposes endpoints for authentication and JWT issuance, " +
+                "authorization (roles, groups and tenants), user and credential management, scheduling, " +
+                "rule compliance checks, reporting and change-request workflows.\n\n" +
+                "Use this interactive documentation to explore the available endpoints, inspect their " +
+                "request and response schemas, and send live test requests directly from your browser. " +
+                "Every request requires a valid JWT — see the **Authentication** section below on how to " +
+                "obtain and apply one.\n\n" +
+                "## Authentication\n\n" +
+                "All endpoints are protected by a single JWT bearer scheme. In this API documentation, there is no need to " +
+                "add an individual authorization header to each endpoint. Instead, set the token " +
+                "once in the top-level **Authentication** field at the top of this page and it is " +
+                "automatically applied to every request you send.\n\n" +
+                "To obtain a token, call `POST /api/AuthenticationToken/GetTokenPair` and paste only " +
+                "the returned `accessToken` value into the Authentication field (without the " +
+                "`Bearer` prefix and without the `refreshToken`).",
+            Version = "v1"
+        };
 
-    //! Microsoft broke the current OpenAPI "AddSecurityRequirement" so we have to use the workaround with "OpenApiSecuritySchemeReference" until they fix it
-    c.AddSecurityDefinition("bearer", new OpenApiSecurityScheme
-    {
-        Type = SecuritySchemeType.Http,
-        Scheme = "bearer",
-        BearerFormat = "JWT",
-        Description = "JWT Authorization header using the Bearer scheme."
-    });
+        OpenApiComponents components = document.Components ??= new OpenApiComponents();
+        components.SecuritySchemes ??= new Dictionary<string, IOpenApiSecurityScheme>();
+        components.SecuritySchemes["bearer"] = new OpenApiSecurityScheme
+        {
+            Type = SecuritySchemeType.Http,
+            Scheme = "bearer",
+            BearerFormat = "JWT",
+            Description = "JWT Authorization header using the Bearer scheme."
+        };
 
-    c.AddSecurityRequirement(document => new OpenApiSecurityRequirement
-    {
-        [new OpenApiSecuritySchemeReference("bearer", document)] = []
+        return Task.CompletedTask;
     });
 });
 
@@ -146,8 +175,21 @@ if (app.Environment.IsDevelopment())
     app.UseDeveloperExceptionPage();
 }
 
-app.UseSwagger();
-app.UseSwaggerUI(c => { c.SwaggerEndpoint("/swagger/v1/swagger.json", "FWO.Middleware v1"); });
+app.UseForwardedHeaders(ReverseProxyForwardingOptions.Create());
+
+app.MapOpenApi(kApiDocsRoute);
+app.MapScalarApiReference(kApiDocsPageRoute, options =>
+{
+    options.WithTitle("FWO Middleware API Documentation")
+        .WithOpenApiRoutePattern(kApiDocsRoute)
+        .AddPreferredSecuritySchemes(["bearer"])
+        .AddHttpAuthentication("bearer", scheme =>
+        {
+            scheme.WithDescription("Paste only the accessToken value returned by /api/AuthenticationToken/GetTokenPair. Do not paste the refreshToken or add the Bearer prefix.");
+        })
+        .EnablePersistentAuthentication();
+});
+app.UseSwaggerRedirect(kApiDocsPageRoute);
 
 //app.UseHttpsRedirection();
 

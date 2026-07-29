@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import copy
 import ipaddress
 from datetime import datetime, timezone
@@ -173,7 +175,6 @@ def add_implicit_deny_rule(
     )
 
     rule_normalized = RuleNormalized(
-        rule_num=0,
         rule_num_numeric=0,
         rule_disabled=False,
         rule_src_neg=False,
@@ -198,8 +199,8 @@ def add_implicit_deny_rule(
         parent_rule_uid=None,
         last_hit=None,
         rule_comment=None,
-        rule_src_zone=LIST_DELIMITER.join(rule_src_zones),
-        rule_dst_zone=LIST_DELIMITER.join(rule_dst_zones),
+        rule_src_zone=LIST_DELIMITER.join(sorted(set(rule_src_zones))),
+        rule_dst_zone=LIST_DELIMITER.join(sorted(set(rule_dst_zones))),
         rule_head_text=None,
     )
 
@@ -249,7 +250,6 @@ def parse_single_rule(
 
     # Create the normalized rule
     rule_normalized = RuleNormalized(
-        rule_num=0,
         rule_num_numeric=0,
         rule_disabled=rule_disabled,
         rule_src_neg=rule_src_neg,

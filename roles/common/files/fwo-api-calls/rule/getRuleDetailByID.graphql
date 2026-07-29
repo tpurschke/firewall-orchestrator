@@ -2,7 +2,7 @@ query RuleDetailById(
     $rule_ids: [bigint!]
     $rule_action: String
 ) {
-    rule(
+    firewall_rule(
         where:{
             rule_id: {_in: $rule_ids}
             rule_action: { _eq: $rule_action}
@@ -137,9 +137,14 @@ query RuleDetailById(
         rule_metadatum {
             rule_last_hit
         }
-        rule_owners
-        {
+        rule_owners(
+            where: {
+                removed: { _is_null: true }
+            }
+            order_by: { owner_id: asc }
+        ) {
             owner_id
+            owner_mapping_source_id
         }
     }
 }

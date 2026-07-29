@@ -4,7 +4,7 @@ query getRulesByManagement (
   $import_id_start: bigint
   $import_id_end: bigint
 ) {
-  rule (
+  firewall_rule (
   where: {
     mgm_id: { _eq: $mgmId }
     active: { _eq: true }
@@ -16,5 +16,6 @@ query getRulesByManagement (
   }
   order_by: { rule_num_numeric: asc }){
     ...ruleDetails
+    ...ruleEnforcedOnGateways
   }
 }

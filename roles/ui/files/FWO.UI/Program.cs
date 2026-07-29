@@ -47,7 +47,6 @@ builder.Services.AddRazorPages();
 builder.Services.AddServerSideBlazor();
 
 builder.Services.AddScoped<AuthenticationStateProvider, AuthStateProvider>();
-builder.Services.AddScoped<CircuitHandler, CircuitHandlerService>();
 builder.Services.AddScoped<KeyboardInputService, KeyboardInputService>();
 builder.Services.AddScoped<IEventMediator, EventMediator>();
 builder.Services.AddScoped<IRuleTreeBuilder>(_ => new RuleTreeBuilder());
@@ -60,6 +59,8 @@ builder.Services.AddScoped<ApiConnection>(_ => new GraphQlApiConnection(ApiUri))
 builder.Services.AddScoped<MiddlewareClient>(_ => new MiddlewareClient(MiddlewareUri));
 builder.Services.AddScoped<ISessionStorage, SessionStorageWrapper>();
 builder.Services.AddScoped<TokenService>();
+builder.Services.AddScoped<ITokenRefreshCoordinator, TokenRefreshCoordinator>();
+builder.Services.AddSingleton<IPeriodicTaskRunnerFactory, PeriodicTaskRunnerFactory>();
 builder.Services.AddScoped<ExecutionModeStorage>();
 
 // Create "anonymous" (empty) jwt
@@ -93,12 +94,18 @@ TokenPair tokenPair = System.Text.Json.JsonSerializer.Deserialize<TokenPair>(cre
 string jwt = tokenPair.AccessToken ?? throw new ArgumentException("Received empty jwt.");
 
 // Get all non-confidential configuration settings and add to a global service (for all users)
-GlobalConfig globalConfig = await GlobalConfig.ConstructAsync(jwt, true, true);
+ApiConnection globalConfigApiConnection = new GraphQlApiConnection(ApiUri, jwt);
+GlobalConfig globalConfig = await GlobalConfig.ConstructAsync(globalConfigApiConnection, true, true, owningApiConnection: true);
 builder.Services.AddSingleton<GlobalConfig>(_ => globalConfig);
 builder.Services.AddSingleton<IUrlSanitizer, UrlSanitizer>();
+builder.Services.AddSingleton(new GlobalConfigApiConnection(globalConfigApiConnection));
+builder.Services.AddSingleton(new GlobalConfigTokenState(tokenPair));
+builder.Services.AddSingleton<IAnonymousGlobalConfigTokenProvider>(_ => new AnonymousGlobalConfigTokenProvider(MiddlewareUri));
+builder.Services.AddSingleton(new TokenRefreshOptions());
+builder.Services.AddHostedService<GlobalConfigTokenRefreshService>();
 
 // the user's personal config
-builder.Services.AddScoped<UserConfig>(_ => new UserConfig(globalConfig));
+builder.Services.AddScoped<UserConfig>(_ => UserConfig.ForTextOnly(globalConfig));
 
 builder.Services.AddScoped(_ => new NetworkZoneService());
 builder.Services.AddScoped(_ => new DomEventService());

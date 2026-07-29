@@ -28,7 +28,7 @@
             <EditConnLeftSide @bind-Width="sidebarLeftWidth" @bind-ConnHandler="appHandler.OverviewConnHandler" OverviewMode="true"/>
             <RequestFwChangePopup @bind-Display="showFwChange" SelectedApp="@selectedApp" Connections="appHandler.GetConnectionsToRequest()"
                 RefreshParent="RefreshAfterRequestCreated" ChangeStatus="@ChangeStatus" LastRequestDate="@LastRequestDate"/>
-            <RequestRecertPopup @bind-Display="showRecert" AppHandler="@appHandler" RefreshParent="UpdateRecertStatus" CanRecertify="IsRecertificationAllowedForSelectedApp()"/>
+            <RequestRecertPopup @bind-Display="showRecert" AppHandler="@appHandler" RefreshParent="UpdateRecertStatus" CanRecertify="CanRecertifySelectedApp()"/>
         }
         <div style="margin-left: @($"{sidebarLeftWidth + 10}px");">
             <div class="input-group">
@@ -76,7 +76,7 @@
                         }
                         @if(userConfig.ModRecertActive && appSelected && selectedApp.RecertActive && selectedApp.ConnectionCount.Aggregate.Count > 0)
                         {
-                            @if (HasRecertWriteAccess() && IsRecertificationAllowedForSelectedApp())
+                            @if (CanOpenRecertificationPopup())
                             {
                                 <button type="button" class="btn btn-sm btn-success" @onclick="Recertify">
                                     @(DisplayService.DisplayButtonWithTooltip(userConfig, "recertify", Icons.Recertify, UserConfig.PureLineStat(RecertStatus)))
@@ -84,7 +84,7 @@
                             }
                             else
                             {
-                                <div data-toggle="tooltip" title="@(userConfig.PureLine("C9012"))">
+                                <div data-toggle="tooltip" title="@GetRecertificationDisabledTooltip()">
                                     <button type="button" class="btn btn-sm btn-success" disabled>
                                         @(DisplayService.DisplayButton(userConfig, "recertify", Icons.Recertify))
                                     </button>
@@ -236,8 +236,6 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        // if use has modeller role, choose it before all others for this menu
-        apiConnection.SetBestRole(authenticationStateTask!.Result.User, [ Roles.Modeller, Roles.Admin, Roles.Auditor ]);
         extStateHandler = new(apiConnection);
         await states.Init(apiConnection);
         await InitAppList();
@@ -274,18 +272,7 @@ else
         try
         {
             apps = await ModellingHandlerBase.GetOwnApps(authenticationStateTask!, userConfig, apiConnection, DisplayMessageInUi, true);
-            if (userConfig.CanUseAnyRole(Roles.Admin))
-            {
-                recertifiableOwnerIds = apps.Select(owner => owner.Id).ToHashSet();
-            }
-            else if (userConfig.CanUseAnyRole(Roles.Auditor))
-            {
-                recertifiableOwnerIds = [];
-            }
-            else
-            {
-                recertifiableOwnerIds = userConfig.User.RecertOwnerships.ToHashSet();
-            }
+            recertifiableOwnerIds = userConfig.User.RecertOwnerships.ToHashSet();
 
             if (apps.Count == 0)
             {
@@ -456,7 +443,7 @@ else
 
     private void Recertify()
     {
-        if (!HasRecertWriteAccess() || !IsRecertificationAllowedForSelectedApp())
+        if (!CanOpenRecertificationPopup())
         {
             DisplayMessageInUi(null, userConfig.GetText("recertify"), userConfig.GetText("E9104"), true);
             return;
@@ -471,13 +458,27 @@ else
             return false;
         }
 
-        bool isAdmin = userConfig.CanUseAnyRole(Roles.Admin);
-        return isAdmin || recertifiableOwnerIds.Contains(selectedApp.Id);
+        return recertifiableOwnerIds.Contains(selectedApp.Id);
     }
 
     private bool HasRecertWriteAccess()
     {
-        return userConfig.CanUseAnyRole(Roles.Admin, Roles.Recertifier);
+        return userConfig.CanUseAnyRole(Roles.Recertifier);
+    }
+
+    private bool CanRecertifySelectedApp()
+    {
+        return HasRecertWriteAccess() && IsRecertificationAllowedForSelectedApp();
+    }
+
+    private bool CanOpenRecertificationPopup()
+    {
+        return userConfig.CanUseAnyRole(Roles.Admin) || CanRecertifySelectedApp();
+    }
+
+    private string GetRecertificationDisabledTooltip()
+    {
+        return userConfig.PureLine(HasRecertWriteAccess() ? "C9032" : "C9031");
     }
 
     private bool IsModellingWriteAllowedForSelectedApp()
@@ -543,7 +544,6 @@ else
     {
         if(userConfig.ModRolloutActive)
         {
-            apiConnection.SetProperRole(authenticationStateTask!.Result.User, [ Roles.Modeller, Roles.Recertifier, Roles.Admin, Roles.Auditor ]);
             List<TicketId> ticketIds = await apiConnection.SendQueryAsync<List<TicketId>>(ExtRequestQueries.getLatestTicketId, new{ownerId = selectedApp.Id});
             if(ticketIds.Count == 0)
             {
@@ -553,7 +553,6 @@ else
             else
             {
                 WfTicket? intTicket = await apiConnection.SendQueryAsync<WfTicket>(RequestQueries.getTicketById, new { ticketIds[0].Id });
-                apiConnection.SetProperRole(authenticationStateTask!.Result.User, [ Roles.Modeller, Roles.Recertifier, Roles.Admin, Roles.Auditor ]);
                 if(intTicket != null)
                 {
                     await SubscribeAndSetStatusFromTicket(intTicket);

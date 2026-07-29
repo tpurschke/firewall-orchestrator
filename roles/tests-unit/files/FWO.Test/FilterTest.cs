@@ -7,13 +7,16 @@ using FWO.Basics;
 using FWO.Data.Report;
 using FWO.Data.Workflow;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using System.Text.Json;
 namespace FWO.Test
 {
     [TestFixture]
     [Parallelizable]
-    public class FilterTest
+    public partial class FilterTest
     {
+        private const int kRegexTimeoutMilliseconds = 1000;
+
         private delegate void StubExtractDelegate(ref DynGraphqlQuery query, ReportType? reportType);
 
         private sealed class StubAstNode(StubExtractDelegate extractAction) : AstNode
@@ -43,6 +46,16 @@ namespace FWO.Test
         private static DateTime? GetDateTimeRangeBound(object range, string fieldName)
         {
             return (DateTime?)range.GetType().GetField(fieldName)!.GetValue(range);
+        }
+
+        private static string NormalizeGraphQl(string query)
+        {
+            return GraphQlWhitespaceRegex().Replace(query, " ").Trim();
+        }
+
+        private static Regex GraphQlWhitespaceRegex()
+        {
+            return new Regex("\\s+", RegexOptions.None, TimeSpan.FromMilliseconds(kRegexTimeoutMilliseconds));
         }
 
         private static TException AssertDateTimeRangeThrows<TException>(TokenKind operatorKind, string value)
@@ -322,7 +335,7 @@ namespace FWO.Test
 
             ClassicAssert.AreEqual(3, query.QueryVariables.Count);
             ClassicAssert.AreEqual(true, query.QueryVariables.ContainsKey("refdate1"));
-            ClassicAssert.AreEqual(true, query.QueryVariables.ContainsKey("ownerWhere"));
+            ClassicAssert.IsTrue(query.QueryVariables.ContainsKey("ownerWhere"));
             ClassicAssert.AreEqual("1000", query.QueryVariables["dport0"]);
             ClassicAssert.AreEqual("_and: [{rule_head_text: {_is_null: true}}, { rule_metadatum: { recertifications: { next_recert_date: { _lte: $refdate1 } } } }, {_not: {rule_services: { service: { svcgrp_flats: { serviceBySvcgrpFlatMemberId: { svc_port: {_lte: $dport0}, svc_port_end: {_gte: $dport0 } } } } }}}] ", query.RuleWhereStatement);
         }
@@ -337,7 +350,37 @@ namespace FWO.Test
 
             DynGraphqlQuery query = Compiler.Compile(t);
 
-            ClassicAssert.AreEqual(true, query.QueryVariables.ContainsKey("ownerWhere"));
+            ClassicAssert.IsTrue(query.QueryVariables.ContainsKey("ownerWhere"));
+            Assert.That(JsonSerializer.Serialize(query.QueryVariables["ownerWhere"]), Is.EqualTo("{}"));
+        }
+
+        [Test]
+        [Parallelizable]
+        public void RecertShowRulesWithoutOwner_AddsRuleOwnersNotClause()
+        {
+            ReportTemplate t = new();
+            t.ReportParams.ReportType = (int)ReportType.Recertification;
+            t.ReportParams.RecertFilter.ShowRulesWithoutOwner = true;
+            t.ReportParams.RecertFilter.RecertOwnerList = [];
+
+            DynGraphqlQuery query = Compiler.Compile(t);
+
+            ClassicAssert.IsTrue(query.QueryVariables.ContainsKey("ownerWhere"));
+            Assert.That(JsonSerializer.Serialize(query.QueryVariables["ownerWhere"]), Is.EqualTo("{}"));
+            StringAssert.Contains("{ _not: { rule_owners: { removed: { _is_null: true } } } }", query.RuleWhereStatement);
+        }
+
+        [Test]
+        [Parallelizable]
+        public void RecertShowRulesWithoutOwner_LeavesOwnerWhereEmptyWhenNoOwnersSelected()
+        {
+            ReportTemplate t = new();
+            t.ReportParams.ReportType = (int)ReportType.Recertification;
+            t.ReportParams.RecertFilter.ShowRulesWithoutOwner = true;
+            t.ReportParams.RecertFilter.RecertOwnerList = [];
+
+            DynGraphqlQuery query = Compiler.Compile(t);
+
             ClassicAssert.AreEqual("{}", JsonSerializer.Serialize(query.QueryVariables["ownerWhere"]));
         }
 
@@ -353,6 +396,43 @@ namespace FWO.Test
             StringAssert.Contains("rulebase_links(where:", query.FullQuery);
             StringAssert.DoesNotContain("rulebase_links(where: { }) { rules (", query.FullQuery);
             StringAssert.Contains("rulebases { id uid name rules (", query.FullQuery);
+        }
+
+        [Test]
+        [Parallelizable]
+        public void StandardRulesQueryBuildsSplitStructureAndRulePageQueries()
+        {
+            ReportTemplate t = new();
+            t.ReportParams.ReportType = (int)ReportType.Rules;
+
+            DynGraphqlQuery query = Compiler.Compile(t);
+
+            StringAssert.Contains("query standardRulesStructure", query.StandardRulesStructureQuery);
+            Assert.That(query.FullQuery, Is.Empty);
+            StringAssert.Contains("rulebase_links", query.StandardRulesStructureQuery);
+            StringAssert.DoesNotContain("rules (", query.StandardRulesStructureQuery);
+            StringAssert.Contains("query standardRulesPage", query.StandardRulesPageQuery);
+            StringAssert.Contains("firewall_rule", query.StandardRulesPageQuery);
+            StringAssert.Contains("$rulebaseIds: [Int!]", query.StandardRulesPageQuery);
+            StringAssert.Contains("rulebase_id: { _in: $rulebaseIds }", query.StandardRulesPageQuery);
+            StringAssert.Contains("rulebase_id", query.StandardRulesPageQuery);
+            StringAssert.Contains("rule_id: asc", query.StandardRulesPageQuery);
+        }
+
+        [Test]
+        [Parallelizable]
+        public void StandardRulesQueryWithActiveTenantFilterSkipsSplitQueries()
+        {
+            ReportTemplate t = new();
+            t.ReportParams.ReportType = (int)ReportType.Rules;
+            t.ReportParams.TenantFilter.IsActive = true;
+            t.ReportParams.TenantFilter.TenantId = 2;
+
+            DynGraphqlQuery query = Compiler.Compile(t);
+
+            Assert.That(query.StandardRulesStructureQuery, Is.Empty);
+            Assert.That(query.StandardRulesPageQuery, Is.Empty);
+            StringAssert.Contains("get_rules_for_tenant", query.FullQuery);
         }
 
         [Test]
@@ -1204,6 +1284,22 @@ namespace FWO.Test
 
         [Test]
         [Parallelizable]
+        public void StatisticsQueryCountsRulesPerGatewayNotPerManagement()
+        {
+            ReportTemplate t = new();
+            t.ReportParams.ReportType = (int)ReportType.Statistics;
+
+            DynGraphqlQuery query = Compiler.Compile(t);
+
+            // Per gateway rule counts must be derived from rules enforced on that gateway,
+            // otherwise every gateway of a management shows the same (summed) rule count (issue #4768).
+            StringAssert.Contains("rules_aggregate: rule_enforced_on_gateways_aggregate(where:", query.FullQuery);
+            StringAssert.Contains("unusedRules_Count: rule_enforced_on_gateways_aggregate(where:", query.FullQuery);
+            StringAssert.DoesNotContain("rules_aggregate: management {", query.FullQuery);
+        }
+
+        [Test]
+        [Parallelizable]
         public void ReportTypeFilter_RejectsUnknownReportType()
         {
             ReportTemplate template = new()
@@ -1321,7 +1417,8 @@ namespace FWO.Test
             DynGraphqlQuery query = Compiler.Compile(template);
 
             Assert.That(query.QueryVariables["src0"], Is.EqualTo("AppServer1"));
-            StringAssert.Contains("rule_froms: { object: { objgrp_flats: { objectByObjgrpFlatMemberId: { obj_name: { _eq: $src0 } } } } }", query.RuleWhereStatement);
+            string normalizedRuleWhere = NormalizeGraphQl(query.RuleWhereStatement);
+            StringAssert.Contains("rule_froms: { object: { _or: [{ obj_name: { _eq: $src0 } }, { objgrp_flats: { objectByObjgrpFlatMemberId: { obj_name: { _eq: $src0 } } } }] } }", normalizedRuleWhere);
             StringAssert.Contains("owner_network: {name: { _eq: $src0 } }", query.ConnectionWhereStatement);
             StringAssert.Contains("id_string: { _eq: $src0 }", query.ConnectionWhereStatement);
         }
@@ -1342,6 +1439,42 @@ namespace FWO.Test
             StringAssert.Contains("obj_name: { _nilike: $dst0 }", query.RuleWhereStatement);
             StringAssert.Contains("owner_network: {name: { _nilike: $dst0 } }", query.ConnectionWhereStatement);
             StringAssert.Contains("id_string: { _nilike: $dst0 }", query.ConnectionWhereStatement);
+        }
+
+        [Test]
+        [Parallelizable]
+        public void ChangesReport_SourceIpFilterTargetsDirectAndFlatNetworkObjects()
+        {
+            ReportTemplate template = new()
+            {
+                Filter = "src=5.6.0.1"
+            };
+            template.ReportParams.ReportType = (int)ReportType.Changes;
+
+            DynGraphqlQuery query = Compiler.Compile(template);
+
+            Assert.That(query.QueryVariables["srcIpLow0"], Is.EqualTo("5.6.0.1"));
+            Assert.That(query.QueryVariables["srcIpHigh0"], Is.EqualTo("5.6.0.1"));
+            string normalizedRuleWhere = NormalizeGraphQl(query.RuleWhereStatement);
+            StringAssert.Contains("rule: { _or: [", normalizedRuleWhere);
+            StringAssert.Contains("ruleByOldRuleId: { _or: [", normalizedRuleWhere);
+            StringAssert.Contains("object: { _or: [{ obj_ip_end: { _gte: $srcIpLow0 } obj_ip: { _lte: $srcIpHigh0 } }, { objgrp_flats: { objectByObjgrpFlatMemberId: { obj_ip_end: { _gte: $srcIpLow0 } obj_ip: { _lte: $srcIpHigh0 } } } }] }", normalizedRuleWhere);
+        }
+
+        [Test]
+        [Parallelizable]
+        public void NetworkFilter_SourceCidrExpandsToRangeBounds()
+        {
+            ReportTemplate template = new()
+            {
+                Filter = "src=5.6.0.0/20"
+            };
+            template.ReportParams.ReportType = (int)ReportType.Changes;
+
+            DynGraphqlQuery query = Compiler.Compile(template);
+
+            Assert.That(query.QueryVariables["srcIpLow0"], Is.EqualTo("5.6.0.0"));
+            Assert.That(query.QueryVariables["srcIpHigh0"], Is.EqualTo("5.6.15.255"));
         }
 
         [Test]

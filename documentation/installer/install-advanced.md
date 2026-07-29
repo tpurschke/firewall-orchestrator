@@ -2,6 +2,14 @@
 
 always change into the firewwall-orchestrator directory before starting the installation.
 
+On Ubuntu 26.04 or other systems with sudo 1.9.16+, use `./scripts/run-playbook-with-sudo.sh` instead of `ansible-playbook ... -K`. For example:
+
+```console
+./scripts/run-playbook-with-sudo.sh site.yml -e installation_mode=upgrade
+```
+
+Full sudoers rights are still required. If sudo already works without a password, the wrapper runs the playbook directly; otherwise it creates a temporary passwordless sudoers entry for the current user, runs the playbook without `-K`, and removes the entry again when the playbook exits.
+
 ## Install parameters
 
 ### Installation mode parameter
@@ -24,20 +32,21 @@ Then for upgrading firewall orchestrator, use the following switch:
 
 ```console
 cd ~/firewall-orchestrator
-ansible-playbook -e installation_mode=upgrade site.yml -K
+./scripts/run-playbook-with-sudo.sh site.yml -e installation_mode=upgrade
 ```
 
 #### Uninstall ####
 If you want to drop the database and re-install from scratch, do the following:
 
 ```console
-ansible-playbook -e installation_mode=uninstall site.yml -K
-ansible-playbook site.yml -K
+./scripts/run-playbook-with-sudo.sh site.yml -e installation_mode=uninstall
+./scripts/run-playbook-with-sudo.sh site.yml
 ```
 
 ### Installation behind a proxy (no direct Internet connection)
 
 By default, during installation or upgrade the proxy settings are read from the OS environment of the installer host.
+The installer reads both lowercase and uppercase proxy variables. If both forms are set and non-empty, the lowercase value wins.
 For example you may either use /etc/environment or add a global system-wide config file /etc/profile.d/proxy.sh and add the following content:
 
 ```console
@@ -54,7 +63,7 @@ If instead you need to individually set a proxy before installation/upgrade, use
 export http_proxy=http://proxy.int:3128
 export https_proxy=http://proxy.int:3128
 export no_proxy=127.0.0.1,localhost
-ansible-playbook site.yml -K
+./scripts/run-playbook-with-sudo.sh site.yml
 ```
 
 Use the following syntax for authenticated proxy access:
@@ -105,40 +114,40 @@ Note that the following domains (and their sub-domains) must be reachable throug
 
 #### Pyhton proxy config
 
-Remember if your server resides behind a proxy that you will have to set the proxy for pip as follows before installing ansible:
-
-         pip config set global.proxy http://proxy:3128
+When using `scripts/install-ansible-from-venv.sh`, export the proxy variables described above. Pip automatically honors them; the script does not write a pip configuration file.
 
 
 In case of timeout issues (you might be behind a security proxy that does intensive scanning), try to install ansible using the command:
 
           pip --default-timeout=3600 install ansible
           
-##### issues with existing pip config
+##### Existing pip configuration
 
-In case of errors with existing pip config, do not use the script to create the venv but proceed as follows:
+The venv helper preserves any existing pip configuration, including an organization-provided package index. It sets only a command-local download timeout and does not create or change `$HOME/.config/pip/pip.conf`.
 
-remove any local pip config and install manually:
-    
-    rm -f $HOME/.config/pip/pip.conf
-    sudo apt-get update
-    sudo apt-get install --yes python3-venv
-    python3 -m venv installer-venv
-    source installer-venv/bin/activate
-    pip install -r requirements.txt
-    pip install ansible
+If that configuration cannot provide the required packages, have the package-index administrator correct the repository or use an approved index. Do not remove an existing user or OS-managed pip configuration as an installer workaround.
 
 ### Parameter "api_no_metadata" to prevent meta data import
 
 e.g. if your hasura metadata file needs to be re-created from scratch, then use the following switch:
 
 ```console
-ansible-playbook -e "api_no_metadata=yes" site.yml -K
+./scripts/run-playbook-with-sudo.sh site.yml -e "api_no_metadata=yes"
 ```
 ### Parameter "force_install" to force installation even though operating system packages are not up2date
 
 ```console
-ansible-playbook -e "force_install=yes" site.yml -K
+./scripts/run-playbook-with-sudo.sh site.yml -e "force_install=yes"
+```
+
+### Parameter "allowRepoChangesForRedhat" to allow RedHat repository changes
+
+By default, the installer does not add or enable RedHat repositories. If required packages are not available from the already enabled repositories, prepare the OS repositories outside the installer.
+
+Set this parameter only if the installer is allowed to install EPEL and enable CodeReady Builder/CRB on RedHat-like systems:
+
+```console
+./scripts/run-playbook-with-sudo.sh site.yml -e "allowRepoChangesForRedhat=true"
 ```
 
 ### Parameter "docker_network" after the Podman migration
@@ -146,7 +155,7 @@ ansible-playbook -e "force_install=yes" site.yml -K
 This legacy parameter is ignored by the current installer because Hasura now runs with Podman host networking instead of a Docker bridge.
 
 ```console
-ansible-playbook -e "docker_network=172.26.0.1/16" site.yml -K
+./scripts/run-playbook-with-sudo.sh site.yml -e "docker_network=172.26.0.1/16"
 ```
 
 ### Parameter "install_syslog" allows disabling of separate syslog installation
@@ -155,7 +164,7 @@ Default value is install_syslog=yes but if you already have a syslog service run
 
 run installation without syslog installation:
 ```console
-ansible-playbook -e "install_syslog=no" site.yml -K
+./scripts/run-playbook-with-sudo.sh site.yml -e "install_syslog=no"
 ```
 
 Here is a sample config you can use for configuring your already running syslog:
@@ -210,7 +219,7 @@ Generating a full hasura (all tables, etc. tracked) API documentation  currently
 - a minimum of 8 GB RAM
 
 ```console
-ansible-playbook -e "api_docu=yes" site.yml -K
+./scripts/run-playbook-with-sudo.sh site.yml -e "api_docu=yes"
 ```
 
 api docu can then be accessed at <https://server/api_schema/index.html>
@@ -227,7 +236,7 @@ The following options exist for communication to the UI:
 
 Example:
 ```console
-ansible-playbook -e "ui_comm_mode=no_ws" site.yml -K
+./scripts/run-playbook-with-sudo.sh site.yml -e "ui_comm_mode=no_ws"
 ```
 
 ### Specifying server name and aliases
@@ -236,11 +245,11 @@ To make sure that firewall orchestrator UI webserver responds to the correct DNS
 
 Example to set fwodemo.cactus.de as webserver name:
 ```console
-ansible-playbook -e "ui_server_name='fwodemo.cactus.de'" site.yml -K
+./scripts/run-playbook-with-sudo.sh site.yml -e "ui_server_name='fwodemo.cactus.de'"
 ```
 Example to set fwodemo.cactus.de and two additional aliases as websrver names:
 ```console
-ansible-playbook -e "ui_server_name=fwodemo.cactus.de ui_server_alias=' fwo1.cactus.de fwo2.cactus.de'" site.yml -K
+./scripts/run-playbook-with-sudo.sh site.yml -e "ui_server_name=fwodemo.cactus.de ui_server_alias=' fwo1.cactus.de fwo2.cactus.de'"
 ```
 
 ### Server Alias string
@@ -249,11 +258,11 @@ To be able to configure your webserver name, you may add the following parameter
 
 Example to set fwodemo.cactus.de as websrver name:
 ```console
-ansible-playbook -e "ui_server_alias='fwodemo.cactus.de'" site.yml -K
+./scripts/run-playbook-with-sudo.sh site.yml -e "ui_server_alias='fwodemo.cactus.de'"
 ```
 Example to set fwodemo.cactus.de and fwo2.cactus.de as websrver names:
 ```console
-ansible-playbook -e "ui_server_alias='fwodemo.cactus.de fwo2.cactus.de'" site.yml -K
+./scripts/run-playbook-with-sudo.sh site.yml -e "ui_server_alias='fwodemo.cactus.de fwo2.cactus.de'"
 ```
 
 ## Distributed setup with multiple servers

@@ -19,10 +19,17 @@ namespace FWO.Data.Workflow
         public const string ConnId = "ConnId";
         public const string ReqOwner = "ReqOwner";
         public const string GrpName = "GrpName";
+        public const string GroupId = "GroupId";
+        public const string RequestContactName = "requestContactName";
+        public const string RequestContactId = "requestContactId";
+        public const string RequestorName = "requestorName";
+        public const string RequestorId = "requestorId";
+        public const string TimeObjectId = "timeObjectId";
         public const string ExtIcketId = "ExtIcketId";
         public const string AppRoleId = "AppRoleId";
         public const string SvcGrpId = "SvcGrpId";
         public const string FlowBundleId = "FlowBundleId";
+        public const string FwConfigChangeTarget = "FwConfigChangeTarget";
     }
 
     public class WfReqTaskBase : WfTaskBase
@@ -43,6 +50,9 @@ namespace FWO.Data.Workflow
 
         [JsonProperty("mgm_id"), JsonPropertyName("mgm_id")]
         public int? ManagementId { get; set; }
+
+        [JsonProperty("locked"), JsonPropertyName("locked")]
+        public bool Locked { get; set; }
 
         [JsonProperty("devices"), JsonPropertyName("devices")]
         public string SelectedDevices
@@ -71,6 +81,7 @@ namespace FWO.Data.Workflow
             LastRecertDate = reqtask.LastRecertDate;
             SelectedDevices = reqtask.SelectedDevices;
             ManagementId = reqtask.ManagementId;
+            Locked = reqtask.Locked;
         }
 
         public virtual List<int> GetDeviceList()

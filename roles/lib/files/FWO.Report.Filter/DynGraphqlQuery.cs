@@ -16,6 +16,8 @@ namespace FWO.Report.Filter
         public int parameterCounter { get; set; } = 0;
         public Dictionary<string, object> QueryVariables { get; set; } = [];
         public string FullQuery { get; set; } = "";
+        public string StandardRulesStructureQuery { get; set; } = "";
+        public string StandardRulesPageQuery { get; set; } = "";
         public string RulebaseLinkWhereStatement { get; set; } = "";
         public string RuleWhereStatement { get; set; } = "";
         public string NwObjWhereStatement { get; set; } = "";
@@ -145,83 +147,12 @@ namespace FWO.Report.Filter
                         {{
                             name: dev_name
                             id: dev_id
-                            rules_aggregate: management {{ rules_aggregate(where: {{ {query.RuleWhereStatement} }}) {{ aggregate {{ count }} }} }}
-                            unusedRules_Count: management {{ rules_aggregate(where: {{ {unusedRulesWhereStatement} }}) {{ aggregate {{ count }} }} }}
+                            rules_aggregate: rule_enforced_on_gateways_aggregate(where: {{ {query.RulebaseLinkWhereStatement} rule: {{ {query.RuleWhereStatement} }} }}) {{ aggregate {{ count }} }}
+                            unusedRules_Count: rule_enforced_on_gateways_aggregate(where: {{ {query.RulebaseLinkWhereStatement} rule: {{ {unusedRulesWhereStatement} }} }}) {{ aggregate {{ count }} }}
                         }}
                     }}
                 }}";
             //TODO: show number of rulebase links per gateway ?
-        }
-
-        private static string ConstructRulesQuery(DynGraphqlQuery query, string paramString, ReportTemplate filter)
-        {
-            return $@"
-                {GetRulesFragmentDef(filter)}
-                query rulesReport ({paramString}) 
-                {{ 
-                    management({mgmtWhereString}) 
-                    {{
-                        id: mgm_id
-                        uid: mgm_uid
-                        name: mgm_name
-                        devices ({GetDevWhereFilter(filter.ReportParams.DeviceFilter)})
-                        {{
-                            id: dev_id
-                            name: dev_name
-                            uid: dev_uid
-                            {query.OpenRuleBaseTable}
-                                where: {{ {query.RulebaseLinkWhereStatement} }}
-                            ) {{
-                                linkType: stm_link_type  {{
-                                    name
-                                    id
-                                }}
-                                link_type
-                                is_initial
-                                is_global
-                                is_section
-                                gw_id
-                                from_rule_id
-                                from_rulebase_id
-                                to_rulebase_id
-                                created
-                                removed
-                            }}
-                        }}
-                        rulebases {{
-                            name
-                            uid
-                            id
-                            {query.OpenRulesTable}
-                                {limitOffsetString}
-                                where: {{ access_rule: {{_eq: true}} {query.RuleWhereStatement} }} 
-                                order_by: {{ rule_num_numeric: asc }} )
-                            {{
-                                mgm_id: mgm_id
-                                {((ReportType)filter.ReportParams.ReportType == ReportType.UnusedRules ? "rule_metadatum { rule_last_hit }" : "")}
-                                ...{GetRulesFragmentCall(filter)}
-                            }} 
-                        }}
-                    }} 
-                }}";
-        }
-
-        private static string GetRulesFragmentDef(ReportTemplate filter)
-        {
-            if ((ReportType)filter.ReportParams.ReportType == ReportType.AppRules)
-            {
-                return RuleQueries.ruleDetailsForAppRuleReportFragments;
-            }
-            return filter.Detailed ? RuleQueries.ruleDetailsForReportFragments : RuleQueries.ruleOverviewFragments;
-        }
-
-        private static string GetRulesFragmentCall(ReportTemplate filter)
-        {
-            if ((ReportType)filter.ReportParams.ReportType == ReportType.AppRules)
-            {
-                return "ruleDetailsForAppRuleReport";
-            }
-            return filter.Detailed ? "ruleDetailsForReport" : "ruleOverview";
         }
 
         private static string ConstructRecertQuery(DynGraphqlQuery query, string paramString)
@@ -466,6 +397,19 @@ namespace FWO.Report.Filter
                     break;
 
                 case ReportType.Rules:
+                    // The flat firewall_rule query cannot apply the get_rules_for_tenant functions,
+                    // so tenant-filtered reports must use the legacy nested query.
+                    if (filter.ReportParams.TenantFilter.IsActive)
+                    {
+                        query.FullQuery = Queries.Compact(RuleReportQueryBuilder.ConstructLegacyRulesQuery(query, paramString, filter));
+                    }
+                    else
+                    {
+                        query.StandardRulesStructureQuery = Queries.Compact(RuleReportQueryBuilder.ConstructStandardStructureQuery(query, filter));
+                        query.StandardRulesPageQuery = Queries.Compact(RuleReportQueryBuilder.ConstructStandardPageQuery(query, paramString, filter));
+                    }
+                    break;
+
                 case ReportType.ResolvedRules:
                 case ReportType.ResolvedRulesTech:
                 case ReportType.UnusedRules:
@@ -473,7 +417,7 @@ namespace FWO.Report.Filter
                 case ReportType.ComplianceReport:
                 case ReportType.ComplianceDiffReport:
                 case ReportType.RecertEventReport:
-                    query.FullQuery = Queries.Compact(ConstructRulesQuery(query, paramString, filter));
+                    query.FullQuery = Queries.Compact(RuleReportQueryBuilder.ConstructLegacyRulesQuery(query, paramString, filter));
                     break;
 
                 case ReportType.Recertification:
@@ -746,40 +690,6 @@ namespace FWO.Report.Filter
             }
         }
 
-        private static string GetDevWhereFilter(DeviceFilter deviceFilter)
-        {
-            if (deviceFilter == null || deviceFilter.Managements == null)
-            {
-                return devWhereStringStart + devWhereStringEnd;
-            }
-
-            string devWhereStatement = devWhereStringStart;
-            bool first = true;
-
-            devWhereStatement += "_or: [{";
-
-            foreach (ManagementSelect mgmt in deviceFilter.Managements)
-            {
-                if (mgmt.Devices == null) continue;
-
-                foreach (DeviceSelect dev in mgmt.Devices)
-                {
-                    if (dev.Selected)
-                    {
-                        if (!first)
-                        {
-                            devWhereStatement += "}, {";
-                        }
-                        first = false;
-                        devWhereStatement += $@" dev_id: {{_eq:{dev.Id} }} ";
-                    }
-                }
-            }
-            devWhereStatement += "}] ";
-            devWhereStatement += devWhereStringEnd;
-            return devWhereStatement;
-        }
-
 
         private static void SetTimeFilter(ref DynGraphqlQuery query, TimeFilter? timeFilter, ReportType? reportType, RecertFilter recertFilter)
         {
@@ -940,6 +850,11 @@ namespace FWO.Report.Filter
             if (recertFilter != null)
             {
                 query.QueryParameters.Add("$ownerWhere: owner_bool_exp");
+
+                if (recertFilter.ShowRulesWithoutOwner)
+                {
+                    query.RuleWhereStatement += "{ _not: { rule_owners: { removed: { _is_null: true } } } }, ";
+                }
                 query.QueryVariables["ownerWhere"] = recertFilter.RecertOwnerList.Count > 0
                     ? new { id = new { _in = recertFilter.RecertOwnerList } }
                     : new { };

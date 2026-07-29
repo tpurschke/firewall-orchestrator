@@ -28,17 +28,19 @@ namespace FWO.Services.Workflow
                     return false;
                 }
 
-                WfTicket? refreshedTicket = await dbAcc.FetchTicket(ActReqTask.TicketId, userConfig.ReqOwnerBased ? AllOwners.ConvertAll(owner => owner.Id) : null);
+                WfTicket? refreshedTicket = await dbAcc.FetchTicket(ActReqTask.TicketId, GetOwnerIdsForFiltering(), GetVisibilityTicketFilter());
+                if (refreshedTicket != null)
+                {
+                    int ticketIndex = TicketList.FindIndex(ticket => ticket.Id == refreshedTicket.Id);
+                    if (ticketIndex >= 0)
+                    {
+                        TicketList[ticketIndex] = refreshedTicket;
+                    }
+                }
                 WfReqTask? refreshedTask = refreshedTicket?.Tasks.FirstOrDefault(task => task.Id == ActReqTask.Id);
                 if (refreshedTask == null)
                 {
                     return false;
-                }
-
-                int ticketIndex = TicketList.FindIndex(ticket => ticket.Id == refreshedTicket!.Id);
-                if (ticketIndex >= 0)
-                {
-                    TicketList[ticketIndex] = refreshedTicket!;
                 }
 
                 SetTicketEnv(refreshedTicket!);
@@ -85,19 +87,21 @@ namespace FWO.Services.Workflow
 
             try
             {
-                WfTicket? ticket = await dbAcc.FetchTicket(reqTask.TicketId, userConfig.ReqOwnerBased ? AllOwners.ConvertAll(owner => owner.Id) : null);
+                WfTicket? ticket = await dbAcc.FetchTicket(reqTask.TicketId, GetOwnerIdsForFiltering(), GetVisibilityTicketFilter());
+                if (ticket != null)
+                {
+                    int ticketIndex = TicketList.FindIndex(existingTicket => existingTicket.Id == ticket.Id);
+                    if (ticketIndex >= 0)
+                    {
+                        TicketList[ticketIndex] = ticket;
+                    }
+                    SetTicketEnv(ticket);
+                }
                 WfReqTask? fullReqTask = ticket?.Tasks.FirstOrDefault(task => task.Id == reqTask.Id);
                 if (ticket == null || fullReqTask == null)
                 {
                     return reqTask;
                 }
-
-                int ticketIndex = TicketList.FindIndex(existingTicket => existingTicket.Id == ticket.Id);
-                if (ticketIndex >= 0)
-                {
-                    TicketList[ticketIndex] = ticket;
-                }
-                SetTicketEnv(ticket);
                 return fullReqTask;
             }
             catch (Exception exception)
@@ -242,6 +246,11 @@ namespace FWO.Services.Workflow
 
         public async Task AddReqTask()
         {
+            if (ActTicket.Locked)
+            {
+                return;
+            }
+
             if (ActTicket.Id > 0) // ticket already created -> write directly to db
             {
                 ActReqTask.TicketId = ActTicket.Id;
@@ -255,6 +264,11 @@ namespace FWO.Services.Workflow
 
         public async Task ChangeReqTask()
         {
+            if (ActReqTask.Locked)
+            {
+                return;
+            }
+
             if (ActReqTask.Id > 0 && dbAcc != null)
             {
                 await dbAcc.UpdateReqTaskInDb(ActReqTask);
@@ -264,6 +278,11 @@ namespace FWO.Services.Workflow
 
         public async Task ChangeOwner()
         {
+            if (ActReqTask.Locked)
+            {
+                return;
+            }
+
             if (ActReqTask.Id > 0 && dbAcc != null)
             {
                 await dbAcc.UpdateOwnersInDb(ActReqTask);
@@ -273,6 +292,12 @@ namespace FWO.Services.Workflow
 
         public async Task ConfDeleteReqTask()
         {
+            if (ActTicket.Locked)
+            {
+                DisplayDeleteReqTaskMode = false;
+                return;
+            }
+
             if (ActReqTask.Id > 0 && dbAcc != null)
             {
                 await dbAcc.DeleteReqTaskFromDb(ActReqTask);

@@ -5,9 +5,6 @@ namespace FWO.Data
 {
     public class NormalizedRule
     {
-        [JsonProperty("rule_num"), JsonPropertyName("rule_num")]
-        public int RuleNum { get; set; }
-
         [JsonProperty("rule_num_numeric"), JsonPropertyName("rule_num_numeric")]
         public double RuleNumNumeric { get; set; }
 
@@ -100,8 +97,7 @@ namespace FWO.Data
 
             return new NormalizedRule
             {
-                RuleNum = rule.RuleOrderNumber,
-                RuleNumNumeric = rule.OrderNumber,
+                RuleNumNumeric = rule.RuleNumNumeric,
                 RuleDisabled = rule.Disabled,
                 RuleSrcNeg = rule.SourceNegated,
                 RuleSrc = rule.Source,
@@ -125,8 +121,8 @@ namespace FWO.Data
                 ParentRuleUid = rule.ParentRule?.Uid,
                 LastHit = lastHit.HasValue ? NormalizedConfig.FormatDatetimeZ(lastHit.Value, convertToUtc: true) : null,
                 RuleComment = rule.Comment,
-                RuleSrcZone = rule.RuleFromZones?.Length > 0 ? string.Join("|", rule.RuleFromZones.Select(z => z.Content.Name).Order()) : null,
-                RuleDstZone = rule.RuleToZones?.Length > 0 ? string.Join("|", rule.RuleToZones.Select(z => z.Content.Name).Order()) : null,
+                RuleSrcZone = rule.SourceZone,
+                RuleDstZone = rule.DestinationZone,
                 RuleHeadText = rule.SectionHeader
             };
         }

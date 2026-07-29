@@ -7,20 +7,6 @@ namespace FWO.Test
     internal class FlowQueriesTest
     {
         [Test]
-        public void FlowQueries_LoadObjectCatalogQuery()
-        {
-            Assert.That(FlowQueries.getFlowObjectCatalog, Does.Contain("query getFlowObjectCatalog"));
-            Assert.That(FlowQueries.getFlowObjectCatalog, Does.Contain("fragment flowNwObjectDetails"));
-        }
-
-        [Test]
-        public void FlowQueries_LoadAccessCatalogQuery()
-        {
-            Assert.That(FlowQueries.getFlowAccessCatalog, Does.Contain("query getFlowAccessCatalog"));
-            Assert.That(FlowQueries.getFlowAccessCatalog, Does.Contain("fragment flowAccessDetails"));
-        }
-
-        [Test]
         public void FlowQueries_LoadCustomObjectCandidatesQuery()
         {
             Assert.That(FlowQueries.getFlowCustomObjectCandidates, Does.Contain("query getFlowCustomObjectCandidates"));
@@ -28,10 +14,49 @@ namespace FWO.Test
         }
 
         [Test]
+        public void FlowQueries_LoadFlowCatalogQueries()
+        {
+            Assert.That(FlowQueries.getFlowAddressObjects, Does.Contain("query getFlowAddressObjects"));
+            Assert.That(FlowQueries.getFlowAddressObjects, Does.Contain("fragment flowNwObjectFragment"));
+            Assert.That(FlowQueries.getFlowAddressObjects, Does.Not.Contain("objects("));
+            Assert.That(FlowQueries.getFlowAddressGroups, Does.Contain("query getFlowAddressGroups"));
+            Assert.That(FlowQueries.getFlowAddressGroups, Does.Contain("fragment flowNwGroupWithMembersFragment"));
+            Assert.That(FlowQueries.getFlowAddressGroups, Does.Not.Contain("objects("));
+            Assert.That(FlowQueries.getFlowServiceObjects, Does.Contain("query getFlowServiceObjects"));
+            Assert.That(FlowQueries.getFlowServiceObjects, Does.Contain("fragment flowSvcObjectFragment"));
+            Assert.That(FlowQueries.getFlowServiceObjects, Does.Not.Contain("services("));
+            Assert.That(FlowQueries.getFlowServiceGroups, Does.Contain("query getFlowServiceGroups"));
+            Assert.That(FlowQueries.getFlowServiceGroups, Does.Contain("fragment flowSvcGroupWithMembersFragment"));
+            Assert.That(FlowQueries.getFlowServiceGroups, Does.Not.Contain("services("));
+            Assert.That(FlowQueries.getFlowTimeObjects, Does.Contain("query getFlowTimeObjects"));
+            Assert.That(FlowQueries.getFlowTimeObjects, Does.Contain("fragment flowTimeObjectFragment"));
+            Assert.That(FlowQueries.getFlowTimeObjects, Does.Not.Contain("time_objects("));
+            Assert.That(FlowQueries.getFlowAddressObjectId, Does.Contain("query getFlowAddressObjectId"));
+            Assert.That(FlowQueries.getFlowServiceObjectId, Does.Contain("query getFlowServiceObjectId"));
+        }
+
+        [Test]
         public void FlowQueries_LoadNwObjectCatalogQuery()
         {
             Assert.That(FlowQueries.getFlowNwObjectCatalog, Does.Contain("query getFlowNwObjectCatalog"));
-            Assert.That(FlowQueries.getFlowNwObjectCatalog, Does.Contain("fragment flowNwObjectDetails"));
+            Assert.That(FlowQueries.getFlowNwObjectCatalog, Does.Contain("fragment flowNwObjectFragment"));
+        }
+
+        [Test]
+        public void FlowQueries_LoadRequestCatalogQueries()
+        {
+            Assert.Multiple(() =>
+            {
+                Assert.That(FlowQueries.getFlowRequestNwObjectCatalog, Does.Contain("query getFlowRequestNwObjectCatalog"));
+                Assert.That(FlowQueries.getFlowRequestNwObjectCatalog, Does.Not.Contain("fragment flowNwObjectFragment"));
+                Assert.That(FlowQueries.getFlowRequestNwObjectCatalog, Does.Not.Contain("objects("));
+                Assert.That(FlowQueries.getFlowRequestSvcObjectCatalog, Does.Contain("query getFlowRequestSvcObjectCatalog"));
+                Assert.That(FlowQueries.getFlowRequestSvcObjectCatalog, Does.Not.Contain("fragment flowSvcObjectFragment"));
+                Assert.That(FlowQueries.getFlowRequestSvcObjectCatalog, Does.Not.Contain("services("));
+                Assert.That(FlowQueries.getFlowRequestTimeObjectCatalog, Does.Contain("query getFlowRequestTimeObjectCatalog"));
+                Assert.That(FlowQueries.getFlowRequestTimeObjectCatalog, Does.Not.Contain("fragment flowTimeObjectFragment"));
+                Assert.That(FlowQueries.getFlowRequestTimeObjectCatalog, Does.Not.Contain("time_objects("));
+            });
         }
 
         [Test]
@@ -44,7 +69,6 @@ namespace FWO.Test
         [Test]
         public void FlowQueries_LoadFlowSyncQueries()
         {
-            Assert.That(FlowQueries.getFlowSyncData, Does.Contain("query getFlowSyncData"));
             Assert.That(FlowQueries.getFlowSyncNwObjects, Does.Contain("query getFlowSyncNwObjects"));
             Assert.That(FlowQueries.getFlowSyncNwGroups, Does.Contain("query getFlowSyncNwGroups"));
             Assert.That(FlowQueries.getFlowSyncSvcObjects, Does.Contain("query getFlowSyncSvcObjects"));

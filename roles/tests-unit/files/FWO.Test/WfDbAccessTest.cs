@@ -18,6 +18,8 @@ namespace FWO.Test
         private sealed class WfDbAccessTestApiConn : SimulatedApiConnection
         {
             public List<long> RegisteredTicketIds { get; set; } = [];
+            public List<WfTicket> Tickets { get; set; } = [];
+            public WfTicket Ticket { get; set; } = new();
             public bool FindRuleUidHasMatch { get; set; }
 
             public override Task<T> SendQueryAsync<T>(string query, object? variables = null, string? operationName = null, FWO.Api.Client.QueryChunkingOptions? chunkingOptions = null)
@@ -26,6 +28,14 @@ namespace FWO.Test
                 {
                     List<TicketId> ids = RegisteredTicketIds.ConvertAll(id => new TicketId { Id = id });
                     return Task.FromResult((T)(object)ids);
+                }
+                if (query == RequestQueries.getTicketById)
+                {
+                    return Task.FromResult((T)(object)Ticket);
+                }
+                if (query == RequestQueries.getTickets || query == RequestQueries.getFullTickets || query == RequestQueries.getTicketsByParameters)
+                {
+                    return Task.FromResult((T)(object)Tickets);
                 }
                 if (query == ConfigQueries.getConfigItemsByUser)
                 {
@@ -112,6 +122,263 @@ namespace FWO.Test
         }
 
         [Test]
+        public async Task FilterWrongOwnersOut_DropsNonOwnerVisibleTickets()
+        {
+            WfDbAccessTestApiConn apiConn = new() { RegisteredTicketIds = [1] };
+            UserConfig userConfig = new();
+            await userConfig.InitWithUserId(apiConn, 100, false);
+            WfHandler wfHandler = new();
+            ActionHandler actionHandler = new(apiConn, wfHandler);
+            WfDbAccess dbAccess = new(DefaultInit.DoNothing, userConfig, apiConn, actionHandler, false);
+
+            WfTicket ticket = new() { Id = 2, Requester = new UiUser { DbId = 201 } };
+            List<WfTicket> tickets = [ticket];
+
+            MethodInfo? filterMethod = typeof(WfDbAccess).GetMethod("FilterWrongOwnersOut", BindingFlags.NonPublic | BindingFlags.Instance);
+            Assert.That(filterMethod, Is.Not.Null);
+            Task<List<WfTicket>> filterTask = (Task<List<WfTicket>>)filterMethod!.Invoke(dbAccess, new object[] { tickets, new List<int> { 7 } })!;
+            List<WfTicket> filtered = await filterTask;
+
+            Assert.That(filtered, Is.Empty);
+        }
+
+        [Test]
+        public async Task FetchTicket_ReturnsNull_WhenTicketIsNotOwnerVisible()
+        {
+            WfDbAccessTestApiConn apiConn = new()
+            {
+                RegisteredTicketIds = [1],
+                Ticket = new WfTicket
+                {
+                    Id = 2,
+                    Requester = new UiUser { DbId = 201 }
+                }
+            };
+            UserConfig userConfig = new();
+            await userConfig.InitWithUserId(apiConn, 100, false);
+            userConfig.ReqOwnerBased = true;
+            WfHandler wfHandler = new();
+            ActionHandler actionHandler = new(apiConn, wfHandler);
+            WfDbAccess dbAccess = new(DefaultInit.DoNothing, userConfig, apiConn, actionHandler, false);
+
+            WfTicket? ticket = await dbAccess.FetchTicket(2, [7], _ => true);
+
+            Assert.That(ticket, Is.Null);
+        }
+
+        [Test]
+        public async Task FetchTicket_ReturnsNull_WhenTicketFilterRejectsTicket()
+        {
+            WfDbAccessTestApiConn apiConn = new()
+            {
+                Ticket = new WfTicket
+                {
+                    Id = 2,
+                    Requester = new UiUser { DbId = 201 }
+                }
+            };
+            UserConfig userConfig = new();
+            await userConfig.InitWithUserId(apiConn, 100, false);
+            WfHandler wfHandler = new();
+            ActionHandler actionHandler = new(apiConn, wfHandler);
+            WfDbAccess dbAccess = new(DefaultInit.DoNothing, userConfig, apiConn, actionHandler, false);
+
+            WfTicket? ticket = await dbAccess.FetchTicket(2, null, _ => false);
+
+            Assert.That(ticket, Is.Null);
+        }
+
+        [Test]
+        public async Task FetchTickets_AppliesOwnerFilterBeforeVisibilityFilter()
+        {
+            WfDbAccessTestApiConn apiConn = new()
+            {
+                RegisteredTicketIds = [1],
+                Tickets =
+                [
+                    new WfTicket { Id = 1, Requester = new UiUser { DbId = 200 } },
+                    new WfTicket { Id = 2, Requester = new UiUser { DbId = 201 } }
+                ]
+            };
+            UserConfig userConfig = new();
+            await userConfig.InitWithUserId(apiConn, 100, false);
+            userConfig.ReqOwnerBased = true;
+            WfHandler wfHandler = new();
+            ActionHandler actionHandler = new(apiConn, wfHandler);
+            WfDbAccess dbAccess = new(DefaultInit.DoNothing, userConfig, apiConn, actionHandler, false);
+            StateMatrix matrix = new() { LowestInputState = 0, LowestEndState = 10 };
+
+            List<WfTicket> tickets = await dbAccess.FetchTickets(matrix, [7], false, false, _ => true);
+
+            Assert.That(tickets, Has.Count.EqualTo(1));
+            Assert.That(tickets[0].Id, Is.EqualTo(1));
+        }
+
+        [Test]
+        public async Task FetchTickets_DoesNotApplyOwnerFilteringForAdmin()
+        {
+            WfDbAccessTestApiConn apiConn = new()
+            {
+                RegisteredTicketIds = [],
+                Tickets =
+                [
+                    new WfTicket { Id = 1, Requester = new UiUser { DbId = 200 } }
+                ]
+            };
+            UserConfig userConfig = new();
+            await userConfig.InitWithUserId(apiConn, 100, false);
+            userConfig.ReqOwnerBased = true;
+            WfHandler wfHandler = new();
+            ActionHandler actionHandler = new(apiConn, wfHandler);
+            WfDbAccess dbAccess = new(DefaultInit.DoNothing, userConfig, apiConn, actionHandler, true);
+            StateMatrix matrix = new() { LowestInputState = 0, LowestEndState = 10 };
+
+            List<WfTicket> tickets = await dbAccess.FetchTickets(matrix, [7], false, false, _ => true);
+
+            Assert.That(tickets, Has.Count.EqualTo(1));
+            Assert.That(tickets[0].Id, Is.EqualTo(1));
+            Assert.That(tickets[0].Editable, Is.True);
+        }
+
+        [Test]
+        public async Task FetchTicket_ReturnsNull_WhenOwnerListIsEmpty()
+        {
+            WfDbAccessTestApiConn apiConn = new()
+            {
+                Ticket = new WfTicket
+                {
+                    Id = 2,
+                    Requester = new UiUser { DbId = 201 }
+                }
+            };
+            UserConfig userConfig = new();
+            await userConfig.InitWithUserId(apiConn, 100, false);
+            userConfig.ReqOwnerBased = true;
+            WfHandler wfHandler = new();
+            ActionHandler actionHandler = new(apiConn, wfHandler);
+            WfDbAccess dbAccess = new(DefaultInit.DoNothing, userConfig, apiConn, actionHandler, false);
+
+            WfTicket? ticket = await dbAccess.FetchTicket(2, [], _ => true);
+
+            Assert.That(ticket, Is.Null);
+        }
+
+        [Test]
+        public async Task GetTicket_UpdatesCidrsAndResetsStateTracking()
+        {
+            WfDbAccessTestApiConn apiConn = new()
+            {
+                Ticket = new WfTicket
+                {
+                    Id = 2,
+                    StateId = 5,
+                    Tasks =
+                    [
+                        new WfReqTask
+                        {
+                            Id = 11,
+                            StateId = 7,
+                            Elements =
+                            [
+                                new WfReqElement
+                                {
+                                    Id = 21,
+                                    IpString = "10.0.0.1"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            };
+            UserConfig userConfig = new();
+            await userConfig.InitWithUserId(apiConn, 100, false);
+            WfHandler wfHandler = new();
+            ActionHandler actionHandler = new(apiConn, wfHandler);
+            WfDbAccess dbAccess = new(DefaultInit.DoNothing, userConfig, apiConn, actionHandler, false);
+
+            WfTicket ticket = await dbAccess.GetTicket(2);
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(ticket.Id, Is.EqualTo(2));
+                Assert.That(ticket.StateChanged(), Is.False);
+                Assert.That(ticket.Tasks[0].StateChanged(), Is.False);
+                Assert.That(ticket.Tasks[0].Elements[0].Cidr, Is.Not.Null);
+            });
+        }
+
+        [Test]
+        public async Task FetchTickets_WithFullTicketsUpdatesCidrsAndResetsStateTracking()
+        {
+            WfDbAccessTestApiConn apiConn = new()
+            {
+                Tickets =
+                [
+                    new WfTicket
+                    {
+                        Id = 1,
+                        StateId = 5,
+                        Tasks =
+                        [
+                            new WfReqTask
+                            {
+                                Id = 11,
+                                StateId = 7,
+                                Elements =
+                                [
+                                    new WfReqElement
+                                    {
+                                        Id = 21,
+                                        IpString = "10.0.0.2"
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            };
+            UserConfig userConfig = new();
+            await userConfig.InitWithUserId(apiConn, 100, false);
+            WfHandler wfHandler = new();
+            ActionHandler actionHandler = new(apiConn, wfHandler);
+            WfDbAccess dbAccess = new(DefaultInit.DoNothing, userConfig, apiConn, actionHandler, false);
+            StateMatrix matrix = new() { LowestInputState = 0, LowestEndState = 10 };
+
+            List<WfTicket> tickets = await dbAccess.FetchTickets(matrix, null, false, true, null);
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(tickets, Has.Count.EqualTo(1));
+                Assert.That(tickets[0].StateChanged(), Is.False);
+                Assert.That(tickets[0].Tasks[0].StateChanged(), Is.False);
+                Assert.That(tickets[0].Tasks[0].Elements[0].Cidr, Is.Not.Null);
+            });
+        }
+
+        [Test]
+        public async Task GetTicketsByParameters_AppliesTicketFilter()
+        {
+            WfDbAccessTestApiConn apiConn = new()
+            {
+                Tickets =
+                [
+                    new WfTicket { Id = 1 },
+                    new WfTicket { Id = 2 }
+                ]
+            };
+            UserConfig userConfig = new();
+            await userConfig.InitWithUserId(apiConn, 100, false);
+            WfHandler wfHandler = new();
+            ActionHandler actionHandler = new(apiConn, wfHandler);
+            WfDbAccess dbAccess = new(DefaultInit.DoNothing, userConfig, apiConn, actionHandler, false);
+
+            List<WfTicket> tickets = await dbAccess.GetTicketsByParameters(WfTaskType.access.ToString(), 0, 10, DateTime.UtcNow, ticket => ticket.Id == 2);
+
+            Assert.That(tickets, Has.Count.EqualTo(1));
+            Assert.That(tickets[0].Id, Is.EqualTo(2));
+        }
+
+        [Test]
         public async Task FindRuleUid_ReturnsTrue_WhenRuleFound()
         {
             WfDbAccessTestApiConn apiConn = new() { FindRuleUidHasMatch = true };
@@ -142,7 +409,7 @@ namespace FWO.Test
         }
 
         [Test]
-        public void BuildReqTaskUpdateVariables_DoesNotIncludeTaskType()
+        public void BuildReqTaskUpdateVariables_DoesNotIncludeCreationOnlyFields()
         {
             WfReqTask reqTask = new()
             {
@@ -165,9 +432,83 @@ namespace FWO.Test
             Dictionary<string, object?> variables = (Dictionary<string, object?>)buildMethod!.Invoke(null, [reqTask])!;
 
             Assert.That(variables.ContainsKey("taskType"), Is.False);
+            Assert.That(variables.ContainsKey("taskNumber"), Is.False);
             Assert.That(variables["title"], Is.EqualTo("Access request"));
             Assert.That(variables["state"], Is.EqualTo(0));
             Assert.That(variables["managementId"], Is.EqualTo(5));
+        }
+
+        [Test]
+        public void BuildReqTaskInsertVariables_IncludesCreationOnlyFields()
+        {
+            WfReqTask reqTask = new()
+            {
+                Title = "Access request",
+                TaskNumber = 3,
+                TaskType = WfTaskType.access.ToString(),
+                Locked = true
+            };
+
+            MethodInfo? buildMethod = typeof(WfDbAccess).GetMethod("BuildReqTaskInsertVariables", BindingFlags.NonPublic | BindingFlags.Static);
+            Assert.That(buildMethod, Is.Not.Null);
+
+            Dictionary<string, object?> variables = (Dictionary<string, object?>)buildMethod!.Invoke(null, [reqTask])!;
+
+            Assert.That(variables["taskNumber"], Is.EqualTo(3));
+            Assert.That(variables["taskType"], Is.EqualTo(WfTaskType.access.ToString()));
+            Assert.That(variables["locked"], Is.True);
+        }
+
+        [Test]
+        public void BuildReqElementVariables_ClearsManualPortFieldsForFlowServiceReference()
+        {
+            WfReqElement element = new()
+            {
+                Field = ElemFieldType.service.ToString(),
+                FlowServiceObjectId = 5,
+                Name = "https",
+                Port = 0,
+                PortEnd = null,
+                ProtoId = 0
+            };
+            MethodInfo? buildMethod = typeof(WfDbAccess).GetMethod("BuildReqElementVariables", BindingFlags.NonPublic | BindingFlags.Static);
+            Assert.That(buildMethod, Is.Not.Null);
+
+            Dictionary<string, object?> variables = (Dictionary<string, object?>)buildMethod!.Invoke(null, [element])!;
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(variables["flowSvcObjId"], Is.EqualTo(5));
+                Assert.That(variables["port"], Is.Null);
+                Assert.That(variables["portEnd"], Is.Null);
+                Assert.That(variables["proto"], Is.Null);
+            });
+        }
+
+        [Test]
+        public void BuildReqElementVariables_KeepsResolvedPortFieldsForFlowServiceReference()
+        {
+            WfReqElement element = new()
+            {
+                Field = ElemFieldType.service.ToString(),
+                FlowServiceObjectId = 5,
+                Name = "https",
+                Port = 443,
+                PortEnd = null,
+                ProtoId = 6
+            };
+            MethodInfo? buildMethod = typeof(WfDbAccess).GetMethod("BuildReqElementVariables", BindingFlags.NonPublic | BindingFlags.Static);
+            Assert.That(buildMethod, Is.Not.Null);
+
+            Dictionary<string, object?> variables = (Dictionary<string, object?>)buildMethod!.Invoke(null, [element])!;
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(variables["flowSvcObjId"], Is.EqualTo(5));
+                Assert.That(variables["port"], Is.EqualTo(443));
+                Assert.That(variables["portEnd"], Is.Null);
+                Assert.That(variables["proto"], Is.EqualTo(6));
+            });
         }
 
         [Test]

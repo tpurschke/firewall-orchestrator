@@ -75,6 +75,17 @@ namespace FWO.Data.Workflow
         [JsonProperty("external_parameters"), JsonPropertyName("external_parameters")]
         public string ExternalParams { get; set; } = "";
 
+        private List<WfStateActionStateHelper> _stateActions = [];
+
+        [JsonProperty("state_actions"), JsonPropertyName("state_actions")]
+        public List<WfStateActionStateHelper> StateActions
+        {
+            get => _stateActions;
+            set => _stateActions = value ?? [];
+        }
+
+        public int StateCount => StateActions.Count;
+
 
         public WfStateAction()
         { }
@@ -90,6 +101,7 @@ namespace FWO.Data.Workflow
             Event = action.Event;
             ButtonText = action.ButtonText;
             ExternalParams = action.ExternalParams;
+            StateActions = [.. action.StateActions.Select(stateAction => new WfStateActionStateHelper(stateAction))];
         }
 
         public static bool IsReadonlyType(string actionTypeString)
@@ -171,6 +183,12 @@ namespace FWO.Data.Workflow
         [JsonPropertyName("bundle_type")]
         public BundleTaskType BundleType { get; set; } = BundleTaskType.TwoOutOfThree;
 
+        [JsonPropertyName("clean_zones")]
+        public bool CleanZones { get; set; }
+
+        [JsonPropertyName("policy_id")]
+        public int? PolicyId { get; set; }
+
         private static readonly System.Text.Json.JsonSerializerOptions SerializerOptions = new()
         {
             Converters = { new JsonStringEnumConverter() }
@@ -207,5 +225,29 @@ namespace FWO.Data.Workflow
 
         [JsonProperty("action"), JsonPropertyName("action")]
         public WfStateAction Action { get; set; } = new WfStateAction();
+    }
+
+    public class WfStateActionStateHelper
+    {
+        private WfState _state = new();
+
+        [JsonProperty("sort_order"), JsonPropertyName("sort_order")]
+        public int SortOrder { get; set; }
+
+        [JsonProperty("state"), JsonPropertyName("state")]
+        public WfState State
+        {
+            get => _state;
+            set => _state = value ?? new WfState();
+        }
+
+        public WfStateActionStateHelper()
+        { }
+
+        public WfStateActionStateHelper(WfStateActionStateHelper stateActionStateHelper)
+        {
+            SortOrder = stateActionStateHelper.SortOrder;
+            State = new WfState(stateActionStateHelper.State);
+        }
     }
 }

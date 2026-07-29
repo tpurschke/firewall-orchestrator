@@ -73,7 +73,8 @@ namespace FWO.Middleware.Server
                 htmlRuleTable = BuildHtmlReportSection(frameTitle, htmlRuleTable, owner);
             }
 
-            return NotificationTableBodyBuilder.BuildHtmlDocument(NotificationTableBodyBuilder.BuildHtmlBody(introText, htmlRuleTable));
+            htmlRuleTable = NotificationTableBodyBuilder.HtmlTableStyleBlock + htmlRuleTable;
+            return NotificationTableBodyBuilder.BuildHtmlBody(introText, htmlRuleTable);
         }
 
         /// <summary>
@@ -220,7 +221,7 @@ namespace FWO.Middleware.Server
 
         private RuleDisplayHtml CreateRuleDisplayHtml()
         {
-            UserConfig displayUserConfig = new(GlobalConfig, false);
+            UserConfig displayUserConfig = UserConfig.ForTextOnly(GlobalConfig, false);
             return new RuleDisplayHtml(displayUserConfig);
         }
 

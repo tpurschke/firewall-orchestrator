@@ -5,9 +5,12 @@ namespace FWO.Api.Client.Queries
     public class OwnerQueries : Queries
     {
         public static readonly string ownerDetailsFragment;
+        public static readonly string ownerDetailsWithLifecycleStateFragment;
 
         public static readonly string getOwnerById;
         public static readonly string getOwners;
+        public static readonly string getOwnersFiltered;
+        public static readonly string getApplicationIdentifiers;
         public static readonly string getOwnersWithNetworks;
         public static readonly string getOwnersForRuleOwnerCustomField;
         public static readonly string getOwnersForRuleOwnerIpBased;
@@ -63,9 +66,12 @@ namespace FWO.Api.Client.Queries
             try
             {
                 ownerDetailsFragment = GetQueryText("owner/fragments/ownerDetails.graphql");
+                ownerDetailsWithLifecycleStateFragment = ownerDetailsFragment + GetQueryText("owner/fragments/ownerDetailsWithLifecycleState.graphql");
 
                 getOwnerById = GetQueryText("owner/getOwnerById.graphql");
                 getOwners = ownerDetailsFragment + GetQueryText("owner/getOwners.graphql");
+                getOwnersFiltered = ownerDetailsWithLifecycleStateFragment + GetQueryText("owner/getOwnersFiltered.graphql");
+                getApplicationIdentifiers = GetQueryText("owner/getApplicationIdentifiers.graphql");
                 getOwnersWithNetworks = ownerDetailsFragment + GetQueryText("owner/getOwnersWithNetworks.graphql");
                 getOwnersForRuleOwnerCustomField = GetQueryText("owner/getOwnersForRuleOwnerCustomField.graphql");
                 getOwnersForRuleOwnerIpBased = GetQueryText("owner/getOwnersForRuleOwnerIpBased.graphql");

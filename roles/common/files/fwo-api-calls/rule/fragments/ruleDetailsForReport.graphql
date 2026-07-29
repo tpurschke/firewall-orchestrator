@@ -1,4 +1,4 @@
-fragment ruleDetailsForReport on rule {
+fragment ruleDetailsForReport on firewall_rule {
   rule_id
   rule_uid
   mgm_id
@@ -103,10 +103,5 @@ fragment ruleDetailsForReport on rule {
       ...networkServiceDetails
     }
   }
-  rule_enforced_on_gateways(order_by:{ device: { dev_name: asc } }) {
-    device {
-      id: dev_id
-      name: dev_name
-    }
-  }
+  ...ruleEnforcedOnGateways
 }

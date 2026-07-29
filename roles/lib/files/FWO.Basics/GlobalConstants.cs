@@ -69,6 +69,7 @@ namespace FWO.Basics
         public const string kStyleAdded = "color: green; text-decoration: bold;";
 
         public const string ChromeBinPathLinux = "/usr/local/fworch/bin";
+        public const string ChromiumHeadlessBinPathLinux = "/usr/local/fworch/bin/chromium-headless";
         public const string TestPDFFilePath = "pdffile.pdf";
         public const string TestPDFHtmlTemplate = "<html><body><h1>test</h1><h2>test mit puppteer</h2></body></html>";
 
@@ -124,6 +125,7 @@ namespace FWO.Basics
         public const string ManagementId = "management_id";
         public const string RuleIds = "ruleIds";
         public const string RuleId = "rule_id";
+        public const string RulebaseIds = "rulebaseIds";
     }
 
     public struct Placeholder
@@ -210,6 +212,14 @@ namespace FWO.Basics
         public const string Any = "any";
         public const string Reject = "reject";
         public const string Drop = "drop";
+
+        /// <summary>
+        /// Returns whether the normalized action name blocks traffic.
+        /// </summary>
+        public static bool IsDropAction(string? action)
+        {
+            return action == Drop || action == Reject || action == Deny;
+        }
     }
 
     public enum ChunkMergeMode

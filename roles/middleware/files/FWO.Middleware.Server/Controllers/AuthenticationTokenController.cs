@@ -117,7 +117,9 @@ namespace FWO.Middleware.Server.Controllers
                 UiUser authenticatedTargetUser = await authManager.AuthenticateAndBuildUserAsync(targetUser, validatePassword: false)
                     ?? throw new AuthenticationException("Provided target user credentials are invalid.");
 
-                TokenPair tokenPair = await authManager.CreateTokenPair(authenticatedTargetUser);
+                // Delegated tokens are not refreshable: withholding the refresh token prevents an admin-issued
+                // short-lived delegated session from being rotated into a normal full-lifetime user session (#4654).
+                TokenPair tokenPair = await authManager.CreateTokenPair(authenticatedTargetUser, issueRefreshToken: false);
                 WriteTokenPairAudit("IssueDelegatedTokenPair", tokenPair, authenticatedAdminUser,
                     $"Issued delegated token pair for target user \"{authenticatedTargetUser.Name}\".");
 
@@ -133,6 +135,8 @@ namespace FWO.Middleware.Server.Controllers
         /// Generates an authentication token (jwt) given valid credentials.  
         /// </summary>
         /// <remarks>
+        /// Deprecated: This endpoint will be dropped in the next major release. Use /api/AuthenticationToken/GetTokenPair instead.
+        ///
         /// Username (required)&#xA;
         /// Password (required)
         /// </remarks>
@@ -354,7 +358,7 @@ namespace FWO.Middleware.Server.Controllers
 
 #if DEBUG
         /// <summary>
-        ///  Tests the Auth from swagger. If this returns unauthorized then check JWT token in swagger and try again.
+        ///  Tests the Auth from API docs. If this returns unauthorized then check JWT token in API docs and try again.
         /// </summary>
         /// <returns></returns>
         [Authorize]
@@ -529,12 +533,8 @@ namespace FWO.Middleware.Server.Controllers
         {
             HashSet<string> userGroups = new(DistName.DnComparer);
             userGroups.UnionWith(ldap.GetGroups(ldapUser));
-            if (userGroups.Count == 0)
-            {
-                string? groupPath = !string.IsNullOrWhiteSpace(ldap.GroupSearchPath) ? ldap.GroupSearchPath : ldap.GroupWritePath;
-                List<string> groupNames = await ldap.GetGroups([ldapUser.Dn]);
-                userGroups.UnionWith(Ldap.BuildGroupDns(groupNames, groupPath));
-            }
+            string? groupPath = !string.IsNullOrWhiteSpace(ldap.GroupSearchPath) ? ldap.GroupSearchPath : ldap.GroupWritePath;
+            AddResolvedGroupMemberships(userGroups, await ldap.GetGroups([ldapUser.Dn]), groupPath);
             if (!ldap.IsInternal())
             {
                 object groupsLock = new();
@@ -549,13 +549,18 @@ namespace FWO.Middleware.Server.Controllers
                         lock (groupsLock)
                         {
                             string? groupPath = !string.IsNullOrWhiteSpace(currentLdap.GroupSearchPath) ? currentLdap.GroupSearchPath : currentLdap.GroupWritePath;
-                            userGroups.UnionWith(Ldap.BuildGroupDns(currentGroups, groupPath));
+                            AddResolvedGroupMemberships(userGroups, currentGroups, groupPath);
                         }
                     }));
                 }
                 await Task.WhenAll(ldapRoleRequests);
             }
             return userGroups.ToList();
+        }
+
+        private static void AddResolvedGroupMemberships(HashSet<string> userGroups, IEnumerable<string> groupNames, string? groupPath)
+        {
+            userGroups.UnionWith(Ldap.BuildGroupDns(groupNames, groupPath));
         }
 
         public async Task<(LdapEntry, Ldap)> AuthenticateInAnyLdap(UiUser user, bool validatePassword)
@@ -857,8 +862,9 @@ namespace FWO.Middleware.Server.Controllers
         /// </summary>
         /// <param name="user">The authenticated user for whom the token pair is created. If null, an anonymous access token without a refresh token is created.</param>
         /// <param name="accessTokenLifetime">Optional access-token lifetime override.</param>
+        /// <param name="issueRefreshToken">When false, no refresh token is issued so the access token cannot be rotated into a longer-lived session. Used for delegated (admin-on-behalf-of-user) tokens.</param>
         /// <returns>A token pair containing the signed access token and, for authenticated users, a persisted refresh token with its expiration metadata.</returns>
-        public async Task<TokenPair> CreateTokenPair(UiUser? user = null, TimeSpan? accessTokenLifetime = null)
+        public async Task<TokenPair> CreateTokenPair(UiUser? user = null, TimeSpan? accessTokenLifetime = null, bool issueRefreshToken = true)
         {
             TimeSpan accessLifetime = user == null
                 ? tokenLifetimeProvider.GetAnonymousTokenLifetime()
@@ -871,7 +877,7 @@ namespace FWO.Middleware.Server.Controllers
             string refreshToken = "";
             DateTime refreshExpiry = DateTime.MinValue;
 
-            if (user is not null)
+            if (user is not null && issueRefreshToken)
             {
                 refreshToken = JwtWriter.GenerateRefreshToken();
                 TimeSpan refreshLifetime = await tokenLifetimeProvider.GetRefreshTokenLifetimeAsync(apiConnection);

@@ -723,6 +723,56 @@ namespace FWO.Test
         }
 
         [Test]
+        public async Task ResolveImportedUserIdentifierToDn_ReturnsNullWithoutLdaps()
+        {
+            BaseResolverTestAppDataImport import = new(new SimulatedApiConnection(), new GlobalConfig());
+
+            string? resolvedDn = await import.ResolveUserIdentifier("user-a");
+
+            Assert.That(resolvedDn, Is.Null);
+        }
+
+        [Test]
+        public async Task ResolveImportedGroupIdentifierToDn_ReturnsNullWithoutLdaps()
+        {
+            BaseResolverTestAppDataImport import = new(new SimulatedApiConnection(), new GlobalConfig());
+
+            string? resolvedDn = await import.ResolveGroupIdentifier("group-a");
+
+            Assert.That(resolvedDn, Is.Null);
+        }
+
+        [Test]
+        public async Task ResolveImportedResponsibleIdentifierToDn_ReturnsNullWithoutLdaps()
+        {
+            BaseResolverTestAppDataImport import = new(new SimulatedApiConnection(), new GlobalConfig());
+
+            string? resolvedDn = await import.ResolveResponsibleIdentifier("mixed-a");
+
+            Assert.That(resolvedDn, Is.Null);
+        }
+
+        [Test]
+        public async Task ResolveImportedUiUser_ReturnsNullWithoutLdaps()
+        {
+            BaseResolverTestAppDataImport import = new(new SimulatedApiConnection(), new GlobalConfig());
+
+            UiUser? resolvedUser = await import.ResolveUiUser("cn=user,dc=example,dc=com");
+
+            Assert.That(resolvedUser, Is.Null);
+        }
+
+        [Test]
+        public async Task ResolveImportedGroupMembers_ReturnsEmptyForEmptyGroupDn()
+        {
+            BaseResolverTestAppDataImport import = new(new SimulatedApiConnection(), new GlobalConfig());
+
+            List<string> resolvedMembers = await import.ResolveGroupMembers(new Ldap(), "");
+
+            Assert.That(resolvedMembers, Is.Empty);
+        }
+
+        [Test]
         public async Task DeactivateMissingApps_DeactivatesOnlyActiveAppsFromSameSourceThatAreMissingInImport()
         {
             AppDataImportFlowTestApiConn apiConn = new();
@@ -1273,7 +1323,7 @@ namespace FWO.Test
 
             Assert.That(imported, Is.True);
             Assert.That(apiConn.LastNewOwnerRecertActive, Is.True);
-            Assert.That(apiConn.GetInitialOwnerRecertCalls, Is.EqualTo(1));
+            Assert.That(apiConn.GetOwnerRecertCalls, Is.EqualTo(1));
             Assert.That(apiConn.RecertifyOwnerCalls, Is.EqualTo(1));
             Assert.That(apiConn.SetOwnerLastRecertCalls, Is.EqualTo(1));
         }
@@ -1300,7 +1350,7 @@ namespace FWO.Test
             bool imported = await InvokeSaveApp(import, incomingApp, new OwnerChangeImportTracker(apiConn));
 
             Assert.That(imported, Is.True);
-            Assert.That(apiConn.GetInitialOwnerRecertCalls, Is.EqualTo(1));
+            Assert.That(apiConn.GetOwnerRecertCalls, Is.EqualTo(1));
             Assert.That(apiConn.RecertifyOwnerCalls, Is.EqualTo(1));
             Assert.That(apiConn.SetOwnerLastRecertCalls, Is.EqualTo(1));
         }
@@ -1325,7 +1375,7 @@ namespace FWO.Test
 
             Assert.That(imported, Is.True);
             Assert.That(apiConn.LastNewOwnerRecertActive, Is.False);
-            Assert.That(apiConn.GetInitialOwnerRecertCalls, Is.EqualTo(0));
+            Assert.That(apiConn.GetOwnerRecertCalls, Is.EqualTo(0));
             Assert.That(apiConn.RecertifyOwnerCalls, Is.EqualTo(0));
             Assert.That(apiConn.SetOwnerLastRecertCalls, Is.EqualTo(0));
         }
@@ -1350,7 +1400,7 @@ namespace FWO.Test
 
             Assert.That(imported, Is.True);
             Assert.That(apiConn.LastNewOwnerRecertActive, Is.True);
-            Assert.That(apiConn.GetInitialOwnerRecertCalls, Is.EqualTo(0));
+            Assert.That(apiConn.GetOwnerRecertCalls, Is.EqualTo(0));
             Assert.That(apiConn.RecertifyOwnerCalls, Is.EqualTo(0));
             Assert.That(apiConn.SetOwnerLastRecertCalls, Is.EqualTo(0));
         }
@@ -1378,7 +1428,7 @@ namespace FWO.Test
 
             Assert.That(imported, Is.True);
             Assert.That(apiConn.LastUpdateOwnerRecertActive, Is.True);
-            Assert.That(apiConn.GetInitialOwnerRecertCalls, Is.EqualTo(1));
+            Assert.That(apiConn.GetOwnerRecertCalls, Is.EqualTo(1));
             Assert.That(apiConn.RecertifyOwnerCalls, Is.EqualTo(1));
             Assert.That(apiConn.SetOwnerLastRecertCalls, Is.EqualTo(1));
         }
@@ -1411,7 +1461,40 @@ namespace FWO.Test
             bool imported = await InvokeSaveApp(import, incomingApp, new OwnerChangeImportTracker(apiConn));
 
             Assert.That(imported, Is.True);
-            Assert.That(apiConn.GetInitialOwnerRecertCalls, Is.EqualTo(1));
+            Assert.That(apiConn.GetOwnerRecertCalls, Is.EqualTo(1));
+            Assert.That(apiConn.RecertifyOwnerCalls, Is.EqualTo(0));
+            Assert.That(apiConn.SetOwnerLastRecertCalls, Is.EqualTo(0));
+        }
+
+        [Test]
+        public async Task SaveApp_ActiveOwnerWithExistingRealRecert_DoesNotCreateInitialRecert()
+        {
+            AppDataImportSaveAppApiConn apiConn = new()
+            {
+                ExistingInitialOwnerRecerts =
+                [
+                    new OwnerRecertification { Id = 556, OwnerId = 47, Recertified = true }
+                ]
+            };
+            GlobalConfig globalConfig = new() { RecertificationMode = RecertificationMode.OwnersAndRules };
+            AppDataImport import = new(apiConn, globalConfig);
+            SetUserConfig(import, new SimulatedUserConfig { RecertificationMode = RecertificationMode.OwnersAndRules });
+            SetExistingApps(import,
+            [
+                new() { Id = 47, Name = "App-47", ExtAppId = "APP-47", RecertActive = true }
+            ]);
+            ModellingImportAppData incomingApp = new()
+            {
+                Name = "App-47",
+                ExtAppId = "APP-47",
+                ImportSource = "SRC-47",
+                RecertActive = true
+            };
+
+            bool imported = await InvokeSaveApp(import, incomingApp, new OwnerChangeImportTracker(apiConn));
+
+            Assert.That(imported, Is.True);
+            Assert.That(apiConn.GetOwnerRecertCalls, Is.EqualTo(1));
             Assert.That(apiConn.RecertifyOwnerCalls, Is.EqualTo(0));
             Assert.That(apiConn.SetOwnerLastRecertCalls, Is.EqualTo(0));
         }
@@ -2245,7 +2328,7 @@ namespace FWO.Test
             public Dictionary<string, string>? LastUpdateOwnerAdditionalInfo { get; private set; }
             public bool? LastNewOwnerRecertActive { get; private set; }
             public bool? LastUpdateOwnerRecertActive { get; private set; }
-            public int GetInitialOwnerRecertCalls { get; private set; }
+            public int GetOwnerRecertCalls { get; private set; }
             public int RecertifyOwnerCalls { get; private set; }
             public int SetOwnerLastRecertCalls { get; private set; }
             public List<OwnerRecertification> ExistingInitialOwnerRecerts { get; init; } = [];
@@ -2377,9 +2460,9 @@ namespace FWO.Test
                     });
                 }
 
-                if (query == RecertQueries.getInitialOwnerRecert)
+                if (query == RecertQueries.getOwnerRecert)
                 {
-                    ++GetInitialOwnerRecertCalls;
+                    ++GetOwnerRecertCalls;
                     return Task.FromResult((QueryResponseType)(object)ExistingInitialOwnerRecerts);
                 }
 
@@ -2523,6 +2606,39 @@ namespace FWO.Test
             {
                 CheckedOwners.Add(new FwoOwner(owner) { OwnerLifeCycleStateId = owner.OwnerLifeCycleStateId });
                 return Task.CompletedTask;
+            }
+        }
+
+        private sealed class BaseResolverTestAppDataImport : AppDataImport
+        {
+            public BaseResolverTestAppDataImport(ApiConnection apiConnection, GlobalConfig globalConfig)
+                : base(apiConnection, globalConfig)
+            {
+            }
+
+            public Task<string?> ResolveUserIdentifier(string userIdentifier)
+            {
+                return ResolveImportedUserIdentifierToDn(userIdentifier);
+            }
+
+            public Task<string?> ResolveGroupIdentifier(string groupIdentifier)
+            {
+                return ResolveImportedGroupIdentifierToDn(groupIdentifier);
+            }
+
+            public Task<string?> ResolveResponsibleIdentifier(string identifier)
+            {
+                return ResolveImportedResponsibleIdentifierToDn(identifier);
+            }
+
+            public Task<UiUser?> ResolveUiUser(string responsibleDn)
+            {
+                return ResolveImportedUiUser(responsibleDn);
+            }
+
+            public Task<List<string>> ResolveGroupMembers(Ldap ldap, string groupDn)
+            {
+                return ResolveImportedGroupMembers(ldap, groupDn);
             }
         }
 

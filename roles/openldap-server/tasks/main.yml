@@ -8,11 +8,23 @@
   become: true
   tags: ["test", "integrationtests"]
 
-- block:
-      ### OS basics
-      - name: Add the OS specific varibles
-        include_vars: "{{ ansible_os_family }}.yml"
+### OS basics needed in every installation mode
+- name: Add the OS specific varibles
+  include_vars: "{{ ansible_facts['os_family'] }}.yml"
+  tags: ["always"]
 
+# the ldap client tools are used by the upgrade, sample-auth-data and integration test tasks,
+# so they must not depend on the server installation block below
+- name: Install the openldap client packages
+  package:
+      name: "{{ item }}"
+      state: present
+  loop: "{{ openldap_client_pkgs }}"
+  become: true
+  environment: "{{ proxy_env }}"
+  tags: ["test", "integrationtests"]
+
+- block:
       - name: Install the openldap and required Packages
         package:
             name: "{{ item }}"
@@ -101,7 +113,8 @@
 
       - name: Configure LDAP protocol, URI and port
         lineinfile:
-            path: /etc/default/slapd
+            path: "{{ openldap_service_defaults_file }}"
+            create: true
             regexp: "^SLAPD_SERVICES="
             line: 'SLAPD_SERVICES="{{ openldap_server_services }}"'
 
@@ -113,7 +126,7 @@
             path: "{{ openldap_server_app_path }}/slapd.d"
             state: directory
             recurse: true
-            owner: openldap
+            owner: "{{ openldap_server_user }}"
 
       ### systemctl
       - name: Remove Debian slapd override
@@ -126,6 +139,12 @@
         file:
             path: /etc/systemd/system/slapd.service.d
             recurse: true
+        when: ansible_facts['distribution'] != "Debian"
+
+      - name: Read slapd systemd unit type
+        command: systemctl show -p Type --value slapd.service
+        register: slapd_unit_type
+        changed_when: false
         when: ansible_facts['distribution'] != "Debian"
 
       - name: Enable TLS for slapd service

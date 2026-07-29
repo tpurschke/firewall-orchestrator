@@ -1,4 +1,5 @@
 using FWO.Api.Client;
+using FWO.Basics;
 using FWO.Data;
 using FWO.Data.Workflow;
 using FWO.Middleware.Server;
@@ -7,6 +8,7 @@ using GraphQL.Client.Http;
 using NUnit.Framework;
 using System.IdentityModel.Tokens.Jwt;
 using System.Reflection;
+using System.Security.Authentication;
 using System.Security.Claims;
 
 namespace FWO.Test
@@ -20,6 +22,33 @@ namespace FWO.Test
             string escaped = Ldap.EscapeFilterValue(@"a*b(c)d\e" + '\0');
 
             Assert.That(escaped, Is.EqualTo(@"a\2ab\28c\29d\5ce\00"));
+        }
+
+        [Test]
+        public void EscapeSearchPattern_PreservesWildcardsButEscapesSegments()
+        {
+            // '*' stays a wildcard; the literal '(' and ')' within segments are escaped
+            string escaped = Ldap.EscapeSearchPattern("*smith*(test)");
+
+            Assert.That(escaped, Is.EqualTo(@"*smith*\28test\29"));
+        }
+
+        [Test]
+        public void EscapeSearchPattern_NeutralizesFilterInjectionWhileKeepingWildcards()
+        {
+            // An injection attempt that abuses parentheses must be escaped,
+            // while the user-supplied leading/trailing wildcards keep working
+            string escaped = Ldap.EscapeSearchPattern("*)(uid=admin)(*");
+
+            Assert.That(escaped, Is.EqualTo(@"*\29\28uid=admin\29\28*"));
+            Assert.That(escaped, Does.Not.Contain(")("));
+        }
+
+        [Test]
+        public void EscapeSearchPattern_ReturnsEmptyForNullOrEmpty()
+        {
+            Assert.That(Ldap.EscapeSearchPattern(null), Is.EqualTo(""));
+            Assert.That(Ldap.EscapeSearchPattern(""), Is.EqualTo(""));
         }
 
         [Test]
@@ -142,6 +171,66 @@ namespace FWO.Test
             Assert.That(connection.GetActRole(), Is.EqualTo("middleware-server"));
         }
 
+        [Test]
+        public void GraphQlApiConnection_MultiRoleUserUsesJwtDefaultRoleWithoutAmbientRole()
+        {
+            string jwt = CreateJwt("reporter", ["reporter", "modeller"]);
+            using GraphQlApiConnection connection = new("http://localhost", jwt);
+
+            GraphQLRequest request = CreateSubscriptionRequest(connection, "subscription Test { test }", null, "Test");
+
+            Dictionary<string, object?> extensions = (Dictionary<string, object?>)request.Extensions!;
+            Dictionary<string, object?> headers = extensions["headers"] as Dictionary<string, object?>
+                ?? throw new InvalidOperationException("Subscription extensions headers have unexpected type.");
+            Assert.That(headers["x-hasura-role"], Is.EqualTo("reporter"));
+        }
+
+        [Test]
+        public void GraphQlApiConnection_NormalModeDoesNotUseElevatedJwtDefaultRole()
+        {
+            string jwt = CreateJwt(Roles.Auditor, [Roles.Auditor, Roles.Modeller]);
+            ClaimsPrincipal user = CreateUser([Roles.Auditor, Roles.Modeller]);
+            using GraphQlApiConnection connection = new("http://localhost", jwt);
+            connection.SetExecutionMode(user, GlobalConst.kUserRolesSelection);
+
+            TargetInvocationException exception = Assert.Throws<TargetInvocationException>(() =>
+                CreateSubscriptionRequest(connection, "subscription Test { test }", null, "Test"))!;
+
+            Assert.That(exception.InnerException, Is.TypeOf<AuthenticationException>());
+        }
+
+        [Test]
+        public void GraphQlApiConnection_MultiRoleUserAllowsExplicitRequestRole()
+        {
+            string jwt = CreateJwt("reporter", ["reporter", "modeller"]);
+            using GraphQlApiConnection connection = new("http://localhost", jwt);
+            connection.SetRole("modeller");
+
+            GraphQLRequest request = CreateSubscriptionRequest(connection, "subscription Test { test }", null, "Test");
+
+            Dictionary<string, object?> extensions = (Dictionary<string, object?>)request.Extensions!;
+            Dictionary<string, object?> headers = extensions["headers"] as Dictionary<string, object?>
+                ?? throw new InvalidOperationException("Subscription extensions headers have unexpected type.");
+            Assert.That(headers["x-hasura-role"], Is.EqualTo("modeller"));
+        }
+
+        [Test]
+        public void GraphQlApiConnection_MultiRoleUserAllowsAmbientRequestRole()
+        {
+            string jwt = CreateJwt("reporter", ["reporter", "modeller"]);
+            ClaimsPrincipal user = CreateUser(["reporter", "modeller"]);
+            using GraphQlApiConnection connection = new("http://localhost", jwt);
+            connection.SetAmbientRole(user, ["modeller"]);
+
+            Assert.That(connection.GetActRole(), Is.EqualTo("modeller"));
+            GraphQLRequest request = CreateSubscriptionRequest(connection, "subscription Test { test }", null, "Test");
+
+            Dictionary<string, object?> extensions = (Dictionary<string, object?>)request.Extensions!;
+            Dictionary<string, object?> headers = extensions["headers"] as Dictionary<string, object?>
+                ?? throw new InvalidOperationException("Subscription extensions headers have unexpected type.");
+            Assert.That(headers["x-hasura-role"], Is.EqualTo("modeller"));
+        }
+
         private static GraphQLHttpClient GetGraphQlClient(GraphQlApiConnection connection)
         {
             FieldInfo? field = typeof(GraphQlApiConnection).GetField("graphQlClient", BindingFlags.NonPublic | BindingFlags.Instance);
@@ -152,6 +241,24 @@ namespace FWO.Test
         {
             MethodInfo? method = typeof(GraphQlApiConnection).GetMethod("CreateSubscriptionRequest", BindingFlags.NonPublic | BindingFlags.Instance);
             return (GraphQLRequest)(method?.Invoke(connection, [query, variables, operationName]) ?? throw new InvalidOperationException("CreateSubscriptionRequest method not found."));
+        }
+
+        private static string CreateJwt(string defaultRole, string[] allowedRoles)
+        {
+            return new JwtSecurityTokenHandler().WriteToken(new JwtSecurityToken(claims:
+            [
+                new Claim("x-hasura-default-role", defaultRole),
+                new Claim("x-hasura-allowed-roles", System.Text.Json.JsonSerializer.Serialize(allowedRoles), JsonClaimValueTypes.JsonArray)
+            ]));
+        }
+
+        private static ClaimsPrincipal CreateUser(string[] roles)
+        {
+            return new ClaimsPrincipal(new ClaimsIdentity(
+                roles.Select(role => new Claim(ClaimTypes.Role, role)),
+                "test",
+                ClaimTypes.Name,
+                ClaimTypes.Role));
         }
     }
 }
