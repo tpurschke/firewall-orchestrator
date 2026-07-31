@@ -4,8 +4,13 @@
     name: "{{ item }}"
     state: present
   loop: "{{ test_packages }}"
+  register: test_packages_install
+  until: test_packages_install is succeeded
+  retries: "{{ os_package_install_retries }}"
+  delay: "{{ os_package_install_retry_delay }}"
   become: true
-  environment: "{{ proxy_env }}"
+  # OS packages come from the configured repositories, not through the installer proxy
+  environment: "{{ os_package_env }}"
 
 - name: randomize test names to avoid interference with production data
   set_fact:

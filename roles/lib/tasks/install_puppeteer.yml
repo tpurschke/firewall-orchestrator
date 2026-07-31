@@ -10,7 +10,8 @@
   register: chromium_headless_install
   failed_when: false
   become: true
-  environment: "{{ proxy_env }}"
+  # OS packages come from the configured repositories, not through the installer proxy
+  environment: "{{ os_package_env }}"
   when: chromium_headless_packages | default([]) | length > 0
 
 - name: locate system chromium headless binary
@@ -171,6 +172,8 @@
           package:
             name: unzip
             state: present
+          # OS packages come from the configured repositories, not through the installer proxy
+          environment: "{{ os_package_env }}"
 
         - name: ensure chrome root directory exists
           file:

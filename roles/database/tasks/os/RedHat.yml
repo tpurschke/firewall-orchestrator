@@ -5,14 +5,26 @@
       when: installation_mode == "new"
 
     - name: install OS postgresql packages for RedHat
-      ansible.builtin.dnf:
-        name:
-          - postgresql-server
-          - postgresql-contrib
-          - python3-psycopg2
-        state: present
-        disablerepo:
-          - pgdg*
+      block:
+        - name: install postgresql packages from the configured repositories
+          ansible.builtin.dnf:
+            name:
+              - postgresql-server
+              - postgresql-contrib
+              - python3-psycopg2
+            state: present
+            disablerepo:
+              - pgdg*
+          # OS packages come from the configured repositories, not through the installer proxy
+          environment: "{{ os_package_env }}"
+          register: redhat_postgresql_install
+          until: redhat_postgresql_install is succeeded
+          retries: "{{ os_package_install_retries }}"
+          delay: "{{ os_package_install_retry_delay }}"
+      rescue:
+        - name: report failed postgresql installation on RedHat
+          fail:
+            msg: "{{ os_package_failure_hint + [ansible_failed_result.msg | default('')] }}"
 
     - name: initdb as extra step for RedHat
       command: /usr/bin/postgresql-setup --initdb

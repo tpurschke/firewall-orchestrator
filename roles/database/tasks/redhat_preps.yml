@@ -19,4 +19,10 @@
     state: present
     disablerepo:
       - pgdg*
+  register: redhat_glibc_langpack_install
+  until: redhat_glibc_langpack_install is succeeded
+  retries: "{{ os_package_install_retries }}"
+  delay: "{{ os_package_install_retry_delay }}"
   become: true
+  # OS packages come from the configured repositories, not through the installer proxy
+  environment: "{{ os_package_env }}"

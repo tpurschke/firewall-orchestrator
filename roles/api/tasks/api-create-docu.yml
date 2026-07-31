@@ -2,6 +2,8 @@
   - name: create api documentation using 2fd/graphdoc - install npm
     package:
       name: npm
+    # OS packages come from the configured repositories, not through the installer proxy
+    environment: "{{ os_package_env }}"
 
   - name: create api documentation using 2fd/graphdoc - install graphdoc
     npm:

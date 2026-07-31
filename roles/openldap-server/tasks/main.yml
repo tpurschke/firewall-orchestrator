@@ -20,8 +20,13 @@
       name: "{{ item }}"
       state: present
   loop: "{{ openldap_client_pkgs }}"
+  register: openldap_client_pkgs_install
+  until: openldap_client_pkgs_install is succeeded
+  retries: "{{ os_package_install_retries }}"
+  delay: "{{ os_package_install_retry_delay }}"
   become: true
-  environment: "{{ proxy_env }}"
+  # OS packages come from the configured repositories, not through the installer proxy
+  environment: "{{ os_package_env }}"
   tags: ["test", "integrationtests"]
 
 - block:
@@ -30,6 +35,11 @@
             name: "{{ item }}"
             state: present
         loop: "{{ openldap_server_pkgs }}"
+        register: openldap_server_pkgs_install
+        until: openldap_server_pkgs_install is succeeded
+        retries: "{{ os_package_install_retries }}"
+        delay: "{{ os_package_install_retry_delay }}"
+        environment: "{{ os_package_env }}"
 
       ### Clean up slapd.d
 

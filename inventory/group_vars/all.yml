@@ -76,13 +76,39 @@ https_proxy: "{{ env_https_proxy_lowercase if env_https_proxy_lowercase | length
 no_proxy: "{{ env_no_proxy_lowercase if env_no_proxy_lowercase | length > 0 else env_no_proxy_uppercase }}"
 proxy_exceptions: "{{ no_proxy }}"
 github_download_timeout: 60
-proxy_env:
+proxy_env_candidates:
         http_proxy: "{{ http_proxy }}"
         https_proxy: "{{ https_proxy }}"
         HTTP_PROXY: "{{ http_proxy }}"
         HTTPS_PROXY: "{{ https_proxy }}"
         no_proxy: "{{ proxy_exceptions }}"
         NO_PROXY: "{{ proxy_exceptions }}"
+# only export proxy variables that actually have a value - exporting empty ones adds
+# no information and makes proxy problems harder to spot in verbose ansible output
+proxy_env: "{{ proxy_env_candidates | dict2items | rejectattr('value', 'equalto', '') | list | items2dict }}"
+
+# OS package managers keep their own proxy configuration (/etc/dnf/dnf.conf, per repo
+# proxy= entries, /etc/apt/apt.conf.d/proxy.conf). Internal/enterprise repositories are
+# usually reachable directly, so passing the installer proxy environment to dnf/apt makes
+# package downloads from those repositories fail. Set this to true when the OS package
+# repositories can only be reached through the proxy.
+use_proxy_for_os_packages: false
+# explicit empty values are required to override a proxy environment set further up the
+# task hierarchy - ansible merges environment dictionaries instead of replacing them
+proxy_env_none:
+        http_proxy: ""
+        https_proxy: ""
+        HTTP_PROXY: ""
+        HTTPS_PROXY: ""
+os_package_env: "{{ proxy_env if use_proxy_for_os_packages | bool else proxy_env_none }}"
+# transient repository/mirror errors should not abort a whole installation run
+os_package_install_retries: 3
+os_package_install_retry_delay: 10
+os_package_failure_hint:
+  - "Could not install operating system packages from the configured repositories."
+  - "Check /var/log/dnf.librepo.log (RedHat) or /var/log/apt/term.log (Debian) for the failing URL and the underlying error."
+  - "When this host uses a proxy, make sure all repository hosts are listed in no_proxy."
+  - "When the repositories are only reachable through the proxy, rerun with -e use_proxy_for_os_packages=true."
 
 http_proxy_import_parameter: ""
 # proxy in capitals needed for debian and ubuntu <20

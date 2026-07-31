@@ -4,6 +4,12 @@
         name: "{{ item }}"
         state: present
       loop: "{{ apache_packages }}"
+      register: webserver_packages_install
+      until: webserver_packages_install is succeeded
+      retries: "{{ os_package_install_retries }}"
+      delay: "{{ os_package_install_retry_delay }}"
+      # OS packages come from the configured repositories, not through the installer proxy
+      environment: "{{ os_package_env }}"
 
     - name: enable apache2 required modules
       apache2_module:

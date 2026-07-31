@@ -49,6 +49,8 @@
       - name: apt update
         apt:
           update_cache: true
+        # OS packages come from the configured repositories, not through the installer proxy
+        environment: "{{ os_package_env }}"
 
       when:
         - not use_dotnet_install_script
@@ -57,11 +59,13 @@
 
     - name: Install apt-transport-https
       package: name=apt-transport-https state=present
+      environment: "{{ os_package_env }}"
       when: not use_dotnet_install_script
 
     - name: apt update
       apt:
         update_cache: true
+      environment: "{{ os_package_env }}"
       when: not use_dotnet_install_script
 
     - block:
@@ -69,6 +73,7 @@
         package:
           name: "{{ dotnet_package_name }}"
           state: present
+        environment: "{{ os_package_env }}"
       rescue:
         - name: get package list from ms {{ dotnet_deb_name }} (ubuntu fallback)
           get_url:
@@ -128,12 +133,14 @@
         - name: apt update after microsoft repo fallback
           apt:
             update_cache: true
+          environment: "{{ os_package_env }}"
 
         - block:
             - name: Install {{ dotnet_package_name }} after microsoft repo fallback
               package:
                 name: "{{ dotnet_package_name }}"
                 state: present
+              environment: "{{ os_package_env }}"
           rescue:
             - name: download dotnet-install script (ubuntu fallback)
               get_url:
@@ -167,14 +174,25 @@
         - not use_dotnet_install_script
 
     - name: Install dotnet-sdk-{{ dotnet_version }} on distro defaults
-      package:
-        name: "{{ dotnet_package_name }}"
-        state: present
       when:
         - ansible_architecture == "x86_64"
         - not use_dotnet_install_script
         - ansible_facts['distribution']|lower != 'ubuntu' or
           (ansible_facts['distribution']|lower == 'ubuntu' and ansible_facts['distribution_major_version'] is version('22', '<'))
+      block:
+        - name: install {{ dotnet_package_name }} from the configured apt sources
+          package:
+            name: "{{ dotnet_package_name }}"
+            state: present
+          environment: "{{ os_package_env }}"
+          register: debian_dotnet_install
+          until: debian_dotnet_install is succeeded
+          retries: "{{ os_package_install_retries }}"
+          delay: "{{ os_package_install_retry_delay }}"
+      rescue:
+        - name: report failed {{ dotnet_package_name }} installation
+          fail:
+            msg: "{{ os_package_failure_hint + [ansible_failed_result.msg | default('')] }}"
 
     - name: Install dotnet sdk {{ dotnet_version }} with dotnet-install script on Debian testing
       block:

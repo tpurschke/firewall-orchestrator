@@ -84,6 +84,27 @@ If you use authentication:
 
     Acquire::http::Proxy "http://user:password@proxy_server:port/";
 
+#### Operating system package repositories and the proxy
+
+The installer does **not** pass its proxy environment to the OS package managers. `dnf`/`yum` and `apt`
+keep their own proxy configuration, and internal (enterprise) package repositories are normally
+reached directly. Passing the installer proxy to the package manager makes downloads from such
+repositories fail with errors like:
+
+    Failed to download packages: <package>: Cannot download, all mirrors were already tried without success
+
+If your OS package repositories are only reachable through the proxy, either configure the proxy for
+the package manager itself (`proxy=` in `/etc/dnf/dnf.conf` or per repository in
+`/etc/yum.repos.d/*.repo`, `/etc/apt/apt.conf.d/proxy.conf` for Debian/Ubuntu), or rerun the
+installer with:
+
+```console
+./scripts/run-playbook-with-sudo.sh site.yml -e use_proxy_for_os_packages=true
+```
+
+When package downloads fail, `/var/log/dnf.librepo.log` (RedHat) and `/var/log/apt/term.log`
+(Debian/Ubuntu) contain the failing URL and the underlying error.
+
 Note that the following domains (and their sub-domains) must be reachable through the proxy:
 
     cactus.de (and sub-Domains, only for downloading test data, not needed if run with "--skip-tags test")

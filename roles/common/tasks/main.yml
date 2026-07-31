@@ -313,6 +313,12 @@
       loop:
         - rsync
         - acl
+      register: rsync_acl_install
+      until: rsync_acl_install is succeeded
+      retries: "{{ os_package_install_retries }}"
+      delay: "{{ os_package_install_retry_delay }}"
+      # OS packages come from the configured repositories, not through the installer proxy
+      environment: "{{ os_package_env }}"
 
     - name: create var lock directory
       file:

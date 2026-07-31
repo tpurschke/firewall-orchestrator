@@ -45,7 +45,8 @@
       register: epel_release_repo_check
       changed_when: false
       failed_when: false
-      environment: "{{ proxy_env }}"
+      # OS packages come from the configured repositories, not through the installer proxy
+      environment: "{{ os_package_env }}"
       become: true
       when: epel_release_check.rc != 0
 
@@ -53,7 +54,11 @@
       ansible.builtin.dnf:
         name: epel-release
         state: present
-      environment: "{{ proxy_env }}"
+      register: epel_release_install
+      until: epel_release_install is succeeded
+      retries: "{{ os_package_install_retries }}"
+      delay: "{{ os_package_install_retry_delay }}"
+      environment: "{{ os_package_env }}"
       become: true
       when:
         - epel_release_check.rc != 0
@@ -93,6 +98,12 @@
           - subscription-manager
           - dnf-plugins-core
         state: present
+      register: redhat_repo_tools_install
+      until: redhat_repo_tools_install is succeeded
+      retries: "{{ os_package_install_retries }}"
+      delay: "{{ os_package_install_retry_delay }}"
+      # OS packages come from the configured repositories, not through the installer proxy
+      environment: "{{ os_package_env }}"
       become: true
 
     - name: list RedHat repos via subscription-manager
@@ -151,7 +162,9 @@
   register: redhat_repo_policy_package_checks
   changed_when: false
   failed_when: false
-  environment: "{{ proxy_env }}"
+  # repository queries must not go through the installer proxy either - otherwise packages
+  # that are available from a directly reachable repository look unavailable here
+  environment: "{{ os_package_env }}"
   become: true
 
 - name: fail when required RedHat packages are unavailable

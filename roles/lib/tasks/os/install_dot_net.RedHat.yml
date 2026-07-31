@@ -12,6 +12,9 @@
       register: dotnet_local_repo_check
       changed_when: false
       failed_when: false
+      # repository queries must not go through the installer proxy either - otherwise a
+      # locally available package looks missing and the Microsoft repo is added needlessly
+      environment: "{{ os_package_env }}"
 
     - name: add microsoft package repo only when {{ dotnet_package_name }} is not available locally
       when: dotnet_local_repo_check.rc != 0
@@ -42,10 +45,22 @@
             state: absent
 
     - name: Install dotnet-sdk-{{ dotnet_version }} on RedHat
-      package:
-        name: "{{ dotnet_package_name }}"
-        state: present
       when: ansible_architecture == "x86_64"
+      block:
+        - name: install {{ dotnet_package_name }} from the configured repositories
+          package:
+            name: "{{ dotnet_package_name }}"
+            state: present
+          # OS packages come from the configured repositories, not through the installer proxy
+          environment: "{{ os_package_env }}"
+          register: redhat_dotnet_install
+          until: redhat_dotnet_install is succeeded
+          retries: "{{ os_package_install_retries }}"
+          delay: "{{ os_package_install_retry_delay }}"
+      rescue:
+        - name: report failed {{ dotnet_package_name }} installation on RedHat
+          fail:
+            msg: "{{ os_package_failure_hint + [ansible_failed_result.msg | default('')] }}"
 
     - debug:
         msg:

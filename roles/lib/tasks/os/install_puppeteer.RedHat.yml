@@ -30,9 +30,19 @@
           - xdg-utils
 
     - name: Install all combined dependencies on RedHat
-      package:
-        name: "{{ platform_packages }}"
-        state: present
+      block:
+        - name: install chromium dependency packages on RedHat
+          package:
+            name: "{{ platform_packages }}"
+            state: present
+          register: redhat_chromium_deps_install
+          until: redhat_chromium_deps_install is succeeded
+          retries: "{{ os_package_install_retries }}"
+          delay: "{{ os_package_install_retry_delay }}"
+      rescue:
+        - name: report failed chromium dependency installation on RedHat
+          fail:
+            msg: "{{ os_package_failure_hint + [ansible_failed_result.msg | default('')] }}"
 
     # headless chromium from EPEL can replace the chrome download (hardened / proxy-restricted systems)
     - name: Define RedHat headless chromium package
@@ -43,4 +53,5 @@
           - /usr/lib64/chromium-browser/headless_shell
 
   become: true
-  environment: "{{ proxy_env }}"
+  # OS packages come from the configured repositories, not through the installer proxy
+  environment: "{{ os_package_env }}"
