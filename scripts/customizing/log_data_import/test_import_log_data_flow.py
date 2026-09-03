@@ -1,5 +1,7 @@
 import json
 import logging
+import shutil
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -9,6 +11,8 @@ from scripts.customizing.log_data_import import import_log_data_from_git as impo
 
 LOGGER: logging.Logger = logging.getLogger("test_import_log_data_flow")
 CSV_CONTENT: str = "App ID,Log count,Src IP,Dst IP,Port,Protocol\nAPP-1,42,192.0.2.1,198.51.100.1,443,6\n"
+APPENDED_ROW: str = "APP-2,7,192.0.2.2,198.51.100.2,53,17\n"
+PUSH_FAILURE_REASON: str = "GitCommandError: remote rejected the deletion"
 
 
 def return_true(*_args: object, **_kwargs: object) -> bool:
@@ -17,6 +21,14 @@ def return_true(*_args: object, **_kwargs: object) -> bool:
 
 def return_false(*_args: object, **_kwargs: object) -> bool:
     return False
+
+
+def push_succeeded(*_args: object, **_kwargs: object) -> str | None:
+    return None
+
+
+def push_failed(*_args: object, **_kwargs: object) -> str | None:
+    return PUSH_FAILURE_REASON
 
 
 def write_config(tmp_path: Path, repository_directory: Path, start_path: str | None = None) -> str:
@@ -40,6 +52,7 @@ def write_config(tmp_path: Path, repository_directory: Path, start_path: str | N
 def prepare_repository(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[str, Path, Path]:
     repository_directory: Path = tmp_path / "repo"
     (repository_directory / "2026-08-12").mkdir(parents=True)
+    (repository_directory / ".git").mkdir()
     (repository_directory / "2026-08-12" / "fw.csv").write_text(CSV_CONTENT, encoding="utf-8")
     output_file: Path = tmp_path / "import_log_data_from_git.json"
     monkeypatch.setattr(importer, "OUTPUT_FILE", output_file)
@@ -238,9 +251,9 @@ def test_import_data_keeps_reusing_after_the_reuse_limit(tmp_path: Path, monkeyp
 def test_acknowledge_import_recovers_after_the_reuse_limit(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config_file, _repository_directory, output_file = prepare_repository(tmp_path, monkeypatch)
     exhaust_pending_reuses(config_file, monkeypatch)
-    monkeypatch.setattr(importer, "commit_and_push_deletions", return_false)
+    monkeypatch.setattr(importer, "commit_and_push_deletions", push_failed)
     assert importer.acknowledge_import(config_file, LOGGER) == 1
-    monkeypatch.setattr(importer, "commit_and_push_deletions", return_true)
+    monkeypatch.setattr(importer, "commit_and_push_deletions", push_succeeded)
 
     result: int = importer.acknowledge_import(config_file, LOGGER)
 
@@ -254,7 +267,7 @@ def test_acknowledge_import_reports_a_persistent_failure(
 ) -> None:
     config_file, _repository_directory, _ = prepare_repository(tmp_path, monkeypatch)
     exhaust_pending_reuses(config_file, monkeypatch)
-    monkeypatch.setattr(importer, "commit_and_push_deletions", return_false)
+    monkeypatch.setattr(importer, "commit_and_push_deletions", push_failed)
 
     with caplog.at_level(logging.ERROR, logger=LOGGER.name):
         assert importer.acknowledge_import(config_file, LOGGER) == 1
@@ -268,12 +281,13 @@ def test_acknowledge_import_reports_a_single_failure(
     config_file, _repository_directory, _ = prepare_repository(tmp_path, monkeypatch)
     monkeypatch.setattr(importer, "update_git_repo", return_true)
     importer.import_data(config_file, None, LOGGER)
-    monkeypatch.setattr(importer, "commit_and_push_deletions", return_false)
+    monkeypatch.setattr(importer, "commit_and_push_deletions", push_failed)
 
     with caplog.at_level(logging.ERROR, logger=LOGGER.name):
         assert importer.acknowledge_import(config_file, LOGGER) == 1
 
     assert "the data is kept and imported again" in caplog.text
+    assert PUSH_FAILURE_REASON in caplog.text
 
 
 def test_reuse_reports_a_source_the_middleware_kept_back(
@@ -294,7 +308,7 @@ def test_reuse_reports_a_deletion_which_cannot_be_pushed(
     config_file, _repository_directory, _ = prepare_repository(tmp_path, monkeypatch)
     monkeypatch.setattr(importer, "update_git_repo", return_true)
     importer.import_data(config_file, None, LOGGER)
-    monkeypatch.setattr(importer, "commit_and_push_deletions", return_false)
+    monkeypatch.setattr(importer, "commit_and_push_deletions", push_failed)
     assert importer.acknowledge_import(config_file, LOGGER) == 1
 
     with caplog.at_level(logging.ERROR, logger=LOGGER.name):
@@ -317,9 +331,9 @@ def test_acknowledge_import_deletes_manifest_and_output(tmp_path: Path, monkeypa
     importer.import_data(config_file, None, LOGGER)
     deleted_files: list[list[Path]] = []
 
-    def record_deletions(_directory: str, files: list[Path], *_args: object, **_kwargs: object) -> bool:
+    def record_deletions(_directory: str, files: list[Path], *_args: object, **_kwargs: object) -> str | None:
         deleted_files.append(files)
-        return True
+        return None
 
     monkeypatch.setattr(importer, "commit_and_push_deletions", record_deletions)
 
@@ -337,12 +351,173 @@ def test_acknowledge_import_keeps_the_manifest_when_the_push_fails(
     config_file, _repository_directory, _ = prepare_repository(tmp_path, monkeypatch)
     monkeypatch.setattr(importer, "update_git_repo", return_true)
     importer.import_data(config_file, None, LOGGER)
-    monkeypatch.setattr(importer, "commit_and_push_deletions", return_false)
+    monkeypatch.setattr(importer, "commit_and_push_deletions", push_failed)
 
     result: int = importer.acknowledge_import(config_file, LOGGER)
 
     assert result == 1
     assert importer.MANIFEST_FILE.exists()
+
+
+def clone_again_with(repository_directory: Path, csv_content: str) -> Callable[..., bool]:
+    """Replace update_git_repo with a clone which leaves the given CSV content behind."""
+
+    def clone(*_args: object, **_kwargs: object) -> bool:
+        (repository_directory / "2026-08-12").mkdir(parents=True, exist_ok=True)
+        (repository_directory / ".git").mkdir(exist_ok=True)
+        (repository_directory / "2026-08-12" / "fw.csv").write_text(csv_content, encoding="utf-8")
+        return True
+
+    return clone
+
+
+def clone_again_without_the_file(repository_directory: Path) -> Callable[..., bool]:
+    """Replace update_git_repo with a clone of a repository the file was already deleted from."""
+
+    def clone(*_args: object, **_kwargs: object) -> bool:
+        (repository_directory / "2026-08-12").mkdir(parents=True, exist_ok=True)
+        (repository_directory / ".git").mkdir(exist_ok=True)
+        return True
+
+    return clone
+
+
+def record_deletions_into(deleted_files: list[list[Path]]) -> Callable[..., str | None]:
+    """Replace commit_and_push_deletions with a successful push which records what it deleted."""
+
+    def record(_directory: str, files: list[Path], *_args: object, **_kwargs: object) -> str | None:
+        deleted_files.append(files)
+        return None
+
+    return record
+
+
+def import_and_lose_the_clone(config_file: str, repository_directory: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Import the repository, then let its clone disappear as a cleaned up target directory does."""
+    monkeypatch.setattr(importer, "update_git_repo", return_true)
+    importer.import_data(config_file, None, LOGGER)
+    shutil.rmtree(repository_directory)
+
+
+def test_acknowledge_import_clones_the_repository_again_when_the_clone_is_gone(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Without this the pending import is reused forever: only a fresh import ever clones again."""
+    config_file, repository_directory, output_file = prepare_repository(tmp_path, monkeypatch)
+    import_and_lose_the_clone(config_file, repository_directory, monkeypatch)
+    monkeypatch.setattr(importer, "update_git_repo", clone_again_with(repository_directory, CSV_CONTENT))
+    deleted_files: list[list[Path]] = []
+    monkeypatch.setattr(importer, "commit_and_push_deletions", record_deletions_into(deleted_files))
+
+    with caplog.at_level(logging.WARNING, logger=LOGGER.name):
+        result: int = importer.acknowledge_import(config_file, LOGGER)
+
+    assert result == 0
+    assert "cloning it again" in caplog.text
+    assert deleted_files == [[repository_directory / "2026-08-12/fw.csv"]]
+    assert not importer.MANIFEST_FILE.exists()
+    assert not output_file.exists()
+
+
+def test_acknowledge_import_keeps_a_file_written_to_since_the_import_after_cloning_again(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The rows the exporter appended after the import are not deleted with the file."""
+    config_file, repository_directory, output_file = prepare_repository(tmp_path, monkeypatch)
+    import_and_lose_the_clone(config_file, repository_directory, monkeypatch)
+    monkeypatch.setattr(importer, "update_git_repo", clone_again_with(repository_directory, CSV_CONTENT + APPENDED_ROW))
+    deleted_files: list[list[Path]] = []
+    monkeypatch.setattr(importer, "commit_and_push_deletions", record_deletions_into(deleted_files))
+
+    with caplog.at_level(logging.WARNING, logger=LOGGER.name):
+        result: int = importer.acknowledge_import(config_file, LOGGER)
+
+    assert result == 0
+    assert "keeping 2026-08-12/fw.csv" in caplog.text
+    assert deleted_files == [[]], "the changed file is kept and imported again in the next run"
+    assert not importer.MANIFEST_FILE.exists(), "the pending import is resolved, nothing stays behind"
+    assert not output_file.exists()
+
+
+def test_acknowledge_import_keeps_a_file_without_a_recorded_checksum(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A manifest of a version which recorded no checksums cannot prove the file is unchanged."""
+    config_file, repository_directory, _ = prepare_repository(tmp_path, monkeypatch)
+    import_and_lose_the_clone(config_file, repository_directory, monkeypatch)
+    manifest: dict[str, Any] = json.loads(importer.MANIFEST_FILE.read_text(encoding="utf-8"))
+    del manifest[importer.CSV_HASHES_KEY]
+    importer.MANIFEST_FILE.write_text(json.dumps(manifest), encoding="utf-8")
+    monkeypatch.setattr(importer, "update_git_repo", clone_again_with(repository_directory, CSV_CONTENT))
+    deleted_files: list[list[Path]] = []
+    monkeypatch.setattr(importer, "commit_and_push_deletions", record_deletions_into(deleted_files))
+
+    result: int = importer.acknowledge_import(config_file, LOGGER)
+
+    assert result == 0
+    assert deleted_files == [[]]
+
+
+def test_acknowledge_import_skips_a_file_the_repository_no_longer_has(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A file an earlier acknowledgement already deleted is nothing this run has to delete again."""
+    config_file, repository_directory, _ = prepare_repository(tmp_path, monkeypatch)
+    import_and_lose_the_clone(config_file, repository_directory, monkeypatch)
+    monkeypatch.setattr(importer, "update_git_repo", clone_again_without_the_file(repository_directory))
+    deleted_files: list[list[Path]] = []
+    monkeypatch.setattr(importer, "commit_and_push_deletions", record_deletions_into(deleted_files))
+
+    result: int = importer.acknowledge_import(config_file, LOGGER)
+
+    assert result == 0
+    assert deleted_files == [[]]
+    assert not importer.MANIFEST_FILE.exists()
+
+
+def test_acknowledge_import_reports_a_repository_it_cannot_clone_again(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    config_file, repository_directory, _ = prepare_repository(tmp_path, monkeypatch)
+    import_and_lose_the_clone(config_file, repository_directory, monkeypatch)
+    monkeypatch.setattr(importer, "update_git_repo", return_false)
+
+    with caplog.at_level(logging.ERROR, logger=LOGGER.name):
+        result: int = importer.acknowledge_import(config_file, LOGGER)
+
+    manifest: dict[str, Any] = json.loads(importer.MANIFEST_FILE.read_text(encoding="utf-8"))
+    assert result == 1
+    assert "could not be cloned again" in caplog.text
+    assert str(repository_directory) in manifest[importer.ACKNOWLEDGE_FAILURE_REASON_KEY]
+    assert importer.MANIFEST_FILE.exists(), "the data stays pending until it can be acknowledged"
+
+
+def test_reuse_names_the_reason_the_deletion_could_not_be_pushed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The runs which only reuse the pending import never see the failure themselves."""
+    config_file, _repository_directory, _ = prepare_repository(tmp_path, monkeypatch)
+    monkeypatch.setattr(importer, "update_git_repo", return_true)
+    importer.import_data(config_file, None, LOGGER)
+    monkeypatch.setattr(importer, "commit_and_push_deletions", push_failed)
+    assert importer.acknowledge_import(config_file, LOGGER) == 1
+
+    with caplog.at_level(logging.ERROR, logger=LOGGER.name):
+        for _ in range(importer.MAX_PENDING_REUSES + 1):
+            importer.import_data(config_file, None, LOGGER)
+
+    assert PUSH_FAILURE_REASON in caplog.text
+
+
+def test_read_failure_reason_reports_a_manifest_which_names_none() -> None:
+    assert importer.read_failure_reason({"acknowledge_failures": 1}) == importer.UNRECORDED_FAILURE_REASON
+    assert importer.read_failure_reason({importer.ACKNOWLEDGE_FAILURE_REASON_KEY: 7}) == (
+        importer.UNRECORDED_FAILURE_REASON
+    )
+
+
+def test_hash_file_records_no_checksum_for_an_unreadable_file(tmp_path: Path) -> None:
+    assert importer.hash_file(tmp_path / "gone.csv") == ""
 
 
 def test_acknowledge_import_without_manifest_does_nothing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -417,7 +592,7 @@ def test_main_imports_by_default(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 def test_main_acknowledges_when_requested(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config_file, _, _ = prepare_repository(tmp_path, monkeypatch)
     monkeypatch.setattr(importer, "update_git_repo", return_true)
-    monkeypatch.setattr(importer, "commit_and_push_deletions", return_true)
+    monkeypatch.setattr(importer, "commit_and_push_deletions", push_succeeded)
     monkeypatch.setattr("sys.argv", ["import_log_data_from_git.py", "--config", config_file, "--acknowledge-import"])
     importer.import_data(config_file, None, LOGGER)
 

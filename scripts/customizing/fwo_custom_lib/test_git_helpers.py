@@ -9,10 +9,12 @@ import pytest
 from scripts.customizing.fwo_custom_lib.git_helpers import (
     FALLBACK_COMMITTER_EMAIL,
     FALLBACK_COMMITTER_NAME,
+    MAX_FAILURE_REASON_LENGTH,
     build_askpass_env,
     build_non_interactive_git_env,
     cleanup_repo_target_dir,
     commit_and_push_deletions,
+    describe_failure,
     ensure_committer_identity,
     parse_git_depth_arg,
     read_file_from_git_repo,
@@ -279,9 +281,11 @@ def configure_identity(repo: git.Repo) -> None:
 def test_commit_and_push_deletions_removes_the_file_from_origin(tmp_path: Path) -> None:
     clone_path, clone, origin = create_clone_with_origin(tmp_path)
 
-    pushed: bool = commit_and_push_deletions(str(clone_path), [clone_path / "logs.csv"], COMMIT_MESSAGE, LOGGER)
+    failure_reason: str | None = commit_and_push_deletions(
+        str(clone_path), [clone_path / "logs.csv"], COMMIT_MESSAGE, LOGGER
+    )
 
-    assert pushed
+    assert failure_reason is None
     assert not (clone_path / "logs.csv").exists()
     assert clone.head.commit.message.strip() == COMMIT_MESSAGE
     assert "logs.csv" not in origin.head.commit.tree
@@ -291,9 +295,9 @@ def test_commit_and_push_deletions_without_changes_creates_no_commit(tmp_path: P
     clone_path, clone, _ = create_clone_with_origin(tmp_path)
     commit_before: str = clone.head.commit.hexsha
 
-    pushed: bool = commit_and_push_deletions(str(clone_path), [], COMMIT_MESSAGE, LOGGER)
+    failure_reason: str | None = commit_and_push_deletions(str(clone_path), [], COMMIT_MESSAGE, LOGGER)
 
-    assert pushed
+    assert failure_reason is None
     assert clone.head.commit.hexsha == commit_before
 
 
@@ -302,9 +306,9 @@ def test_commit_and_push_deletions_reports_a_file_outside_the_repository(tmp_pat
     outside_file: Path = tmp_path / "outside.csv"
     outside_file.write_text("App ID,Log count\n", encoding="utf-8")
 
-    pushed: bool = commit_and_push_deletions(str(clone_path), [outside_file], COMMIT_MESSAGE, LOGGER)
+    failure_reason: str | None = commit_and_push_deletions(str(clone_path), [outside_file], COMMIT_MESSAGE, LOGGER)
 
-    assert not pushed
+    assert failure_reason is not None
     assert outside_file.exists()
 
 
@@ -312,22 +316,57 @@ def test_commit_and_push_deletions_reports_a_failing_push(tmp_path: Path) -> Non
     clone_path, clone, _ = create_clone_with_origin(tmp_path)
     clone.delete_remote(clone.remote("origin"))
 
-    pushed: bool = commit_and_push_deletions(str(clone_path), [clone_path / "logs.csv"], COMMIT_MESSAGE, LOGGER)
+    failure_reason: str | None = commit_and_push_deletions(
+        str(clone_path), [clone_path / "logs.csv"], COMMIT_MESSAGE, LOGGER
+    )
 
-    assert not pushed
+    assert failure_reason is not None
+
+
+def test_commit_and_push_deletions_names_a_missing_clone(tmp_path: Path) -> None:
+    """The clone of the import is gone, which the caller has to be able to tell from a rejected push."""
+    missing_clone: Path = tmp_path / "gone"
+
+    failure_reason: str | None = commit_and_push_deletions(
+        str(missing_clone), [missing_clone / "logs.csv"], COMMIT_MESSAGE, LOGGER
+    )
+
+    assert failure_reason is not None
+    assert "NoSuchPathError" in failure_reason
+    assert str(missing_clone) in failure_reason
+
+
+def test_describe_failure_condenses_a_multi_line_message() -> None:
+    condensed: str = describe_failure(ValueError("first line\n  second line"))
+
+    assert condensed == "ValueError: first line second line"
+
+
+def test_describe_failure_shortens_an_endless_message() -> None:
+    condensed: str = describe_failure(ValueError("x" * (MAX_FAILURE_REASON_LENGTH * 2)))
+
+    assert len(condensed) == MAX_FAILURE_REASON_LENGTH
+
+
+def test_describe_failure_names_an_exception_without_a_message() -> None:
+    assert describe_failure(ValueError()) == "ValueError"
 
 
 def test_commit_and_push_deletions_retries_an_existing_local_commit(tmp_path: Path) -> None:
     clone_path, clone, origin = create_clone_with_origin(tmp_path)
     origin_url: str = str(origin.working_dir)
     clone.delete_remote(clone.remote("origin"))
-    first_push: bool = commit_and_push_deletions(str(clone_path), [clone_path / "logs.csv"], COMMIT_MESSAGE, LOGGER)
+    first_failure: str | None = commit_and_push_deletions(
+        str(clone_path), [clone_path / "logs.csv"], COMMIT_MESSAGE, LOGGER
+    )
     clone.create_remote("origin", origin_url)
 
-    second_push: bool = commit_and_push_deletions(str(clone_path), [clone_path / "logs.csv"], COMMIT_MESSAGE, LOGGER)
+    second_failure: str | None = commit_and_push_deletions(
+        str(clone_path), [clone_path / "logs.csv"], COMMIT_MESSAGE, LOGGER
+    )
 
-    assert not first_push
-    assert second_push
+    assert first_failure is not None
+    assert second_failure is None
     assert "logs.csv" not in origin.head.commit.tree
 
 
@@ -354,11 +393,11 @@ def create_shallow_clone(tmp_path: Path) -> tuple[Path, git.Repo]:
 def test_commit_and_push_deletions_completes_a_shallow_clone_before_pushing(tmp_path: Path) -> None:
     shallow_path, shallow = create_shallow_clone(tmp_path)
 
-    pushed: bool = commit_and_push_deletions(
+    failure_reason: str | None = commit_and_push_deletions(
         str(shallow_path), [shallow_path / "second.csv"], COMMIT_MESSAGE, LOGGER, "user", "password"
     )
 
-    assert pushed
+    assert failure_reason is None
     assert shallow.git.rev_parse("--is-shallow-repository").strip() == "false"
     assert "second.csv" not in git.Repo(tmp_path / "origin.git").head.commit.tree
 
@@ -367,9 +406,11 @@ def test_commit_and_push_deletions_completes_a_shallow_clone_without_credentials
     # a repository which needs no credentials is pushed through the same preparation
     shallow_path, shallow = create_shallow_clone(tmp_path)
 
-    pushed: bool = commit_and_push_deletions(str(shallow_path), [shallow_path / "second.csv"], COMMIT_MESSAGE, LOGGER)
+    failure_reason: str | None = commit_and_push_deletions(
+        str(shallow_path), [shallow_path / "second.csv"], COMMIT_MESSAGE, LOGGER
+    )
 
-    assert pushed
+    assert failure_reason is None
     assert shallow.git.rev_parse("--is-shallow-repository").strip() == "false"
     assert "second.csv" not in git.Repo(tmp_path / "origin.git").head.commit.tree
 
@@ -406,9 +447,11 @@ def test_commit_and_push_deletions_commits_without_a_configured_identity(
     remove_configured_identity(clone)
     isolate_from_host_git_config(tmp_path, monkeypatch)
 
-    pushed: bool = commit_and_push_deletions(str(clone_path), [clone_path / "logs.csv"], COMMIT_MESSAGE, LOGGER)
+    failure_reason: str | None = commit_and_push_deletions(
+        str(clone_path), [clone_path / "logs.csv"], COMMIT_MESSAGE, LOGGER
+    )
 
-    assert pushed
+    assert failure_reason is None
     assert clone.head.commit.committer.email == FALLBACK_COMMITTER_EMAIL
     assert clone.head.commit.committer.name == FALLBACK_COMMITTER_NAME
     assert "logs.csv" not in origin.head.commit.tree
@@ -454,9 +497,11 @@ def test_commit_and_push_deletions_replays_onto_a_moved_remote(tmp_path: Path) -
     seed.index.commit("chore: add new log data export")
     seed.git.push("origin", "HEAD:refs/heads/main")
 
-    pushed: bool = commit_and_push_deletions(str(clone_path), [clone_path / "logs.csv"], COMMIT_MESSAGE, LOGGER)
+    failure_reason: str | None = commit_and_push_deletions(
+        str(clone_path), [clone_path / "logs.csv"], COMMIT_MESSAGE, LOGGER
+    )
 
-    assert pushed
+    assert failure_reason is None
     assert "logs.csv" not in origin.head.commit.tree
     assert "new-export.csv" in origin.head.commit.tree, "the export added meanwhile survives"
     assert clone.head.commit.message.strip() == COMMIT_MESSAGE
@@ -477,9 +522,11 @@ def test_commit_and_push_deletions_keeps_a_file_written_to_after_the_import(tmp_
     clone_path, _, origin = create_clone_with_origin(tmp_path)
     append_to_exported_file(tmp_path, "logs.csv", "APP-2,2\n")
 
-    pushed: bool = commit_and_push_deletions(str(clone_path), [clone_path / "logs.csv"], COMMIT_MESSAGE, LOGGER)
+    failure_reason: str | None = commit_and_push_deletions(
+        str(clone_path), [clone_path / "logs.csv"], COMMIT_MESSAGE, LOGGER
+    )
 
-    assert pushed, "a deterministic conflict must not stall the acknowledgement forever"
+    assert failure_reason is None, "a deterministic conflict must not stall the acknowledgement forever"
     assert "logs.csv" in origin.head.commit.tree, "the rows appended after the import are not deleted"
     log_data: bytes = cast("bytes", origin.head.commit.tree["logs.csv"].data_stream.read())
     assert "APP-2,2" in log_data.decode("utf-8")
@@ -497,11 +544,11 @@ def test_commit_and_push_deletions_deletes_the_untouched_files_beside_a_kept_one
     clone_path_repo.git.pull("origin", "main")
     append_to_exported_file(tmp_path, "logs.csv", "APP-2,2\n")
 
-    pushed: bool = commit_and_push_deletions(
+    failure_reason: str | None = commit_and_push_deletions(
         str(clone_path), [clone_path / "logs.csv", clone_path / "second.csv"], COMMIT_MESSAGE, LOGGER
     )
 
-    assert pushed
+    assert failure_reason is None
     assert "logs.csv" in origin.head.commit.tree
     assert "second.csv" not in origin.head.commit.tree, "a file nobody wrote to is still acknowledged"
 
@@ -513,8 +560,10 @@ def test_commit_and_push_deletions_reports_only_the_files_it_removed(
     append_to_exported_file(tmp_path, "logs.csv", "APP-2,2\n")
 
     with caplog.at_level(logging.INFO, logger=LOGGER.name):
-        pushed: bool = commit_and_push_deletions(str(clone_path), [clone_path / "logs.csv"], COMMIT_MESSAGE, LOGGER)
+        failure_reason: str | None = commit_and_push_deletions(
+            str(clone_path), [clone_path / "logs.csv"], COMMIT_MESSAGE, LOGGER
+        )
 
-    assert pushed
+    assert failure_reason is None
     assert "deleted and pushed log data files: none" in caplog.text, "a kept file must not be reported as deleted"
     assert "keeping logs.csv" in caplog.text

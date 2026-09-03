@@ -3,6 +3,7 @@
 
 import argparse
 import csv
+import hashlib
 import json
 import logging
 import sys
@@ -36,6 +37,9 @@ MAX_PENDING_REUSES: int = 3
 MAX_REPORTED_EXAMPLE_ROWS: int = 5
 REUSES_KEY: str = "reuses"
 ACKNOWLEDGE_FAILURES_KEY: str = "acknowledge_failures"
+ACKNOWLEDGE_FAILURE_REASON_KEY: str = "acknowledge_failure_reason"
+CSV_HASHES_KEY: str = "csv_hashes"
+UNRECORDED_FAILURE_REASON: str = "reason not recorded"
 COMMIT_MESSAGE: str = "chore: remove imported log data"
 REQUIRED_COLUMNS: set[str] = {"App ID", "Log count", "Src IP", "Dst IP", "Port"}
 OPTIONAL_COLUMNS: dict[str, str] = {"Log timestamp": "log_time", "Rule name": "rule_name"}
@@ -302,9 +306,30 @@ def normalize_log_time(value: str) -> str:
 def write_import_file(entries: list[LogDataEntry], csv_files: list[Path], repository_directory: Path) -> None:
     import_time: str = datetime.now(timezone.utc).isoformat()
     write_json_file(OUTPUT_FILE, {"import_time": import_time, "logs": entries})
-    relative_files: list[str] = [csv_file.relative_to(repository_directory).as_posix() for csv_file in csv_files]
-    manifest: dict[str, object] = {"csv_files": relative_files, REUSES_KEY: 0, ACKNOWLEDGE_FAILURES_KEY: 0}
+    csv_hashes: dict[str, str] = {
+        csv_file.relative_to(repository_directory).as_posix(): hash_file(csv_file) for csv_file in csv_files
+    }
+    manifest: dict[str, object] = {
+        "csv_files": list(csv_hashes),
+        CSV_HASHES_KEY: csv_hashes,
+        REUSES_KEY: 0,
+        ACKNOWLEDGE_FAILURES_KEY: 0,
+    }
     write_json_file(MANIFEST_FILE, manifest)
+
+
+def hash_file(csv_file: Path) -> str:
+    """
+    Checksum the content one run imported, an unreadable file gets no checksum.
+
+    The acknowledgement compares this with the file it finds when it had to clone the repository
+    again: without the clone the import read there is nothing else left which could tell whether
+    the exporter wrote more rows into the file since then.
+    """
+    try:
+        return hashlib.sha256(csv_file.read_bytes()).hexdigest()
+    except OSError:
+        return ""
 
 
 def write_json_file(target_file: Path, content: dict[str, object]) -> None:
@@ -354,7 +379,10 @@ def describe_pending_cause(manifest: dict[str, object]) -> str:
     the source back - it does that while none of the reported entries can be imported.
     """
     if read_counter(manifest, ACKNOWLEDGE_FAILURES_KEY) > 0:
-        return "the deletion of the imported CSV files can be pushed to the log data repository"
+        return (
+            "the deletion of the imported CSV files can be pushed to the log data repository"
+            f" ({read_failure_reason(manifest)})"
+        )
     return (
         "the reported entries can be imported; the middleware keeps the source files until then,"
         " check the log data settings and the entries it reported as not importable"
@@ -372,20 +400,29 @@ def read_counter(manifest: dict[str, object], key: str) -> int:
     return stored_value if isinstance(stored_value, int) and stored_value > 0 else 0
 
 
-def record_failed_acknowledgement(manifest: dict[str, object]) -> None:
+def record_failed_acknowledgement(manifest: dict[str, object], failure_reason: str) -> None:
     """
-    Count a failed acknowledgement in the manifest.
+    Count a failed acknowledgement in the manifest and keep the reason it failed.
 
     A reuse cannot tell by itself whether the deletion push failed or was never attempted, so the
-    acknowledgement leaves its trace here for describe_pending_cause.
+    acknowledgement leaves its trace here for describe_pending_cause. The reason is kept with it:
+    the following runs report the pending import without retrying the push themselves, and a
+    message which does not name the cause sends the operator looking at the wrong thing.
     """
     manifest[ACKNOWLEDGE_FAILURES_KEY] = read_counter(manifest, ACKNOWLEDGE_FAILURES_KEY) + 1
+    manifest[ACKNOWLEDGE_FAILURE_REASON_KEY] = failure_reason
     write_json_file(MANIFEST_FILE, manifest)
 
 
-def report_failed_acknowledgement(manifest: dict[str, object], logger: logging.Logger) -> None:
+def read_failure_reason(manifest: dict[str, object]) -> str:
+    """Read why the last acknowledgement failed, a manifest of an older run names no reason."""
+    stored_reason: object = manifest.get(ACKNOWLEDGE_FAILURE_REASON_KEY)
+    return stored_reason if isinstance(stored_reason, str) and stored_reason else UNRECORDED_FAILURE_REASON
+
+
+def report_failed_acknowledgement(manifest: dict[str, object], failure_reason: str, logger: logging.Logger) -> None:
     """
-    Report that the deletion of the imported CSV files could not be pushed.
+    Report that the deletion of the imported CSV files could not be pushed, and why.
 
     This runs while the acknowledgement fails, so the message reaches the log of the middleware,
     which alerts on it. A repeatedly kept back import is reported as a persistent failure: the
@@ -394,15 +431,17 @@ def report_failed_acknowledgement(manifest: dict[str, object], logger: logging.L
     reuses: int = read_reuses(manifest)
     if reuses > MAX_PENDING_REUSES:
         logger.error(
-            "deleting the imported CSV files of %s could not be pushed in %s runs; the import is stuck "
+            "deleting the imported CSV files of %s could not be pushed in %s runs (%s); the import is stuck "
             "on this data until the log data repository accepts the deletion",
             OUTPUT_FILE,
             reuses + 1,
+            failure_reason,
         )
     else:
         logger.error(
-            "deleting the imported CSV files of %s could not be pushed; the data is kept and imported again",
+            "deleting the imported CSV files of %s could not be pushed (%s); the data is kept and imported again",
             OUTPUT_FILE,
+            failure_reason,
         )
 
 
@@ -464,12 +503,7 @@ def import_data(config_file: str, depth: int | None, logger: logging.Logger) -> 
             return reuse_pending_import(pending_manifest, logger)
         discard_unusable_import(logger)
 
-    git_repo: str = read_custom_config(config_file, "logDataGitRepo", logger=logger)
-    git_user: str = read_custom_config(config_file, "logDataGitUser", logger=logger)
-    git_password: str = read_custom_config(config_file, "logDataGitPassword", logger=logger)
-    branch: str = get_optional_value(config_file, "logDataGitBranch", "", logger)
-    repo_url: str = f"https://{git_user}:{urllib.parse.quote(git_password, safe='')}@{git_repo}"
-    if not update_git_repo(repo_url, str(repository_directory), logger, branch=branch or None, depth=depth):
+    if not clone_repository(config_file, repository_directory, depth, logger):
         return 1
     search_directory: Path | None = get_csv_search_directory(config_file, repository_directory, logger)
     if search_directory is None:
@@ -497,18 +531,107 @@ def acknowledge_import(config_file: str, logger: logging.Logger) -> int:
         # imported already, so the pending import is dropped and reported instead of retried
         discard_unusable_import(logger)
         return 1
-    csv_files: list[Path] = [repository_directory / file_name for file_name in valid_csv_file_names]
-    git_user: str = read_custom_config(config_file, "logDataGitUser", logger=logger)
-    git_password: str = read_custom_config(config_file, "logDataGitPassword", logger=logger)
-    if not commit_and_push_deletions(
-        str(repository_directory), csv_files, COMMIT_MESSAGE, logger, git_user, git_password
-    ):
-        record_failed_acknowledgement(manifest)
-        report_failed_acknowledgement(manifest, logger)
+    failure_reason: str | None = push_acknowledged_deletions(
+        config_file, repository_directory, valid_csv_file_names, manifest, logger
+    )
+    if failure_reason is not None:
+        record_failed_acknowledgement(manifest, failure_reason)
+        report_failed_acknowledgement(manifest, failure_reason, logger)
         return 1
     MANIFEST_FILE.unlink(missing_ok=True)
     OUTPUT_FILE.unlink(missing_ok=True)
     return 0
+
+
+def clone_repository(config_file: str, repository_directory: Path, depth: int | None, logger: logging.Logger) -> bool:
+    """Clone the configured log data repository into the target directory, replacing what is there."""
+    git_repo: str = read_custom_config(config_file, "logDataGitRepo", logger=logger)
+    git_user: str = read_custom_config(config_file, "logDataGitUser", logger=logger)
+    git_password: str = read_custom_config(config_file, "logDataGitPassword", logger=logger)
+    branch: str = get_optional_value(config_file, "logDataGitBranch", "", logger)
+    repo_url: str = f"https://{git_user}:{urllib.parse.quote(git_password, safe='')}@{git_repo}"
+    return update_git_repo(repo_url, str(repository_directory), logger, branch=branch or None, depth=depth)
+
+
+def push_acknowledged_deletions(
+    config_file: str,
+    repository_directory: Path,
+    csv_file_names: list[str],
+    manifest: dict[str, object],
+    logger: logging.Logger,
+) -> str | None:
+    """
+    Delete the imported CSV files in the clone and push it, cloning again when the clone is gone.
+
+    The clone is the only part of a pending import which no other run recreates: while an import
+    waits for its acknowledgement it is reused instead of read again, and only reading it clones.
+    A clone which disappeared - a cleaned up target directory, a changed logDataGitRepoTargetDir
+    or an interrupted clone - would therefore make this and every following acknowledgement fail,
+    and with it stop every following import, so it is cloned again here instead.
+    """
+    if not is_usable_clone(repository_directory):
+        logger.warning(
+            "clone %s of the log data repository is gone; cloning it again to acknowledge the imported data",
+            repository_directory,
+        )
+        if not clone_repository(config_file, repository_directory, None, logger):
+            return f"the log data repository could not be cloned again into {repository_directory}"
+        csv_file_names = select_unchanged_files(repository_directory, csv_file_names, manifest, logger)
+    csv_files: list[Path] = [repository_directory / file_name for file_name in csv_file_names]
+    git_user: str = read_custom_config(config_file, "logDataGitUser", logger=logger)
+    git_password: str = read_custom_config(config_file, "logDataGitPassword", logger=logger)
+    return commit_and_push_deletions(
+        str(repository_directory), csv_files, COMMIT_MESSAGE, logger, git_user, git_password
+    )
+
+
+def is_usable_clone(repository_directory: Path) -> bool:
+    """A directory the acknowledgement can push from, one without a .git entry is not one."""
+    return (repository_directory / ".git").exists()
+
+
+def select_unchanged_files(
+    repository_directory: Path,
+    csv_file_names: list[str],
+    manifest: dict[str, object],
+    logger: logging.Logger,
+) -> list[str]:
+    """
+    Keep back every file of a fresh clone which does not hold the imported data any more.
+
+    The fresh clone carries whatever the exporter wrote after the import, so deleting a file by
+    its name alone would lose the rows appended since then - the same rows the rebase of a
+    surviving clone keeps. Only a file whose recorded checksum still matches is deleted, anything
+    else stays in the repository and is imported again in the next run, where a repeated flow is
+    merged with the stored one. A file without a recorded checksum is kept for the same reason.
+    """
+    recorded_hashes: dict[str, str] = read_csv_hashes(manifest)
+    unchanged_files: list[str] = []
+    for file_name in csv_file_names:
+        csv_file: Path = repository_directory / file_name
+        if not csv_file.is_file():
+            continue
+        recorded_hash: str = recorded_hashes.get(file_name, "")
+        if recorded_hash and recorded_hash == hash_file(csv_file):
+            unchanged_files.append(file_name)
+            continue
+        logger.warning(
+            "keeping %s: it does not hold the data which was imported from it, it is imported again next run",
+            file_name,
+        )
+    return unchanged_files
+
+
+def read_csv_hashes(manifest: dict[str, object]) -> dict[str, str]:
+    """Read the checksums the import recorded, a manifest without usable ones records none."""
+    stored_hashes: object = manifest.get(CSV_HASHES_KEY)
+    if not isinstance(stored_hashes, dict):
+        return {}
+    return {
+        file_name: file_hash
+        for file_name, file_hash in cast("dict[object, object]", stored_hashes).items()
+        if isinstance(file_name, str) and isinstance(file_hash, str)
+    }
 
 
 def main() -> int:

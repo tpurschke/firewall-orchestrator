@@ -13,6 +13,10 @@ The script uses `GitPython`, which is not part of the system python. The install
 
 Set `importLogDataPath` to the extensionless full path of this script. The scheduler runs the script, then reads its sibling `.json` file. After a successful import it runs the script with `--acknowledge-import`; that deletes the source CSV files, commits their removal, pushes it to `origin`, and deletes the generated JSON file.
 
+While an import waits for its acknowledgement the repository is not read again: the generated JSON file is reused, so the same CSV files are not imported twice. The clone is therefore only created by a run which reads the repository, and if it is gone when the acknowledgement runs - the target directory was cleaned up, `logDataGitRepoTargetDir` was changed, or a clone was interrupted - the repository is cloned again instead of failing; otherwise neither the acknowledgement nor any following import could ever succeed again. In such a fresh clone only files whose content still matches the checksum recorded during the import are deleted. A file the exporter wrote to in the meantime stays in the repository and is imported again in the next run, where repeated flows are merged with the stored ones.
+
+If the acknowledgement fails, the reason is kept with the pending import and repeated in the message of every following run, so the log names what has to be fixed before new log data is imported again.
+
 The mandatory CSV headers are `App ID`, `Log count`, `Src IP`, `Dst IP`, and `Port`. Optional headers are `Protocol`, `Action`, `Log timestamp`, and `Rule name`. `Protocol` uses IP protocol numbers. A nonempty port is permitted only with TCP (`6`) or UDP (`17`).
 
 If any row cannot be converted, the complete CSV file is excluded from the generated JSON and from acknowledgement. Other valid CSV files in the same run are still imported and removed. The rejected file remains in the repository so it can be corrected and retried without losing the application IDs needed by replacement mode.

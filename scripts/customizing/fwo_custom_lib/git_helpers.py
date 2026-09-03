@@ -28,6 +28,10 @@ DEFAULT_GIT_SSH_COMMAND: str = "ssh -o BatchMode=yes"
 FALLBACK_COMMITTER_NAME: str = "FWO Log Data Import"
 FALLBACK_COMMITTER_EMAIL: str = "log-data-import@fworch.local"
 
+# the reason a push failed is reported to the operator and kept in the import manifest, so it is
+# condensed to one readable line instead of the multi line output git writes
+MAX_FAILURE_REASON_LENGTH: int = 300
+
 
 def parse_git_depth_arg(value: str) -> int:
     try:
@@ -242,6 +246,19 @@ def report_pushed_deletions(repo_path: Path, relative_paths: list[str], logger: 
     logger.info("deleted and pushed log data files: %s", ", ".join(deleted_paths) or "none")
 
 
+def describe_failure(exception: BaseException) -> str:
+    """
+    Condense an exception into the one line an operator gets to see.
+
+    The traceback of a failed push only reaches the log of the run it happened in, while the
+    caller reports the failure again in every following run - it therefore needs the reason
+    itself, not a generic message which sends the operator looking in the wrong place.
+    """
+    details: str = " ".join(str(exception).split())
+    reason: str = f"{type(exception).__name__}: {details}" if details else type(exception).__name__
+    return reason[:MAX_FAILURE_REASON_LENGTH]
+
+
 def commit_and_push_deletions(
     git_repo_target_dir: str,
     files_to_delete: list[Path],
@@ -249,8 +266,8 @@ def commit_and_push_deletions(
     logger: logging.Logger,
     git_username: str | None = None,
     git_password: str | None = None,
-) -> bool:
-    """Delete tracked files, commit their removal and push it to origin."""
+) -> str | None:
+    """Delete tracked files, commit their removal and push it to origin, naming what went wrong."""
     try:
         repo: Any = git.Repo(git_repo_target_dir)
         relative_paths: list[str] = []
@@ -270,10 +287,10 @@ def commit_and_push_deletions(
             # without credentials git could still ask for them, which never terminates unattended
             push_deletion_commit(repo, logger, build_non_interactive_git_env())
         report_pushed_deletions(repo_path, relative_paths, logger)
-        return True
-    except Exception:
+        return None
+    except Exception as exception:
         logger.exception("could not commit and push log data file deletions")
-        return False
+        return describe_failure(exception)
 
 
 def read_file_from_git_repo(
