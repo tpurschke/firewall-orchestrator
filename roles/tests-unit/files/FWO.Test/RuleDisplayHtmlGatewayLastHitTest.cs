@@ -1,6 +1,8 @@
 using FWO.Api.Client.Queries;
+using FWO.Basics;
 using FWO.Data;
 using FWO.Data.Report;
+using FWO.Report.Filter;
 using FWO.Ui.Display;
 using NUnit.Framework;
 
@@ -28,6 +30,8 @@ namespace FWO.Test
         private const string kDeviceJson = "{\"id\":51,\"importedRuleHits\":[{\"dev_id\":51}]}";
         private const int kManagementId = 5;
         private const int kSuperManagementId = 4;
+        private const string kImportedRuleHitsSelection = "importedRuleHits: rule_hits(limit: 1)";
+        private const string kDeviceTypeSelection = "supportsRuleHits: dev_typ_supports_rule_hits";
 
         private static readonly DateTime kAggregatedLastHit = new(2026, 11, 1, 10, 0, 0, DateTimeKind.Utc);
         private static readonly DateTime kGatewayLastHit = new(2025, 10, 1, 8, 30, 0, DateTimeKind.Utc);
@@ -169,10 +173,20 @@ namespace FWO.Test
         [Test]
         public void RuleReportQueriesSelectWhatTheGatewayContextReads()
         {
+            string legacyRulesQuery = CompileReportQuery(ReportType.ResolvedRules).FullQuery;
+            string standardStructureQuery = CompileReportQuery(ReportType.Rules).StandardRulesStructureQuery;
+            string natStructureQuery = CompileReportQuery(ReportType.NatRules).StandardRulesStructureQuery;
+
             Assert.Multiple(() =>
             {
                 Assert.That(RuleQueries.ruleOverviewFragments, Does.Contain("mgm_id"));
                 Assert.That(RuleQueries.ruleDetailsForReportFragments, Does.Contain("mgm_id"));
+                Assert.That(legacyRulesQuery, Does.Contain(kImportedRuleHitsSelection), "legacy rules query");
+                Assert.That(legacyRulesQuery, Does.Contain(kDeviceTypeSelection), "legacy rules query");
+                Assert.That(standardStructureQuery, Does.Contain(kImportedRuleHitsSelection), "standard rules structure query");
+                Assert.That(standardStructureQuery, Does.Contain(kDeviceTypeSelection), "standard rules structure query");
+                Assert.That(natStructureQuery, Does.Contain(kImportedRuleHitsSelection), "NAT rules structure query");
+                Assert.That(natStructureQuery, Does.Contain(kDeviceTypeSelection), "NAT rules structure query");
             });
         }
 
@@ -228,6 +242,13 @@ namespace FWO.Test
                 Assert.That(RuleQueries.ruleDetailsForReportFragments, Does.Contain("rule_hits"));
                 Assert.That(DeviceQueries.getDeviceTypeDetails, Does.Contain("supportsRuleHits: dev_typ_supports_rule_hits"));
             });
+        }
+
+        private static DynGraphqlQuery CompileReportQuery(ReportType reportType)
+        {
+            ReportTemplate template = new();
+            template.ReportParams.ReportType = (int)reportType;
+            return Compiler.Compile(template);
         }
 
         private static ManagementReport CreateSupportingManagement()
