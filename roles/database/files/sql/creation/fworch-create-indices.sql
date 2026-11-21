@@ -217,3 +217,4 @@ CREATE INDEX IF NOT EXISTS idx_generic_recertification_owner_id ON generic.recer
 CREATE INDEX IF NOT EXISTS idx_generic_recertification_next_recert_date ON generic.recertification (next_recert_date);
 CREATE INDEX IF NOT EXISTS idx_generic_recertification_config_item_id ON generic.recertification (config_item_id);
 CREATE INDEX IF NOT EXISTS idx_generic_owner_recertification_owner_id ON generic.owner_recertification (owner_id);
+CREATE INDEX IF NOT EXISTS idx_generic_responsible_type_dev_type_dev_typ_id ON generic.responsible_type_dev_type (dev_typ_id);

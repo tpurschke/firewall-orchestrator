@@ -20,7 +20,7 @@ namespace FWO.Test
         private const string kImporter = "importer";
 
         private static readonly List<string> kDecisionTables = ["recertification", "owner_recertification"];
-        private static readonly List<string> kGenericTables = ["device_type_key_config", "config_item", "recertification", "owner_recertification"];
+        private static readonly List<string> kGenericTables = ["device_type_key_config", "config_item", "recertification", "owner_recertification", "responsible_type_dev_type"];
 
         private static readonly Lazy<FileInfo?> kMetadataFileInfo = new(LocateMetadata);
 
@@ -71,6 +71,20 @@ namespace FWO.Test
             }
             string itemCheck = JsonSerializer.Serialize(Permission(ReadTable("recertification")!.Value, "insert_permissions", kRecertifier).GetProperty("check"));
             Assert.That(itemCheck, Does.Contain("\"config_item\":{\"owner_id\":{\"_in\":\"x-hasura-recertifiable-owners\"}}"));
+            Assert.That(itemCheck, Does.Contain("\"config_item\":{\"management\":{\"dev_typ_id\":{\"_in\":\"x-hasura-generic-recert-dev-types\"}}}"));
+        }
+
+        [Test]
+        public void RecertDevTypes_AreOnlyReadByAuditorAndMiddleware()
+        {
+            JsonElement table = ReadTable("responsible_type_dev_type")!.Value;
+            Assert.Multiple(() =>
+            {
+                Assert.That(Roles(table, "insert_permissions"), Is.Empty);
+                Assert.That(Roles(table, "update_permissions"), Is.Empty);
+                Assert.That(Roles(table, "delete_permissions"), Is.Empty);
+                Assert.That(Roles(table, "select_permissions"), Is.EquivalentTo(["auditor", "middleware-server"]));
+            });
         }
 
         [Test]

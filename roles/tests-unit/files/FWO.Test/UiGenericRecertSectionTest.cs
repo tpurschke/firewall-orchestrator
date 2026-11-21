@@ -39,7 +39,8 @@ namespace FWO.Test
             };
         }
 
-        private IRenderedComponent<GenericRecertSection> Render(BunitContext context, SimulatedGenericApiConnection api, string role, FwoOwner? owner = null, bool commentRequired = false)
+        private IRenderedComponent<GenericRecertSection> Render(BunitContext context, SimulatedGenericApiConnection api, string role, FwoOwner? owner = null,
+            bool commentRequired = false, List<int>? allowedDevTypes = null)
         {
             context.JSInterop.Mode = JSRuntimeMode.Loose;
             context.Services.AddBlazorTable();
@@ -48,6 +49,7 @@ namespace FWO.Test
             SimulatedUserConfig userConfig = new() { InitialRecertificationPeriod = 30, RecertificationPeriod = 365, CommentRequired = commentRequired };
             userConfig.User.Roles = [role];
             userConfig.User.Dn = "cn=me";
+            userConfig.User.GenericRecertDevTypeIds = [.. allowedDevTypes ?? [33]];
             context.Services.AddSingleton<UserConfig>(userConfig);
             Action<Exception?, string, string, bool> displayMessage = (exception, title, text, _) => messages.Add((exception, title, text));
             IRenderedComponent<CascadingValue<Action<Exception?, string, string, bool>>> wrapper =
@@ -145,6 +147,23 @@ namespace FWO.Test
 
             Assert.That(api.VariablesOf(GenericQueries.addGenericRecertifications), Is.Empty);
             Assert.That(messages.Select(message => message.Text), Does.Contain(new SimulatedUserConfig().GetText("E4001")));
+        }
+
+        [Test]
+        public async Task Recertifier_WithoutAllowedDevTypeCannotRecertify()
+        {
+            await using BunitContext context = new();
+            SimulatedGenericApiConnection api = CreateApi();
+            IRenderedComponent<GenericRecertSection> section = Render(context, api, Roles.Recertifier, new FwoOwner { Id = 7, Name = "App" }, allowedDevTypes: [40]);
+
+            await section.InvokeAsync(() => section.Instance.Load(0));
+            await InvokePrivate(section, "OpenCommentPopup", true);
+            await InvokePrivate(section, "Execute");
+
+            section.WaitForAssertion(() => Assert.That(section.Find("#recert1").HasAttribute("disabled"), Is.True));
+            Assert.That(messages.Select(message => message.Text), Does.Contain(new SimulatedUserConfig().GetText("generic_no_items")));
+            Assert.That(api.VariablesOf(GenericQueries.addGenericOwnerRecertification), Is.Empty);
+            Assert.That(api.VariablesOf(GenericQueries.addGenericRecertifications), Is.Empty);
         }
 
         [Test]

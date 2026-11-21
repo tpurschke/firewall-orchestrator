@@ -472,3 +472,5 @@ ALTER TABLE generic.recertification ADD CONSTRAINT generic_recertification_owner
 ALTER TABLE generic.recertification ADD CONSTRAINT generic_recertification_owner_recertification_foreign_key FOREIGN KEY (owner_recert_id) REFERENCES generic.owner_recertification(id) ON UPDATE RESTRICT ON DELETE CASCADE;
 ALTER TABLE generic.owner_recertification ADD CONSTRAINT generic_owner_recertification_owner_foreign_key FOREIGN KEY (owner_id) REFERENCES owner(id) ON UPDATE RESTRICT ON DELETE CASCADE;
 ALTER TABLE generic.owner_recertification ADD CONSTRAINT generic_owner_recertification_report_foreign_key FOREIGN KEY (report_id) REFERENCES report(report_id) ON UPDATE RESTRICT ON DELETE CASCADE;
+ALTER TABLE generic.responsible_type_dev_type ADD CONSTRAINT generic_responsible_type_dev_type_owner_responsible_type_foreign_key FOREIGN KEY (owner_responsible_type_id) REFERENCES owner_responsible_type(id) ON UPDATE RESTRICT ON DELETE CASCADE;
+ALTER TABLE generic.responsible_type_dev_type ADD CONSTRAINT generic_responsible_type_dev_type_stm_dev_typ_foreign_key FOREIGN KEY (dev_typ_id) REFERENCES stm_dev_typ(dev_typ_id) ON UPDATE RESTRICT ON DELETE CASCADE;

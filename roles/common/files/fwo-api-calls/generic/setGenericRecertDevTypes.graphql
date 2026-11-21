@@ -1,0 +1,9 @@
+mutation setGenericRecertDevTypes($ownerResponsibleTypeId: Int!, $devTypes: [generic_responsible_type_dev_type_insert_input!]!) {
+  # replaces all device types of the responsible type in one transaction
+  delete_generic_responsible_type_dev_type(where: { owner_responsible_type_id: { _eq: $ownerResponsibleTypeId } }) {
+    affected_rows
+  }
+  insert_generic_responsible_type_dev_type(objects: $devTypes) {
+    affected_rows
+  }
+}

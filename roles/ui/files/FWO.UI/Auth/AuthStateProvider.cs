@@ -324,11 +324,13 @@ namespace FWO.Ui.Auth
             userConfig.User.Roles = await GetAllowedRoles(jwtString);
             userConfig.User.Ownerships = await GetAssignedOwners(jwtString);
             userConfig.User.RecertOwnerships = await GetRecertifiableOwners(jwtString);
+            userConfig.User.GenericRecertDevTypeIds = await GetIntClaimList(jwtString, "x-hasura-generic-recert-dev-types");
             userConfig.User.WorkflowVisibilityGroupIds = await GetWorkflowVisibilityGroupIds(jwtString);
 
             Log.WriteDebug("Auth Claims", $"Parsed allowed roles: [{string.Join(", ", userConfig.User.Roles)}]");
             Log.WriteDebug("Auth Claims", $"Parsed editable owners: [{string.Join(", ", userConfig.User.Ownerships)}]");
             Log.WriteDebug("Auth Claims", $"Parsed recertifiable owners: [{string.Join(", ", userConfig.User.RecertOwnerships)}]");
+            Log.WriteDebug("Auth Claims", $"Parsed generic recertification device types: [{string.Join(", ", userConfig.User.GenericRecertDevTypeIds)}]");
             Log.WriteDebug("Auth Claims", $"Parsed workflow visibility groups: [{string.Join(", ", userConfig.User.WorkflowVisibilityGroupIds)}]");
 
             await RestoreExecutionMode(apiConnection, userConfig);

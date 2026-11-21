@@ -95,7 +95,13 @@
     private bool SeesAllOwners => userConfig.CanUseAnyRole(Roles.Admin, Roles.Auditor);
     private bool CanRecertify => userConfig.CanUseAnyRole(Roles.Admin, Roles.Recertifier);
     private bool AnySelected => items.Any(item => item.SelectedAction != GenericRecertAction.None);
-    private bool CanRecertifySelectedOwner => SelectedOwner != null && (IsAdmin || RecertifiableOwnerIds.Contains(SelectedOwner.Id));
+    private bool CanRecertifySelectedOwner => SelectedOwner != null
+        && (IsAdmin || (RecertifiableOwnerIds.Contains(SelectedOwner.Id) && AllowedDevTypeIds.Count > 0));
+
+    /// <summary>
+    /// Generic device types the user may recertify (from the JWT); admins may recertify all.
+    /// </summary>
+    private HashSet<int> AllowedDevTypeIds => [.. userConfig.User.GenericRecertDevTypeIds];
 
     protected override async Task OnInitializedAsync()
     {
@@ -155,7 +161,8 @@
 
     private bool CanWriteItem(GenericConfigItem item)
     {
-        return CanRecertify && (IsAdmin || (item.OwnerId != null && RecertifiableOwnerIds.Contains(item.OwnerId.Value)));
+        return CanRecertify && (IsAdmin || (item.OwnerId != null && RecertifiableOwnerIds.Contains(item.OwnerId.Value)
+            && item.Management != null && AllowedDevTypeIds.Contains(item.Management.DevTypId)));
     }
 
     private void OpenCommentPopup(bool forOwner)
@@ -176,9 +183,12 @@
         try
         {
             GenericRecertHandler handler = new(apiConnection, userConfig);
-            if (ownerMode && SelectedOwner != null)
+            if (ownerMode)
             {
-                await RecertifyOwner(handler);
+                if (CanRecertifySelectedOwner)
+                {
+                    await RecertifyOwner(handler);
+                }
             }
             else
             {
@@ -197,7 +207,14 @@
     {
         FwoOwner owner = SelectedOwner!;
         GenericItemService service = new(apiConnection);
-        List<GenericConfigItem> ownerItems = await service.GetItems([.. managements.Select(management => management.Id)], [owner.Id], userConfig.ElementsPerFetch);
+        // only items of device types the user may recertify; the API rejects all others
+        List<GenericConfigItem> ownerItems = [.. (await service.GetItems([.. managements.Select(management => management.Id)], [owner.Id], userConfig.ElementsPerFetch))
+            .Where(CanWriteItem)];
+        if (ownerItems.Count == 0)
+        {
+            DisplayMessageInUi(null, userConfig.GetText("recertify_owner_generic"), userConfig.GetText("generic_no_items"), true);
+            return;
+        }
         GenericItemOwner genericOwner = new() { Id = owner.Id, Name = owner.Name, ExtAppId = owner.ExtAppId, RecertInterval = owner.RecertInterval };
         await handler.RecertifyOwner(genericOwner, ownerItems, comment, DateTime.Now);
     }

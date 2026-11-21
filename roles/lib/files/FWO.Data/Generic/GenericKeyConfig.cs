@@ -36,6 +36,14 @@ namespace FWO.Data.Generic
         [JsonProperty("reportable_fields"), JsonPropertyName("reportable_fields")]
         public List<string> ReportableFields { get; set; } = [];
 
+        [JsonProperty("device_type"), JsonPropertyName("device_type")]
+        public DeviceType? DeviceType { get; set; }
+
+        /// <summary>
+        /// Name of the device type for display, the id if the device type is not known.
+        /// </summary>
+        public string DeviceTypeName => DeviceType != null ? $"{DeviceType.Name} {DeviceType.Version}".Trim() : DevTypId.ToString();
+
         /// <summary>
         /// Whether the device type delivers a last-used value, which the unused items report needs.
         /// </summary>

@@ -4,6 +4,7 @@ using FWO.Api.Client.Queries;
 using FWO.Basics;
 using FWO.Config.Api.Data;
 using FWO.Data;
+using FWO.Data.Generic;
 using FWO.Data.Enums;
 using FWO.Data.Workflow;
 using FWO.Logging;
@@ -241,6 +242,7 @@ namespace FWO.Middleware.Server
             {
                 user.Ownerships.Clear();
                 user.RecertOwnerships.Clear();
+                user.GenericRecertDevTypeIds.Clear();
 
                 // if the user logging in is the main user for an application, add the ownerships
                 List<FwoOwner> directOwnerships = await apiConn.SendQueryAsync<List<FwoOwner>>(OwnerQueries.getOwnersForUser, new { userDns = new List<string> { user.Dn } });
@@ -276,11 +278,27 @@ namespace FWO.Middleware.Server
 
                 user.Ownerships = user.Ownerships.Distinct().ToList();
                 user.RecertOwnerships = user.RecertOwnerships.Distinct().ToList();
+                user.GenericRecertDevTypeIds = await GetGenericRecertDevTypeIds(apiConn, ownerDns);
             }
             catch (Exception exeption) when (!ApiReachability.IndicatesUnreachableApi(exeption))
             {
                 Log.WriteError("Get ownerships", $"Ownerships could not be detemined for User {user.Name}.", exeption);
             }
+        }
+
+        /// <summary>
+        /// Generic device types the user may recertify: those mapped to the active, recertifying owner responsible
+        /// types the user (or one of the user's groups) holds. Types without mapping allow no generic device type.
+        /// </summary>
+        private static async Task<List<int>> GetGenericRecertDevTypeIds(ApiConnection apiConn, List<string> ownerDns)
+        {
+            if (ownerDns.Count == 0)
+            {
+                return [];
+            }
+            List<GenericRecertDevType> devTypes = await apiConn.SendQueryAsync<List<GenericRecertDevType>>(
+                GenericQueries.getGenericRecertDevTypesForDns, new { dns = ownerDns });
+            return [.. devTypes.Select(devType => devType.DevTypId).Distinct().Order()];
         }
 
         /// <summary>

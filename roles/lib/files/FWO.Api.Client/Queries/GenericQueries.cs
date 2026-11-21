@@ -16,6 +16,9 @@ namespace FWO.Api.Client.Queries
         public static readonly string getGenericRecertifications;
         public static readonly string addGenericRecertifications;
         public static readonly string addGenericOwnerRecertification;
+        public static readonly string getGenericRecertDevTypesForDns;
+        public static readonly string getGenericRecertDevTypes;
+        public static readonly string setGenericRecertDevTypes;
 
         static GenericQueries()
         {
@@ -30,6 +33,9 @@ namespace FWO.Api.Client.Queries
                 getGenericRecertifications = GetQueryText("generic/getGenericRecertifications.graphql");
                 addGenericRecertifications = GetQueryText("generic/addGenericRecertifications.graphql");
                 addGenericOwnerRecertification = GetQueryText("generic/addGenericOwnerRecertification.graphql");
+                getGenericRecertDevTypesForDns = GetQueryText("generic/getGenericRecertDevTypesForDns.graphql");
+                getGenericRecertDevTypes = GetQueryText("generic/getGenericRecertDevTypes.graphql");
+                setGenericRecertDevTypes = GetQueryText("generic/setGenericRecertDevTypes.graphql");
             }
             catch (Exception exception)
             {

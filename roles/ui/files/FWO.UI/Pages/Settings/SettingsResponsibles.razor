@@ -2,7 +2,9 @@
 
 @using FWO.Api.Client.Queries
 @using FWO.Data
+@using FWO.Data.Generic
 @using FWO.Logging
+@using FWO.Services.Generic
 @using FWO.Ui.Services
 
 @attribute [Authorize(Roles = $"{Roles.Admin}, {Roles.Auditor}")]
@@ -75,6 +77,14 @@
                     @(item.AllowRecertification.ShowAsHtml(withColors: true))
                 </Template>
             </Column>
+            @if (genericDevTypes.Count > 0)
+            {
+                <Column TableItem="OwnerResponsibleType" Title="@(userConfig.GetText("generic_recert_dev_types"))" Field="@(x => x.Id)" Sortable="false" Filterable="false">
+                    <Template Context="item">
+                        @(GenericRecertScopeService.DisplayDevTypes(DevTypesOf(item.Id), genericDevTypes))
+                    </Template>
+                </Column>
+            }
         </Table>
     </div>
 
@@ -110,6 +120,20 @@
                         <input type="checkbox" class="form-check-input" @bind="actType.AllowRecertification" />
                     </div>
                 </div>
+                @if (genericDevTypes.Count > 0)
+                {
+                    <div class="form-group row mt-2" data-toggle="tooltip" title="@(userConfig.PureLine("H5918"))">
+                        <label class="col-sm-4 col-form-label col-form-label-sm">@(userConfig.GetText("generic_recert_dev_types")):</label>
+                        <div class="col-sm-7">
+                            <Dropdown ElementType="GenericKeyConfig" ElementToString="@(keyConfig => keyConfig.DeviceTypeName)" Multiselect="true"
+                                      Elements="genericDevTypes" @bind-SelectedElements="actDevTypes" NoneSelectedText="@(userConfig.GetText("none"))">
+                                <ElementTemplate Context="keyConfig">
+                                    @keyConfig.DeviceTypeName
+                                </ElementTemplate>
+                            </Dropdown>
+                        </div>
+                    </div>
+                }
                 <div class="form-group row mt-2">
                     <label class="col-sm-4 col-form-label col-form-label-sm">@(userConfig.GetText("sort_order")):</label>
                     <div class="col-sm-2">
@@ -152,6 +176,9 @@ else
     private bool AddMode = false;
     private bool DeleteTypeMode = false;
     private string deleteTypeMessage = "";
+    private List<GenericKeyConfig> genericDevTypes = [];
+    private Dictionary<int, List<int>> devTypesByResponsibleType = [];
+    private IEnumerable<GenericKeyConfig> actDevTypes = [];
 
     protected override async Task OnInitializedAsync()
     {
@@ -168,6 +195,10 @@ else
                 .OrderBy(type => type.SortOrder)
                 .ThenBy(type => type.Name, StringComparer.OrdinalIgnoreCase)
                 .ToList();
+            genericDevTypes = await new GenericItemService(apiConnection).GetKeyConfigs();
+            devTypesByResponsibleType = genericDevTypes.Count > 0
+                ? await new GenericRecertScopeService(apiConnection).GetDevTypesByResponsibleType()
+                : [];
         }
         catch (Exception exception)
         {
@@ -181,6 +212,24 @@ else
         EditMode = true;
         int nextOrder = responsibleTypes.Count == 0 ? 10 : responsibleTypes.Max(t => t.SortOrder) + 10;
         actType = new OwnerResponsibleType { Active = true, SortOrder = nextOrder, AllowModelling = false, AllowRecertification = false };
+        actDevTypes = [];
+    }
+
+    private List<int> DevTypesOf(int responsibleTypeId)
+    {
+        return devTypesByResponsibleType.TryGetValue(responsibleTypeId, out List<int>? devTypIds) ? devTypIds : [];
+    }
+
+    private async Task SaveDevTypes()
+    {
+        if (genericDevTypes.Count == 0)
+        {
+            return;
+        }
+        List<int> selectedDevTypIds = [.. actDevTypes.Select(keyConfig => keyConfig.DevTypId)];
+        await new GenericRecertScopeService(apiConnection).SetDevTypes(actType.Id, selectedDevTypIds);
+        Log.WriteAudit(Title: "Responsible Types Settings",
+            Text: $"Generic recertification device types of responsible type {actType.Name}: {GenericRecertScopeService.DisplayDevTypes(selectedDevTypIds, genericDevTypes)}");
     }
 
     private void EditResponsibleType(OwnerResponsibleType type)
@@ -196,6 +245,8 @@ else
             AllowModelling = type.AllowModelling,
             AllowRecertification = type.AllowRecertification
         };
+        List<int> devTypIds = DevTypesOf(type.Id);
+        actDevTypes = genericDevTypes.Where(keyConfig => devTypIds.Contains(keyConfig.DevTypId)).ToList();
     }
 
     private void CancelEdit()
@@ -258,6 +309,7 @@ else
                 }
                 Log.WriteAudit(Title: "Responsible Types Settings", Text: $"Updated responsible type: {actType.Name}");
             }
+            await SaveDevTypes();
             await LoadTypes();
             EditMode = false;
             AddMode = false;

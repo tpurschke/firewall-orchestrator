@@ -566,6 +566,15 @@
                           }
                         },
                         {
+                          "config_item": {
+                            "management": {
+                              "dev_typ_id": {
+                                "_in": "x-hasura-generic-recert-dev-types"
+                              }
+                            }
+                          }
+                        },
+                        {
                           "user_dn": {
                             "_eq": "x-hasura-uuid"
                           }
@@ -598,7 +607,7 @@
                       "owner_recert_id"
                     ]
                   },
-                  "comment": "append-only: recertifiers record decisions for items of their recertifiable owners under their own DN; recert_date is set by the database"
+                  "comment": "append-only: recertifiers record decisions for items of their recertifiable owners and generic device types under their own DN; recert_date is set by the database"
                 }
               ],
               "select_permissions": [
@@ -1159,6 +1168,50 @@
                     ],
                     "filter": {},
                     "allow_aggregations": true
+                  },
+                  "comment": ""
+                }
+              ]
+            },
+            {
+              "table": {
+                "name": "responsible_type_dev_type",
+                "schema": "generic"
+              },
+              "object_relationships": [
+                {
+                  "name": "owner_responsible_type",
+                  "using": {
+                    "foreign_key_constraint_on": "owner_responsible_type_id"
+                  }
+                },
+                {
+                  "name": "device_type",
+                  "using": {
+                    "foreign_key_constraint_on": "dev_typ_id"
+                  }
+                }
+              ],
+              "select_permissions": [
+                {
+                  "role": "auditor",
+                  "permission": {
+                    "columns": [
+                      "owner_responsible_type_id",
+                      "dev_typ_id"
+                    ],
+                    "filter": {}
+                  },
+                  "comment": ""
+                },
+                {
+                  "role": "middleware-server",
+                  "permission": {
+                    "columns": [
+                      "owner_responsible_type_id",
+                      "dev_typ_id"
+                    ],
+                    "filter": {}
                   },
                   "comment": ""
                 }

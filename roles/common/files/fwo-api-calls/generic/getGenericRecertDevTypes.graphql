@@ -1,0 +1,6 @@
+query getGenericRecertDevTypes {
+  generic_responsible_type_dev_type(order_by: [{ owner_responsible_type_id: asc }, { dev_typ_id: asc }]) {
+    owner_responsible_type_id
+    dev_typ_id
+  }
+}

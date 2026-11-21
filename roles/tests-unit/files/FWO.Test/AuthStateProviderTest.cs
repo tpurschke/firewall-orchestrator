@@ -352,6 +352,7 @@ namespace FWO.Test
             Assert.That(userConfig.User.Roles, Is.EquivalentTo(kExpectedReporterRoles));
             Assert.That(userConfig.User.Ownerships, Is.EquivalentTo(kExpectedOwnerships));
             Assert.That(userConfig.User.RecertOwnerships, Is.EquivalentTo(kExpectedRecertOwnerships));
+            Assert.That(userConfig.User.GenericRecertDevTypeIds, Is.EquivalentTo([33]));
             Assert.That(userConfig.User.WorkflowVisibilityGroupIds, Is.EquivalentTo(kExpectedWorkflowVisibilityGroupIds));
         }
 
@@ -679,6 +680,7 @@ namespace FWO.Test
                 new Claim("x-hasura-allowed-roles", JsonSerializer.Serialize(roles)),
                 new Claim("x-hasura-editable-owners", "{ 3,7 }"),
                 new Claim("x-hasura-recertifiable-owners", "{ 9 }"),
+                new Claim("x-hasura-generic-recert-dev-types", "{33}"),
                 new Claim("x-hasura-workflow-visibility-groups", "{ 2,4 }")
             ];
         }

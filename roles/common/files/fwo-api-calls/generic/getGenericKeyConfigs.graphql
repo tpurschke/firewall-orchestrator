@@ -9,5 +9,10 @@ query getGenericKeyConfigs {
     last_used_key
     last_used_format
     reportable_fields
+    device_type {
+      id: dev_typ_id
+      name: dev_typ_name
+      version: dev_typ_version
+    }
   }
 }

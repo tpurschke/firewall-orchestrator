@@ -2,7 +2,8 @@
 -- run-upgrade markers below, which also shows that the upgrade can be repeated on a fresh as well as on an upgraded
 -- installation. This probes: the generic tables, constraints and indexes have the same names as in the creation
 -- scripts, the Skyhigh device type and its key configuration exist once, the generic report types are available,
--- only one active version per item is possible, and invalid key configurations are rejected.
+-- only one active version per item is possible, invalid key configurations are rejected, and a device type
+-- can be assigned to a responsible type only once.
 -- The transaction is always rolled back.
 \set ON_ERROR_STOP 1
 BEGIN;
@@ -29,7 +30,9 @@ BEGIN
         ('generic_recertification_owner_foreign_key'),
         ('generic_recertification_owner_recertification_foreign_key'),
         ('generic_owner_recertification_owner_foreign_key'),
-        ('generic_owner_recertification_report_foreign_key')
+        ('generic_owner_recertification_report_foreign_key'),
+        ('generic_responsible_type_dev_type_owner_responsible_type_foreign_key'),
+        ('generic_responsible_type_dev_type_stm_dev_typ_foreign_key')
     ) AS expected(name)
     WHERE NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = expected.name);
     IF missing IS NOT NULL THEN
@@ -77,6 +80,13 @@ BEGIN
         INSERT INTO generic.device_type_key_config (dev_typ_id, uid_key, last_used_format) VALUES (-1, 'uid', 'dd.mm.yyyy');
         RAISE EXCEPTION 'an unknown last-used format was accepted';
     EXCEPTION WHEN check_violation THEN
+        NULL;
+    END;
+    INSERT INTO generic.responsible_type_dev_type (owner_responsible_type_id, dev_typ_id) VALUES (-1, 33);
+    BEGIN
+        INSERT INTO generic.responsible_type_dev_type (owner_responsible_type_id, dev_typ_id) VALUES (-1, 33);
+        RAISE EXCEPTION 'a device type was assigned twice to one responsible type';
+    EXCEPTION WHEN unique_violation THEN
         NULL;
     END;
     BEGIN

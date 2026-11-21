@@ -2,6 +2,7 @@ using FWO.Api.Client;
 using FWO.Api.Client.Queries;
 using FWO.Config.Api.Data;
 using FWO.Data;
+using FWO.Data.Generic;
 using FWO.Data.Enums;
 using FWO.Data.Workflow;
 using FWO.Middleware.Server;
@@ -79,6 +80,40 @@ namespace FWO.Test
             Assert.That(apiConnection.Queries, Does.Contain(OwnerQueries.getOwnersForDnsWithRecertification));
             Assert.That(apiConnection.Queries, Does.Not.Contain(OwnerQueries.getOwners));
             Assert.That(apiConnection.Queries, Does.Not.Contain(ConfigQueries.getConfigItemByKey));
+        }
+
+        [Test]
+        public async Task GetOwnershipsFromOwnerLdap_DerivesGenericRecertDevTypesFromUserAndGroupDns()
+        {
+            OwnershipApiConnection apiConnection = new()
+            {
+                DevTypes = [new() { OwnerResponsibleTypeId = 1, DevTypId = 40 }, new() { OwnerResponsibleTypeId = 2, DevTypId = 33 }, new() { OwnerResponsibleTypeId = 3, DevTypId = 33 }]
+            };
+            UiUser user = new()
+            {
+                Dn = "uid=user1,ou=users,dc=example,dc=com",
+                Groups = ["cn=group1,ou=groups,dc=example,dc=com"],
+                GenericRecertDevTypeIds = [99]
+            };
+
+            await UiUserHandler.GetOwnershipsFromOwnerLdap(apiConnection, user);
+
+            int queryIndex = apiConnection.Queries.IndexOf(GenericQueries.getGenericRecertDevTypesForDns);
+            List<string> dns = (List<string>)apiConnection.Variables[queryIndex]!.GetType().GetProperty("dns")!.GetValue(apiConnection.Variables[queryIndex])!;
+            Assert.That(user.GenericRecertDevTypeIds, Is.EqualTo([33, 40]));
+            Assert.That(dns, Is.EquivalentTo(["uid=user1,ou=users,dc=example,dc=com", "cn=group1,ou=groups,dc=example,dc=com"]));
+        }
+
+        [Test]
+        public async Task GetOwnershipsFromOwnerLdap_WithoutDnsAllowsNoGenericDevTypes()
+        {
+            OwnershipApiConnection apiConnection = new() { DevTypes = [new() { DevTypId = 33 }] };
+            UiUser user = new() { Dn = "", GenericRecertDevTypeIds = [33] };
+
+            await UiUserHandler.GetOwnershipsFromOwnerLdap(apiConnection, user);
+
+            Assert.That(user.GenericRecertDevTypeIds, Is.Empty);
+            Assert.That(apiConnection.Queries, Does.Not.Contain(GenericQueries.getGenericRecertDevTypesForDns));
         }
 
         [Test]
@@ -613,18 +648,22 @@ namespace FWO.Test
         private sealed class OwnershipApiConnection : SimulatedApiConnection
         {
             public List<string> Queries { get; } = [];
+            public List<object?> Variables { get; } = [];
+            public List<GenericRecertDevType> DevTypes { get; set; } = [];
 
             public override Task<QueryResponseType> SendQueryAsync<QueryResponseType>(string query, object? variables = null, string? operationName = null, QueryChunkingOptions? chunkingOptions = null)
             {
                 Queries.Add(query);
-                List<FwoOwner> result = query switch
+                Variables.Add(variables);
+                object result = query switch
                 {
-                    string value when value == OwnerQueries.getOwnersForUser => [new() { Id = 1 }],
-                    string value when value == OwnerQueries.getOwnersFromGroups => [new() { Id = 2 }],
-                    string value when value == OwnerQueries.getOwnersForDnsWithRecertification => [new() { Id = 3 }],
+                    string value when value == OwnerQueries.getOwnersForUser => new List<FwoOwner> { new() { Id = 1 } },
+                    string value when value == OwnerQueries.getOwnersFromGroups => new List<FwoOwner> { new() { Id = 2 } },
+                    string value when value == OwnerQueries.getOwnersForDnsWithRecertification => new List<FwoOwner> { new() { Id = 3 } },
+                    string value when value == GenericQueries.getGenericRecertDevTypesForDns => DevTypes,
                     _ => throw new AssertionException($"Unexpected query: {query}")
                 };
-                return Task.FromResult((QueryResponseType)(object)result);
+                return Task.FromResult((QueryResponseType)result);
             }
         }
 
@@ -652,6 +691,7 @@ namespace FWO.Test
                     string value when value == OwnerQueries.getOwnersForUser => DirectOwners,
                     string value when value == OwnerQueries.getOwnersFromGroups => GroupOwners,
                     string value when value == OwnerQueries.getOwnersForDnsWithRecertification => RecertOwners,
+                    string value when value == GenericQueries.getGenericRecertDevTypesForDns => new List<GenericRecertDevType>(),
                     string value when value == RequestQueries.getWorkflowVisibilityGroups => VisibilityGroups,
                     string value when value == ConfigQueries.getConfigItemByKey => ConfigItems,
                     _ => throw new AssertionException($"Unexpected query: {query}")
@@ -683,6 +723,7 @@ namespace FWO.Test
                     string value when value == AuthQueries.upsertUiUser => new ReturnIdWrapper { ReturnIds = [new ReturnId { NewId = kNewUserId }] },
                     string value when value == OwnerQueries.getOwnersForUser => new List<FwoOwner>(),
                     string value when value == OwnerQueries.getOwnersForDnsWithRecertification => new List<FwoOwner>(),
+                    string value when value == GenericQueries.getGenericRecertDevTypesForDns => new List<GenericRecertDevType>(),
                     string value when value == RequestQueries.getWorkflowVisibilityGroups => new List<WorkflowVisibilityGroup>(),
                     _ => throw new AssertionException($"Unexpected query: {query}")
                 };
@@ -772,6 +813,7 @@ namespace FWO.Test
                     string value when value == AuthQueries.updateUserLastLogin => new ReturnId { PasswordMustBeChanged = false },
                     string value when value == OwnerQueries.getOwnersForUser => new List<FwoOwner>(),
                     string value when value == OwnerQueries.getOwnersForDnsWithRecertification => new List<FwoOwner>(),
+                    string value when value == GenericQueries.getGenericRecertDevTypesForDns => new List<GenericRecertDevType>(),
                     string value when value == RequestQueries.getWorkflowVisibilityGroups => throw visibilityFailure,
                     _ => throw new AssertionException($"Unexpected query: {query}")
                 };

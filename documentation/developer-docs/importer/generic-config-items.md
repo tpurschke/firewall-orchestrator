@@ -11,6 +11,7 @@ for example proxy or load balancer rules (#5786). This page explains the data mo
 | `generic.config_item` | One item per row, versioned like `firewall.rule` (`created` / `removed` import IDs). Only one active version per `(mgm_id, item_uid)`. |
 | `generic.recertification` | Recertification decisions, append-only. `config_item_id` is the certified version; the decision applies to the item (`mgm_id`, `item_uid`) until its next due date. |
 | `generic.owner_recertification` | Owner-level recertification of all generic items of an owner. |
+| `generic.responsible_type_dev_type` | Generic device types the users of an owner responsible type may recertify (#5788). A responsible type without rows may not recertify generic items. |
 
 Key configuration columns:
 
@@ -56,7 +57,11 @@ Links to other hosts in the rule set list are ignored, as the session cookie wou
 ## Access
 
 - Config items are written by the `importer` role only.
-- `recertifier` may only add decisions for items and owners in `x-hasura-recertifiable-owners`, with
-  `user_dn` equal to its own DN (`x-hasura-uuid`); `recert_date` is set by the database.
+- `recertifier` may only add decisions for items and owners in `x-hasura-recertifiable-owners`, of device types in
+  `x-hasura-generic-recert-dev-types`, with `user_dn` equal to its own DN (`x-hasura-uuid`); `recert_date` is set by
+  the database.
+- `x-hasura-generic-recert-dev-types` is derived at login: the device types assigned (settings, owner responsible
+  types) to the active, recertifying responsible types the user or one of the user's groups holds. It applies per user
+  to all owners the user may recertify; "proxies for owner A, load balancers for owner B" cannot be expressed.
 - `reporter` sees items of its visible managements, `recertifier` and `modeller` additionally only items of their owners.
 - The daily recertification check (rule-by-rule mode) adds due generic items to the rule recertification notification.

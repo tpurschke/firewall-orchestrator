@@ -64,3 +64,12 @@ create table generic.owner_recertification
 	next_recert_date TIMESTAMP WITH TIME ZONE,
 	report_id BIGINT
 );
+
+-- generic device types whose items users of an owner responsible type may recertify
+-- a responsible type without rows may not recertify any generic items
+create table generic.responsible_type_dev_type
+(
+	owner_responsible_type_id INTEGER NOT NULL,
+	dev_typ_id INTEGER NOT NULL,
+	PRIMARY KEY (owner_responsible_type_id, dev_typ_id)
+);

@@ -1,0 +1,14 @@
+query getGenericRecertDevTypesForDns($dns: [String!]!) {
+  generic_responsible_type_dev_type(
+    where: {
+      owner_responsible_type: {
+        active: { _eq: true }
+        allow_recertification: { _eq: true }
+        owner_responsibles: { dn: { _in: $dns } }
+      }
+    }
+  ) {
+    owner_responsible_type_id
+    dev_typ_id
+  }
+}

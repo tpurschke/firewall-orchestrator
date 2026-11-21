@@ -5,6 +5,7 @@ using FWO.Api.Client.Queries;
 using FWO.Basics;
 using FWO.Config.Api;
 using FWO.Data;
+using FWO.Data.Generic;
 using FWO.Ui.Pages.Settings;
 using FWO.Ui.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -206,12 +207,88 @@ namespace FWO.Test
             Assert.That(apiConn.UpdateCalls, Is.EqualTo(1));
             Assert.That(apiConn.ResponsibleTypes.First(t => t.Id == 13).Active, Is.True);
         }
+
+        private static SettingsResponsiblesTestApiConn CreateGenericApi()
+        {
+            SettingsResponsiblesTestApiConn apiConn = new();
+            apiConn.ResponsibleTypes.Add(new OwnerResponsibleType { Id = 10, Name = "Main", Active = true, SortOrder = 10, AllowRecertification = true });
+            apiConn.GenericKeyConfigs.Add(new GenericKeyConfig { DevTypId = 33, DeviceType = new DeviceType { Name = "Skyhigh Web Gateway", Version = "12ff" } });
+            apiConn.GenericKeyConfigs.Add(new GenericKeyConfig { DevTypId = 40 });
+            apiConn.GenericDevTypes.Add(new GenericRecertDevType { OwnerResponsibleTypeId = 10, DevTypId = 33 });
+            return apiConn;
+        }
+
+        [Test]
+        public async Task EditResponsibleType_PreselectsAndSavesGenericDevTypes()
+        {
+            SettingsResponsibles component = new();
+            SettingsResponsiblesTestApiConn apiConn = CreateGenericApi();
+            SetInjectedApiConnection(component, apiConn);
+            SetInjectedUserConfig(component, new EditOwnerTestUserConfig());
+            await (Task)GetPrivateMethod("LoadTypes").Invoke(component, null)!;
+
+            GetPrivateMethod("EditResponsibleType").Invoke(component, [apiConn.ResponsibleTypes[0]]);
+            IEnumerable<GenericKeyConfig> preselected = GetPrivateField<IEnumerable<GenericKeyConfig>>(component, "actDevTypes");
+            SetPrivateField<IEnumerable<GenericKeyConfig>>(component, "actDevTypes", [.. apiConn.GenericKeyConfigs]);
+            await (Task)GetPrivateMethod("SaveResponsibleType").Invoke(component, null)!;
+
+            object? variables = apiConn.SetDevTypeCalls.Single();
+            List<object> devTypes = (List<object>)variables!.GetType().GetProperty("devTypes")!.GetValue(variables)!;
+            Assert.Multiple(() =>
+            {
+                Assert.That(preselected.Select(keyConfig => keyConfig.DevTypId), Is.EqualTo([33]));
+                Assert.That(variables.GetType().GetProperty("ownerResponsibleTypeId")!.GetValue(variables), Is.EqualTo(10));
+                Assert.That(devTypes, Has.Count.EqualTo(2));
+            });
+        }
+
+        [Test]
+        public async Task SaveResponsibleType_WithoutGenericDeviceTypesWritesNoAssignments()
+        {
+            SettingsResponsibles component = new();
+            SettingsResponsiblesTestApiConn apiConn = new();
+            apiConn.ResponsibleTypes.Add(new OwnerResponsibleType { Id = 10, Name = "Main", Active = true });
+            SetInjectedApiConnection(component, apiConn);
+            SetInjectedUserConfig(component, new EditOwnerTestUserConfig());
+            await (Task)GetPrivateMethod("LoadTypes").Invoke(component, null)!;
+
+            GetPrivateMethod("EditResponsibleType").Invoke(component, [apiConn.ResponsibleTypes[0]]);
+            await (Task)GetPrivateMethod("SaveResponsibleType").Invoke(component, null)!;
+
+            Assert.That(apiConn.UpdateCalls, Is.EqualTo(1));
+            Assert.That(apiConn.SetDevTypeCalls, Is.Empty);
+        }
+
+        [Test]
+        public async Task Page_ShowsGenericDevTypesOfResponsibleTypes()
+        {
+            await using BunitContext context = new();
+            SettingsResponsiblesTestApiConn apiConn = CreateGenericApi();
+            EditOwnerTestUserConfig userConfig = new() { ModIconify = false, AllowManualOwnerAdmin = true };
+            userConfig.User.Roles = [Roles.Admin];
+            context.JSInterop.Mode = JSRuntimeMode.Loose;
+            context.Services.AddSingleton<ApiConnection>(apiConn);
+            context.Services.AddSingleton<UserConfig>(userConfig);
+            context.Services.AddScoped<DomEventService>();
+            context.Services.AddLocalization();
+            context.Services.AddAuthorizationCore();
+            context.Services.AddSingleton<IAuthorizationService, AllowAllAuthorizationService>();
+            context.Services.AddSingleton<AuthenticationStateProvider>(new MonitoringTestAuthStateProvider(Roles.Admin));
+
+            IRenderedComponent<SettingsResponsibles> page = context.Render<CascadingAuthenticationState>(parameters =>
+                parameters.AddChildContent<SettingsResponsibles>()).FindComponent<SettingsResponsibles>();
+
+            page.WaitForAssertion(() => Assert.That(page.Markup, Does.Contain("Skyhigh Web Gateway 12ff")));
+        }
     }
 
     internal sealed class SettingsResponsiblesTestApiConn : SimulatedApiConnection
     {
         public List<OwnerResponsibleType> ResponsibleTypes { get; } = [];
         public HashSet<int> InUseTypeIds { get; } = [];
+        public List<GenericKeyConfig> GenericKeyConfigs { get; } = [];
+        public List<GenericRecertDevType> GenericDevTypes { get; } = [];
+        public List<object?> SetDevTypeCalls { get; } = [];
         public int UpdateCalls { get; private set; }
         public int DeleteCalls { get; private set; }
 
@@ -266,6 +343,22 @@ namespace FWO.Test
                         AllowRecertification = type.AllowRecertification
                     })];
                 return Task.FromResult((QueryResponseType)(object)copy);
+            }
+
+            if (query == GenericQueries.getGenericKeyConfigs)
+            {
+                return Task.FromResult((QueryResponseType)(object)GenericKeyConfigs);
+            }
+
+            if (query == GenericQueries.getGenericRecertDevTypes)
+            {
+                return Task.FromResult((QueryResponseType)(object)GenericDevTypes);
+            }
+
+            if (query == GenericQueries.setGenericRecertDevTypes)
+            {
+                SetDevTypeCalls.Add(variables);
+                return Task.FromResult((QueryResponseType)new object());
             }
 
             throw new NotImplementedException($"Query not implemented in SettingsResponsibles test api: {query}");

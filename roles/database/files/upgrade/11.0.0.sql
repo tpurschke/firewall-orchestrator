@@ -59,6 +59,15 @@ CREATE TABLE IF NOT EXISTS generic.owner_recertification
 	report_id BIGINT
 );
 
+-- generic device types whose items users of an owner responsible type may recertify
+-- a responsible type without rows may not recertify any generic items
+CREATE TABLE IF NOT EXISTS generic.responsible_type_dev_type
+(
+	owner_responsible_type_id INTEGER NOT NULL,
+	dev_typ_id INTEGER NOT NULL,
+	PRIMARY KEY (owner_responsible_type_id, dev_typ_id)
+);
+
 -- constraints and foreign keys, each guarded so the script can run repeatedly
 DO $$
 DECLARE
@@ -90,6 +99,10 @@ BEGIN
 				'ALTER TABLE generic.recertification ADD CONSTRAINT generic_recertification_owner_recertification_foreign_key FOREIGN KEY (owner_recert_id) REFERENCES generic.owner_recertification(id) ON UPDATE RESTRICT ON DELETE CASCADE'),
 			('generic.owner_recertification'::regclass, 'generic_owner_recertification_owner_foreign_key',
 				'ALTER TABLE generic.owner_recertification ADD CONSTRAINT generic_owner_recertification_owner_foreign_key FOREIGN KEY (owner_id) REFERENCES owner(id) ON UPDATE RESTRICT ON DELETE CASCADE'),
+			('generic.responsible_type_dev_type'::regclass, 'generic_responsible_type_dev_type_owner_responsible_type_foreign_key',
+				'ALTER TABLE generic.responsible_type_dev_type ADD CONSTRAINT generic_responsible_type_dev_type_owner_responsible_type_foreign_key FOREIGN KEY (owner_responsible_type_id) REFERENCES owner_responsible_type(id) ON UPDATE RESTRICT ON DELETE CASCADE'),
+			('generic.responsible_type_dev_type'::regclass, 'generic_responsible_type_dev_type_stm_dev_typ_foreign_key',
+				'ALTER TABLE generic.responsible_type_dev_type ADD CONSTRAINT generic_responsible_type_dev_type_stm_dev_typ_foreign_key FOREIGN KEY (dev_typ_id) REFERENCES stm_dev_typ(dev_typ_id) ON UPDATE RESTRICT ON DELETE CASCADE'),
 			('generic.owner_recertification'::regclass, 'generic_owner_recertification_report_foreign_key',
 				'ALTER TABLE generic.owner_recertification ADD CONSTRAINT generic_owner_recertification_report_foreign_key FOREIGN KEY (report_id) REFERENCES report(report_id) ON UPDATE RESTRICT ON DELETE CASCADE')
 		) AS c(tableId, constraintName, ddl)
@@ -112,6 +125,7 @@ CREATE INDEX IF NOT EXISTS idx_generic_recertification_owner_id ON generic.recer
 CREATE INDEX IF NOT EXISTS idx_generic_recertification_next_recert_date ON generic.recertification (next_recert_date);
 CREATE INDEX IF NOT EXISTS idx_generic_recertification_config_item_id ON generic.recertification (config_item_id);
 CREATE INDEX IF NOT EXISTS idx_generic_owner_recertification_owner_id ON generic.owner_recertification (owner_id);
+CREATE INDEX IF NOT EXISTS idx_generic_responsible_type_dev_type_dev_typ_id ON generic.responsible_type_dev_type (dev_typ_id);
 
 -- Skyhigh Web Gateway as first generic device type
 insert into stm_dev_typ (dev_typ_id,dev_typ_name,dev_typ_version,dev_typ_manufacturer,dev_typ_predef_svc,dev_typ_is_multi_mgmt,dev_typ_is_mgmt,is_pure_routing_device)

@@ -132,6 +132,7 @@ namespace FWO.Middleware.Server
             // on demand instead, see WorkflowController.ResolveCallerGroups.
             claimsIdentity.AddClaim(new Claim("x-hasura-editable-owners", $"{{ {string.Join(",", user.Ownerships)} }}"));
             claimsIdentity.AddClaim(new Claim("x-hasura-recertifiable-owners", $"{{ {string.Join(",", user.RecertOwnerships)} }}"));
+            claimsIdentity.AddClaim(new Claim("x-hasura-generic-recert-dev-types", ToHasuraIdSet(user.GenericRecertDevTypeIds)));
             claimsIdentity.AddClaim(new Claim("x-hasura-workflow-visibility-groups", ToHasuraIdSet(user.WorkflowVisibilityGroupIds)));
             AddRoleClaims(claimsIdentity, user);
             return claimsIdentity;

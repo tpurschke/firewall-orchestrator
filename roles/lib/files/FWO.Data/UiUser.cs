@@ -56,6 +56,12 @@ namespace FWO.Data
         public List<string> Groups { get; set; } = [];
         public List<int> Ownerships { get; set; } = [];
         public List<int> RecertOwnerships { get; set; } = [];
+
+        /// <summary>
+        /// Generic (non-firewall) device types whose items the user may recertify, derived at login from the
+        /// owner responsible types through which the user may recertify.
+        /// </summary>
+        public List<int> GenericRecertDevTypeIds { get; set; } = [];
         public List<int> WorkflowVisibilityGroupIds { get; set; } = [];
 
 
@@ -84,6 +90,7 @@ namespace FWO.Data
             Roles = user.Roles;
             Ownerships = user.Ownerships;
             RecertOwnerships = user.RecertOwnerships;
+            GenericRecertDevTypeIds = user.GenericRecertDevTypeIds;
             WorkflowVisibilityGroupIds = user.WorkflowVisibilityGroupIds;
             if (user.LdapConnection != null)
             {
