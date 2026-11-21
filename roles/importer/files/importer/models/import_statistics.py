@@ -26,6 +26,9 @@ class ImportStatistics:
     rulebase_delete_count: int = 0
     rulebase_link_add_count: int = 0
     rulebase_link_delete_count: int = 0
+    generic_item_add_count: int = 0
+    generic_item_delete_count: int = 0
+    generic_item_change_count: int = 0
     inconsistent_nwobj_delete_count: int = 0
     inconsistent_svcobj_delete_count: int = 0
     inconsistent_userobj_delete_count: int = 0

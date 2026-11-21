@@ -1,0 +1,107 @@
+@using FWO.Basics
+@using FWO.Data.Generic
+@using FWO.Report
+
+@inject UserConfig userConfig
+
+@if (Items.Count == 0)
+{
+    <p>@(userConfig.GetText("generic_no_items"))</p>
+}
+@foreach (IGrouping<int, GenericConfigItem> managementItems in GroupByManagement())
+{
+    List<GenericItemColumn> columns = ColumnsFor(managementItems.First());
+    <h5 class="mt-3">@(managementItems.First().Management?.Name)</h5>
+    <Table TableClass="table table-sm table-bordered th-bg-secondary table-responsive overflow-auto sticky-header" TableItem="GenericConfigItem"
+           Items="managementItems.ToList()" PageSize="PageSize">
+        @if (RecertMode)
+        {
+            <Column TableItem="GenericConfigItem" Title="@(userConfig.GetText("actions"))" Context="item">
+                <Template>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="@($"recert{item.Id}")" disabled="@(!CanWrite(item))"
+                               checked="@(item.SelectedAction == GenericRecertAction.Recertify)"
+                               @onchange="() => ToggleAction(item, GenericRecertAction.Recertify)" />
+                        <label class="form-check-label" for="@($"recert{item.Id}")">@(userConfig.GetText("recertify"))</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="@($"decert{item.Id}")" disabled="@(!CanWrite(item))"
+                               checked="@(item.SelectedAction == GenericRecertAction.Decertify)"
+                               @onchange="() => ToggleAction(item, GenericRecertAction.Decertify)" />
+                        <label class="form-check-label" for="@($"decert{item.Id}")">@(userConfig.GetText("decertify"))</label>
+                    </div>
+                </Template>
+            </Column>
+        }
+        @foreach (GenericItemColumn column in columns)
+        {
+            <Column TableItem="GenericConfigItem" Title="@column.Header" Context="item">
+                <Template>
+                    <span class="text-break">@(column.Value(item))</span>
+                </Template>
+            </Column>
+        }
+        <DetailTemplate TableItem="GenericConfigItem" Context="item">
+            <div class="mb-1">@(userConfig.GetText("details")):</div>
+            <pre class="text-break">@(GenericConfigLine.ToIndentedJson(item.ConfigLine))</pre>
+        </DetailTemplate>
+        <Pager ShowPageNumber="true" ShowTotalCount="true" />
+    </Table>
+}
+
+@code
+{
+    /// <summary>
+    /// Items to show, of one or more managements.
+    /// </summary>
+    [Parameter]
+    public List<GenericConfigItem> Items { get; set; } = [];
+
+    /// <summary>
+    /// Key configurations of the device types, giving the reportable fields per management.
+    /// </summary>
+    [Parameter]
+    public List<GenericKeyConfig> KeyConfigs { get; set; } = [];
+
+    [Parameter]
+    public ReportType ReportType { get; set; } = ReportType.GenericItems;
+
+    /// <summary>
+    /// Shows the recertify/decertify selection per item.
+    /// </summary>
+    [Parameter]
+    public bool RecertMode { get; set; }
+
+    /// <summary>
+    /// Decides per item whether the user may record a decision for it.
+    /// </summary>
+    [Parameter]
+    public Func<GenericConfigItem, bool> CanWrite { get; set; } = _ => false;
+
+    [Parameter]
+    public EventCallback SelectionChanged { get; set; }
+
+    [Parameter]
+    public int PageSize { get; set; } = 50;
+
+    private IEnumerable<IGrouping<int, GenericConfigItem>> GroupByManagement()
+    {
+        return Items
+            .OrderBy(item => item.Management?.Name)
+            .ThenBy(item => item.MgmId)
+            .ThenBy(item => item.ItemOrder)
+            .GroupBy(item => item.MgmId);
+    }
+
+    private List<GenericItemColumn> ColumnsFor(GenericConfigItem item)
+    {
+        GenericKeyConfig? keyConfig = GenericItemTableLayout.FindKeyConfig(KeyConfigs, item.Management?.DevTypId);
+        return GenericItemTableLayout.BuildColumns(ReportType, keyConfig, userConfig);
+    }
+
+    private async Task ToggleAction(GenericConfigItem item, GenericRecertAction action)
+    {
+        item.SelectedAction = item.SelectedAction == action ? GenericRecertAction.None : action;
+        await SelectionChanged.InvokeAsync();
+    }
+}

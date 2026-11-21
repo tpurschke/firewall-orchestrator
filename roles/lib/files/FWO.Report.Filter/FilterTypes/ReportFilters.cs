@@ -37,6 +37,8 @@ namespace FWO.Report.Filter.FilterTypes
 
         public WorkflowFilter WorkflowFilter { get; set; } = new();
 
+        public GenericFilter GenericFilter { get; set; } = new();
+
         public string DisplayedTimeSelection = "";
 
         private UserConfig? userConfig;
@@ -83,6 +85,7 @@ namespace FWO.Report.Filter.FilterTypes
             OwnerFilter = new(template.ReportParams.OwnerFilter);
             ComplianceFilter = new(template.ReportParams.ComplianceFilter);
             WorkflowFilter = new(template.ReportParams.WorkflowFilter);
+            GenericFilter = new(template.ReportParams.GenericFilter ?? new());
         }
 
         public ReportParams ToReportParams()
@@ -102,7 +105,8 @@ namespace FWO.Report.Filter.FilterTypes
                 ModellingFilter = new ModellingFilter(ModellingFilter),
                 OwnerFilter = new OwnerFilter(OwnerFilter),
                 ComplianceFilter = new ComplianceFilter(ComplianceFilter),
-                WorkflowFilter = new WorkflowFilter(WorkflowFilter)
+                WorkflowFilter = new WorkflowFilter(WorkflowFilter),
+                GenericFilter = new GenericFilter(GenericFilter)
             };
             if (ReportType != ReportType.Statistics)
             {

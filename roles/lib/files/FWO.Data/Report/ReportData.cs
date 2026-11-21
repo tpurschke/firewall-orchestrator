@@ -1,4 +1,5 @@
 using FWO.Basics.Interfaces;
+using FWO.Data.Generic;
 using FWO.Data.Workflow;
 
 namespace FWO.Data.Report
@@ -16,6 +17,11 @@ namespace FWO.Data.Report
         public Dictionary<long, DateTime?> TicketReferenceDates { get; set; } = [];
         public Dictionary<int, string> WorkflowStateNames { get; set; } = [];
         public WorkflowFilter WorkflowFilter { get; set; } = new();
+        /// <summary>
+        /// Config items of a report on generic (non-firewall) devices, with the key configuration of their device types.
+        /// </summary>
+        public List<GenericConfigItem> GenericItems { get; set; } = [];
+        public List<GenericKeyConfig> GenericKeyConfigs { get; set; } = [];
         public List<Rule> RulesFlat = [];
         public IEnumerable<IRuleViewData> RuleViewData = [];
         public int ElementsCount { get; set; }
@@ -52,6 +58,8 @@ namespace FWO.Data.Report
             OwnerAdditionalInfoKey = reportData.OwnerAdditionalInfoKey;
             OwnerAddInfoFilter = new(reportData.OwnerAddInfoFilter);
             ExistingViolationsFilterFailed = reportData.ExistingViolationsFilterFailed;
+            GenericItems = reportData.GenericItems;
+            GenericKeyConfigs = reportData.GenericKeyConfigs;
         }
     }
 }

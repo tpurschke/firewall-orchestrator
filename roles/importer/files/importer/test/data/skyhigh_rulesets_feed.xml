@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>rulesets</title>
+  <entry>
+    <id>1001</id>
+    <title>URL Filtering</title>
+    <link href="https://swg.example.com:4712/Konfigurator/REST/rulesets/1001" rel="self"/>
+    <enabled>true</enabled>
+  </entry>
+  <entry>
+    <id>1002</id>
+    <title>Legacy Rules</title>
+    <link href="rulesets/1002"/>
+    <enabled>false</enabled>
+  </entry>
+  <entry>
+    <id>1003</id>
+    <title>Foreign Host</title>
+    <link href="https://attacker.example.net/Konfigurator/REST/rulesets/1003"/>
+    <enabled>true</enabled>
+  </entry>
+  <entry>
+    <id>1004</id>
+    <title>No Link</title>
+    <enabled>true</enabled>
+  </entry>
+</feed>

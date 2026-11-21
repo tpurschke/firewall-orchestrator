@@ -13,9 +13,11 @@ from fw_modules.fortiadom5ff.fwcommon import FortiAdom5ffCommon
 from fw_modules.fortiosmanagementREST.fwcommon import FortiosManagementRESTCommon
 from fw_modules.generic.fwcommon import GenericFirewallCommon
 from fw_modules.opnsense25ff.fwcommon import OPNsense25common
+from fw_modules.skyhighwebgateway12ff.fwcommon import SkyhighWebGateway12ffCommon
 from fwo_const import IMPORTER_BASE_DIR
 from fwo_log import FWOLogger
 from model_controllers.fwconfig_import_rollback import FwConfigImportRollback
+from model_controllers.generic_config_import import import_generic_config
 from model_controllers.management_controller import ManagementController
 
 if IMPORTER_BASE_DIR not in sys.path:
@@ -47,7 +49,7 @@ from services.service_provider import ServiceProvider
 if TYPE_CHECKING:
     from fwo_api_call import FwoApiCall
     from model_controllers.import_state_controller import ImportStateController
-    from models.fw_common import FwCommon
+    from models.fw_common import FwCommon, GenericConfigCommon
     from models.gateway import Gateway
     from models.import_state import ImportState
 
@@ -173,6 +175,12 @@ def _import_management(
     FWOLogger.info(
         f"starting import of management {import_state.state.mgm_details.name} ({mgm_id!s}), import_id={import_state.state.import_id!s}"
     )
+
+    generic_module = get_generic_module(import_state.state)
+    if generic_module is not None:
+        # generic (non-firewall) devices deliver config items instead of a normalized firewall config
+        import_generic_config(import_state, generic_module, clear_management_data)
+        return
 
     if clear_management_data:
         config_normalized = config_importer.clear_management()
@@ -305,10 +313,20 @@ def get_module(import_state: ImportState) -> FwCommon:
         fw_module = GenericFirewallCommon()
     elif pkg_name == "azure2022ff":
         fw_module = Azure2022ffCommon()
+    elif (generic_module := get_generic_module(import_state)) is not None:
+        fw_module = generic_module
     else:
         raise FwoImporterError(f"import_management - no fwcommon module found for package name {pkg_name}")
 
     return fw_module
+
+
+def get_generic_module(import_state: ImportState) -> GenericConfigCommon | None:
+    """Return the importer module of a generic (non-firewall) device type, or None for firewall device types."""
+    pkg_name = get_module_package_name(import_state)
+    if pkg_name == "skyhighwebgateway12ff":
+        return SkyhighWebGateway12ffCommon()
+    return None
 
 
 def get_config_from_api(

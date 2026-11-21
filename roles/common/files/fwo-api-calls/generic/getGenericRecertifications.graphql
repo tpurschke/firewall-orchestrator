@@ -1,0 +1,22 @@
+query getGenericRecertifications($mgmIds: [Int!]!, $limit: Int!, $offset: Int!) {
+  generic_recertification(
+    where: { config_item: { mgm_id: { _in: $mgmIds } } }
+    order_by: [{ recert_date: desc }, { id: desc }]
+    limit: $limit
+    offset: $offset
+  ) {
+    id
+    config_item_id
+    owner_id
+    user_dn
+    recertified
+    recert_date
+    comment
+    next_recert_date
+    owner_recert_id
+    config_item {
+      mgm_id
+      item_uid
+    }
+  }
+}

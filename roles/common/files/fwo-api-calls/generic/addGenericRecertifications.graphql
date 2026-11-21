@@ -1,0 +1,5 @@
+mutation addGenericRecertifications($recertifications: [generic_recertification_insert_input!]!) {
+  insert_generic_recertification(objects: $recertifications) {
+    affected_rows
+  }
+}

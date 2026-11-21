@@ -1,0 +1,19 @@
+mutation addGenericOwnerRecertification(
+  $ownerId: Int!
+  $userDn: String!
+  $recertified: Boolean!
+  $comment: String
+  $nextRecertDate: timestamptz
+) {
+  insert_generic_owner_recertification_one(
+    object: {
+      owner_id: $ownerId
+      user_dn: $userDn
+      recertified: $recertified
+      comment: $comment
+      next_recert_date: $nextRecertDate
+    }
+  ) {
+    id
+  }
+}

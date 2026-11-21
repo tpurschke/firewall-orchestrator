@@ -460,3 +460,15 @@ ALTER TABLE flow.svcgroup_member ADD CONSTRAINT flow_svcgroup_member_svcgroup_fo
 ALTER TABLE flow.svcgroup_member ADD CONSTRAINT flow_svcgroup_member_svcobject_foreign_key FOREIGN KEY (svcobj_id) REFERENCES flow.svcobject(svcobj_id) ON UPDATE RESTRICT ON DELETE CASCADE;
 
 ALTER TABLE credential ADD CONSTRAINT credential_additional_credential_id_foreign_key FOREIGN KEY (additional_credential_id) REFERENCES credential(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
+
+-- generic
+ALTER TABLE generic.device_type_key_config ADD CONSTRAINT generic_device_type_key_config_stm_dev_typ_foreign_key FOREIGN KEY (dev_typ_id) REFERENCES stm_dev_typ(dev_typ_id) ON UPDATE RESTRICT ON DELETE CASCADE;
+ALTER TABLE generic.config_item ADD CONSTRAINT generic_config_item_management_foreign_key FOREIGN KEY (mgm_id) REFERENCES management(mgm_id) ON UPDATE RESTRICT ON DELETE CASCADE;
+ALTER TABLE generic.config_item ADD CONSTRAINT generic_config_item_owner_foreign_key FOREIGN KEY (owner_id) REFERENCES owner(id) ON UPDATE RESTRICT ON DELETE SET NULL;
+ALTER TABLE generic.config_item ADD CONSTRAINT generic_config_item_created_import_control_foreign_key FOREIGN KEY (created) REFERENCES import_control(control_id) ON UPDATE RESTRICT ON DELETE CASCADE;
+ALTER TABLE generic.config_item ADD CONSTRAINT generic_config_item_removed_import_control_foreign_key FOREIGN KEY (removed) REFERENCES import_control(control_id) ON UPDATE RESTRICT ON DELETE CASCADE;
+ALTER TABLE generic.recertification ADD CONSTRAINT generic_recertification_config_item_foreign_key FOREIGN KEY (config_item_id) REFERENCES generic.config_item(id) ON UPDATE RESTRICT ON DELETE CASCADE;
+ALTER TABLE generic.recertification ADD CONSTRAINT generic_recertification_owner_foreign_key FOREIGN KEY (owner_id) REFERENCES owner(id) ON UPDATE RESTRICT ON DELETE CASCADE;
+ALTER TABLE generic.recertification ADD CONSTRAINT generic_recertification_owner_recertification_foreign_key FOREIGN KEY (owner_recert_id) REFERENCES generic.owner_recertification(id) ON UPDATE RESTRICT ON DELETE CASCADE;
+ALTER TABLE generic.owner_recertification ADD CONSTRAINT generic_owner_recertification_owner_foreign_key FOREIGN KEY (owner_id) REFERENCES owner(id) ON UPDATE RESTRICT ON DELETE CASCADE;
+ALTER TABLE generic.owner_recertification ADD CONSTRAINT generic_owner_recertification_report_foreign_key FOREIGN KEY (report_id) REFERENCES report(report_id) ON UPDATE RESTRICT ON DELETE CASCADE;

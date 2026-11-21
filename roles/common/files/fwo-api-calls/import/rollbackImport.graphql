@@ -48,5 +48,7 @@ mutation rollbackImport($importId: bigint!) {
     update_firewall_rule_to_zone(where: {removed: {_eq: $importId}}, _set: {removed: null}) { affected_rows }
     update_firewall_rule_time(where: {removed: {_eq: $importId}}, _set: {removed: null}) { affected_rows }
     update_firewall_rule_enforced_on_gateway(where: {removed: {_eq: $importId}}, _set: {removed: null}) { affected_rows }
+    delete_generic_config_item(where: {created: {_eq: $importId}}) { affected_rows }
+    update_generic_config_item(where: {removed: {_eq: $importId}}, _set: {removed: null}) { affected_rows }
     delete_import_control(where: {control_id: {_eq: $importId}}) { affected_rows }            
 }

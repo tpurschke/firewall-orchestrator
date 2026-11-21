@@ -1,0 +1,204 @@
+@using FWO.Basics
+@using FWO.Data.Generic
+@using FWO.Recert
+@using FWO.Services
+@using FWO.Services.Generic
+
+@inject ApiConnection apiConnection
+@inject UserConfig userConfig
+
+@if (managements.Count > 0)
+{
+    <hr />
+    <h4 data-toggle="tooltip" title="@(userConfig.PureLine("H4036"))">@(userConfig.GetText("generic_items"))</h4>
+    @if (CanRecertify)
+    {
+        <div class="btn-group mb-2">
+            <button type="button" class="btn btn-sm btn-danger" disabled="@(!AnySelected)"
+                    @onclick="() => OpenCommentPopup(false)">@(userConfig.GetText("execute_selected"))</button>
+            <button type="button" class="btn btn-sm btn-warning" disabled="@(!CanRecertifySelectedOwner)"
+                    @onclick="() => OpenCommentPopup(true)">@(userConfig.GetText("recertify_owner_generic"))</button>
+        </div>
+    }
+    @if (loading)
+    {
+        <Loading />
+    }
+    else if (loaded)
+    {
+        <GenericItemTable Items="items" KeyConfigs="keyConfigs" ReportType="ReportType.GenericRecertification" RecertMode="CanRecertify"
+                          CanWrite="CanWriteItem" SelectionChanged="StateHasChanged" />
+    }
+}
+
+<PopUp Title="@(userConfig.GetText(ownerMode ? "recertify_owner_generic" : "add_comment"))" Show="@showCommentPopup" Size=PopupSize.Large
+       OnClose="() => showCommentPopup = false">
+    <Body>
+        @if (showCommentPopup)
+        {
+            @if (ownerMode)
+            {
+                <p>@(userConfig.GetText("U4010")) @(SelectedOwner?.Name)</p>
+            }
+            <form onsubmit="return false">
+                <div class="form-group row">
+                    <label for="genericComment" class="col-sm-2 col-form-label col-form-label-sm">@(userConfig.GetText("comment") + (userConfig.CommentRequired ? "*:" : ":"))</label>
+                    <div class="col-sm-8">
+                        <input id="genericComment" type="text" class="form-control form-control-sm" @bind="comment" />
+                    </div>
+                </div>
+            </form>
+        }
+    </Body>
+    <Footer>
+        <div class="btn-group">
+            <button type="button" class="btn btn-sm btn-primary" @onclick="Execute">@(userConfig.GetText("ok"))</button>
+            <button type="button" class="btn btn-sm btn-secondary" @onclick="() => showCommentPopup = false">@(userConfig.GetText("cancel"))</button>
+        </div>
+    </Footer>
+</PopUp>
+
+@code
+{
+    [CascadingParameter]
+    private Action<Exception?, string, string, bool> DisplayMessageInUi { get; set; } = DefaultInit.DoNothing;
+
+    /// <summary>
+    /// Owner selected on the recertification page; null shows the items of all readable owners.
+    /// </summary>
+    [Parameter]
+    public FwoOwner? SelectedOwner { get; set; }
+
+    /// <summary>
+    /// Owners whose items the user may recertify (admins: all).
+    /// </summary>
+    [Parameter]
+    public HashSet<int> RecertifiableOwnerIds { get; set; } = [];
+
+    /// <summary>
+    /// Owners whose items the user may see; ignored for admins and auditors, who see all.
+    /// </summary>
+    [Parameter]
+    public List<int> ReadableOwnerIds { get; set; } = [];
+
+    private List<GenericItemManagement> managements = [];
+    private List<GenericKeyConfig> keyConfigs = [];
+    private List<GenericConfigItem> items = [];
+    private bool loading;
+    private bool loaded;
+    private bool showCommentPopup;
+    private bool ownerMode;
+    private string comment = "";
+    private int currentLookAheadDays;
+
+    private bool IsAdmin => userConfig.CanUseAnyRole(Roles.Admin);
+    private bool SeesAllOwners => userConfig.CanUseAnyRole(Roles.Admin, Roles.Auditor);
+    private bool CanRecertify => userConfig.CanUseAnyRole(Roles.Admin, Roles.Recertifier);
+    private bool AnySelected => items.Any(item => item.SelectedAction != GenericRecertAction.None);
+    private bool CanRecertifySelectedOwner => SelectedOwner != null && (IsAdmin || RecertifiableOwnerIds.Contains(SelectedOwner.Id));
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            GenericItemService service = new(apiConnection);
+            keyConfigs = await service.GetKeyConfigs();
+            managements = await service.GetGenericManagements(keyConfigs);
+        }
+        catch (Exception exception)
+        {
+            DisplayMessageInUi(exception, userConfig.GetText("generic_items"), "", true);
+        }
+    }
+
+    /// <summary>
+    /// Whether there are generic managements the user may see, i.e. whether this section is shown at all.
+    /// </summary>
+    public bool HasGenericManagements => managements.Count > 0;
+
+    /// <summary>
+    /// Loads the generic items due within the given number of days for the selected owner.
+    /// </summary>
+    public async Task Load(int lookAheadDays)
+    {
+        if (managements.Count == 0)
+        {
+            return;
+        }
+        currentLookAheadDays = lookAheadDays;
+        loading = true;
+        try
+        {
+            GenericItemService service = new(apiConnection);
+            List<GenericConfigItem> allItems = await service.GetItemsWithRecertState(
+                [.. managements.Select(management => management.Id)], OwnerScope(), userConfig.InitialRecertificationPeriod, userConfig.ElementsPerFetch);
+            DateTime now = DateTime.Now;
+            items = [.. allItems.Where(item => GenericRecertCalculator.IsDueWithin(item, now, lookAheadDays))];
+            loaded = true;
+        }
+        catch (Exception exception)
+        {
+            DisplayMessageInUi(exception, userConfig.GetText("generic_items"), "", true);
+        }
+        loading = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private List<int>? OwnerScope()
+    {
+        if (SelectedOwner != null)
+        {
+            return [SelectedOwner.Id];
+        }
+        return SeesAllOwners ? null : ReadableOwnerIds;
+    }
+
+    private bool CanWriteItem(GenericConfigItem item)
+    {
+        return CanRecertify && (IsAdmin || (item.OwnerId != null && RecertifiableOwnerIds.Contains(item.OwnerId.Value)));
+    }
+
+    private void OpenCommentPopup(bool forOwner)
+    {
+        ownerMode = forOwner;
+        comment = "";
+        showCommentPopup = true;
+    }
+
+    private async Task Execute()
+    {
+        if (userConfig.CommentRequired && string.IsNullOrWhiteSpace(comment))
+        {
+            DisplayMessageInUi(null, userConfig.GetText("recertification"), userConfig.GetText("E4001"), true);
+            return;
+        }
+        showCommentPopup = false;
+        try
+        {
+            GenericRecertHandler handler = new(apiConnection, userConfig);
+            if (ownerMode && SelectedOwner != null)
+            {
+                await RecertifyOwner(handler);
+            }
+            else
+            {
+                List<GenericConfigItem> selectedItems = [.. items.Where(item => item.SelectedAction != GenericRecertAction.None && CanWriteItem(item))];
+                await handler.RecertifyItems(selectedItems, comment, DateTime.Now);
+            }
+        }
+        catch (Exception exception)
+        {
+            DisplayMessageInUi(exception, userConfig.GetText("recertification"), "", true);
+        }
+        await Load(currentLookAheadDays);
+    }
+
+    private async Task RecertifyOwner(GenericRecertHandler handler)
+    {
+        FwoOwner owner = SelectedOwner!;
+        GenericItemService service = new(apiConnection);
+        List<GenericConfigItem> ownerItems = await service.GetItems([.. managements.Select(management => management.Id)], [owner.Id], userConfig.ElementsPerFetch);
+        GenericItemOwner genericOwner = new() { Id = owner.Id, Name = owner.Name, ExtAppId = owner.ExtAppId, RecertInterval = owner.RecertInterval };
+        await handler.RecertifyOwner(genericOwner, ownerItems, comment, DateTime.Now);
+    }
+}

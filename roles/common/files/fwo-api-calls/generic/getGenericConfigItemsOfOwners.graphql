@@ -1,0 +1,10 @@
+query getGenericConfigItemsOfOwners($mgmIds: [Int!]!, $ownerIds: [Int!]!, $limit: Int!, $offset: Int!) {
+  generic_config_item(
+    where: { mgm_id: { _in: $mgmIds }, owner_id: { _in: $ownerIds }, removed: { _is_null: true } }
+    order_by: [{ mgm_id: asc }, { item_order: asc }, { id: asc }]
+    limit: $limit
+    offset: $offset
+  ) {
+    ...genericConfigItemDetails
+  }
+}

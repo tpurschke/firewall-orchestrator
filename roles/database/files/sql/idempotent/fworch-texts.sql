@@ -243,6 +243,12 @@ INSERT INTO txt VALUES ('OwnerRecertification', 'German', 	'Zert: Eigent&uuml;me
 INSERT INTO txt VALUES ('OwnerRecertification', 'English', 	'Cert: Owner Overview');
 INSERT INTO txt VALUES ('Owners', 'German', 	'Eigent&uuml;mer');
 INSERT INTO txt VALUES ('Owners', 'English', 	'Owners');
+INSERT INTO txt VALUES ('GenericItems',         'German', 	'Generisch: Konfigurationselemente');
+INSERT INTO txt VALUES ('GenericItems',         'English', 	'Generic: Config Items');
+INSERT INTO txt VALUES ('GenericRecertification','German', 	'Generisch: Rezertifizierung');
+INSERT INTO txt VALUES ('GenericRecertification','English', 	'Generic: Recertification');
+INSERT INTO txt VALUES ('GenericUnusedItems',   'German', 	'Generisch: Unbenutzt');
+INSERT INTO txt VALUES ('GenericUnusedItems',   'English', 	'Generic: Unused');
 INSERT INTO txt VALUES ('RecertificationEvent', 'German', 	'Zert: Zertifikat');
 INSERT INTO txt VALUES ('RecertificationEvent', 'English', 	'Cert: Certificate');
 INSERT INTO txt VALUES ('RecertEventReport',    'German', 	'Zert: Zert-Regel-Details');
@@ -668,6 +674,7 @@ INSERT INTO txt VALUES ('whats_new_facts', 'German', '
     <li>Die interne CA kann ohne Unterbrechung der Verbindungen zwischen den Firewall-Orchestrator-Komponenten ersetzt werden: ein Upgrade mit <code>internalca_ca_rotation=prepare</code> verteilt die neue CA an alle Hosts, ein zweites mit <code>internalca_ca_rotation=activate</code> stellt alle Zertifikate auf sie um und entzieht danach der bisherigen CA das Vertrauen.</li>
     <li>UI und Middleware protokollieren bei An- und Abmeldungen die tats&auml;chliche Adresse des Clients statt 127.0.0.1 bzw. der Adresse des UI-Servers. Anmeldungen &uuml;ber die UI werden dadurch je Client-Adresse begrenzt (Standard: 30 Versuche pro Minute); Benutzer hinter einer gemeinsamen Adresse (NAT, Terminalserver, vorgeschalteter Reverse Proxy) teilen sich dieses Limit.</li>
     <li>Modellierung: Der Report &quot;Modell: Soll-Ist&quot;, der Verbindungsstatus (&quot;Status aktualisieren&quot; und die Hintergrund-Analyse) und die Beantragung analysieren nun dieselben Verbindungen auf dieselbe Weise und beachten einheitlich die Einstellung &quot;Gel&ouml;schte App Server ausrollen&quot;. Verbindungen mit Modellierungsproblemen (z.B. leere App-Rollen, gel&ouml;schte Objekte, nicht nutzbare Schnittstellen) f&uuml;hrt der Report mit Grund unter &quot;Nicht analysierte Verbindungen&quot; auf; ihr Verbindungsstatus zeigt kein Soll-Ist-Ergebnis mehr. Reine Dokumentations-Verbindungen werden im Report nicht mehr verglichen. Mit der Option &quot;Gruppen aufl&ouml;sen&quot; z&auml;hlt eine Gruppe in Produktion mit zus&auml;tzlichen Mitgliedern als Abweichung, eine Gruppe mit genau den modellierten Mitgliedern dagegen nicht.</li>
+    <li>Rezertifizierung generischer Konfigurationselemente: Regel&auml;hnliche Elemente von Ger&auml;ten, die keine Firewalls sind, werden importiert, versioniert gespeichert und k&ouml;nnen einzeln oder je Eigent&uuml;mer rezertifiziert werden. Erster Ger&auml;tetyp ist Skyhigh Web Gateway; der Eigent&uuml;mer einer Regel wird aus einer Zeile &quot;owner: &lt;externe App-ID&gt;&quot; in der Regelbeschreibung &uuml;bernommen. Neue Report-Typen &quot;Generisch: Konfigurationselemente&quot;, &quot;Generisch: Rezertifizierung&quot; und &quot;Generisch: Unbenutzt&quot;; f&auml;llige Elemente erscheinen in der Benachrichtigung zur Regel-Rezertifizierung.</li>
     <li>Details: siehe <a target="_blank" href="https://github.com/CactuseSecurity/firewall-orchestrator/releases">Release Notes.</a></li>
 </ul>
 ');
@@ -698,6 +705,7 @@ INSERT INTO txt VALUES ('whats_new_facts', 'English', '
     <li>The internal CA can be replaced without interrupting the connections between the Firewall Orchestrator components: an upgrade with <code>internalca_ca_rotation=prepare</code> distributes the new CA to every host, a second one with <code>internalca_ca_rotation=activate</code> switches all certificates to it and then withdraws trust in the previous CA.</li>
     <li>UI and middleware log the real address of the client with logins and logouts instead of 127.0.0.1 or the address of the UI server. Logins through the UI are thereby limited per client address (default: 30 attempts per minute); users behind one shared address (NAT, terminal server, an upstream reverse proxy) share that limit.</li>
     <li>Modelling: the report &quot;Model: Variances&quot;, the connection state (&quot;Refresh State&quot; and the background analysis) and the request now analyse the same connections in the same way and all follow the setting &quot;Rollout removed App Servers&quot;. The report lists connections with modelling issues (e.g. empty app roles, deleted objects, unusable interfaces) with their reason under &quot;Connections not analysed&quot;; their connection state no longer shows a variance result. Documentation-only connections are no longer compared in the report. With the option &quot;Resolve Groups&quot;, a production group with additional members counts as a difference, while a group with exactly the modelled members does not.</li>
+    <li>Recertification of generic config items: rule-like items of devices which are not firewalls are imported, stored with versions and can be recertified one by one or per owner. The first device type is Skyhigh Web Gateway; the owner of a rule is taken from a line &quot;owner: &lt;external app id&gt;&quot; in the rule description. New report types &quot;Generic: Config Items&quot;, &quot;Generic: Recertification&quot; and &quot;Generic: Unused&quot;; due items appear in the rule recertification notification.</li>
     <li>Details: see <a target="_blank" href="https://github.com/CactuseSecurity/firewall-orchestrator/releases">release notes.</a></li>
 </ul>
 ');
@@ -1553,6 +1561,18 @@ INSERT INTO txt VALUES ('recertify',		    'German', 	'Rezertifizieren');
 INSERT INTO txt VALUES ('recertify',		    'English', 	'Recertify');
 INSERT INTO txt VALUES ('decertify',		    'German', 	'Dezertifizieren');
 INSERT INTO txt VALUES ('decertify',		    'English', 	'Decertify');
+INSERT INTO txt VALUES ('decertified',		    'German', 	'Dezertifiziert');
+INSERT INTO txt VALUES ('decertified',		    'English', 	'Decertified');
+INSERT INTO txt VALUES ('generic_items',		'German', 	'Generische Konfigurationselemente');
+INSERT INTO txt VALUES ('generic_items',		'English', 	'Generic config items');
+INSERT INTO txt VALUES ('generic_no_items',		'German', 	'Keine generischen Konfigurationselemente gefunden');
+INSERT INTO txt VALUES ('generic_no_items',		'English', 	'No generic config items found');
+INSERT INTO txt VALUES ('recertify_owner_generic','German', 	'Alle Elemente des Eigent&uuml;mers rezertifizieren');
+INSERT INTO txt VALUES ('recertify_owner_generic','English', 	'Recertify all items of owner');
+INSERT INTO txt VALUES ('last_used',		    'German', 	'Zuletzt benutzt');
+INSERT INTO txt VALUES ('last_used',		    'English', 	'Last used');
+INSERT INTO txt VALUES ('first_seen',		    'German', 	'Zuerst gesehen');
+INSERT INTO txt VALUES ('first_seen',		    'English', 	'First seen');
 INSERT INTO txt VALUES ('later',		        'German', 	'Sp&auml;ter');
 INSERT INTO txt VALUES ('later',		        'English', 	'None');
 INSERT INTO txt VALUES ('due_within',		    'German', 	'F&auml;llig in (Tagen)');
@@ -4532,6 +4552,8 @@ INSERT INTO txt VALUES ('U4008', 'German',  'Weitere Apps');
 INSERT INTO txt VALUES ('U4008', 'English', 'Further apps');
 INSERT INTO txt VALUES ('U4009', 'German',  'Apps ohne aktive Rezertifizierung');
 INSERT INTO txt VALUES ('U4009', 'English', 'Apps without active recertification');
+INSERT INTO txt VALUES ('U4010', 'German',  'Alle generischen Konfigurationselemente rezertifizieren f&uuml;r den Eigent&uuml;mer');
+INSERT INTO txt VALUES ('U4010', 'English', 'Recertify all generic config items of owner');
 INSERT INTO txt VALUES ('owner_recert_overview', 'German', 'Rezertifizierungs&uuml;bersicht');
 INSERT INTO txt VALUES ('owner_recert_overview', 'English', 'Recertification overview');
 INSERT INTO txt VALUES ('U4501', 'German',  'Sind sie sicher, dass sie folgende Policy l&ouml;schen wollen: ');
@@ -5630,6 +5652,8 @@ INSERT INTO txt VALUES ('H1111', 'English', '<li>gateway (gw, firewall, fw, devi
     <li>phase: restrict workflow ticket reports to the state range of an active workflow phase</li>
     <li>reference_date (reference-date, referencedate): use a specific reference date or event for workflow ticket change reports</li>
 ');
+INSERT INTO txt VALUES ('H1113', 'German',  'Managements generischer Ger&auml;te (z.B. Proxies), &uuml;ber die berichtet wird. Ohne Auswahl werden alle sichtbaren generischen Managements einbezogen.');
+INSERT INTO txt VALUES ('H1113', 'English', 'Managements of generic devices (e.g. proxies) to report on. Without selection all visible generic managements are included.');
 INSERT INTO txt VALUES ('H1131', 'German',  '<li>and (&)</li><li>or (|)</li><li>not (!)</li><li>eq (=, :)</li><li>neq</li><li>(</li><li>)</li>');
 INSERT INTO txt VALUES ('H1131', 'English', '<li>and (&)</li><li>or (|)</li><li>not (!)</li><li>eq (=, :)</li><li>neq</li><li>(</li><li>)</li>');
 INSERT INTO txt VALUES ('H1141', 'German',  '<li> Volltextsuche</li>
@@ -5752,6 +5776,12 @@ INSERT INTO txt VALUES ('H1167a', 'German',  'Workflow: Tickets - Darstellung vo
 INSERT INTO txt VALUES ('H1167a', 'English', 'Workflow: Tickets - display workflow tickets with their current state and related tasks.');
 INSERT INTO txt VALUES ('H1168', 'German',  'Eigent&uuml;mer - Darstellung aller Eigent&uuml;mer mit Kritikalit&auml;t, Lebenszyklusstatus und zus&auml;tzlichen Informationen.');
 INSERT INTO txt VALUES ('H1168', 'English', 'Owners - display all owners with criticality, lifecycle status and additional information.');
+INSERT INTO txt VALUES ('H1169', 'German',  'Generisch: Konfigurationselemente - Darstellung der aktuellen regel&auml;hnlichen Konfigurationselemente generischer Ger&auml;te wie Proxies, je Management mit den f&uuml;r den Ger&auml;tetyp festgelegten Feldern. Eine Zeile kann aufgeklappt werden, um das vollst&auml;ndige Element anzuzeigen.');
+INSERT INTO txt VALUES ('H1169', 'English', 'Generic: Config Items - display the current rule-like config items of generic devices such as proxies, per management with the fields defined for the device type. A row can be expanded to show the complete item.');
+INSERT INTO txt VALUES ('H1170', 'German',  'Generisch: Rezertifizierung - Darstellung der generischen Konfigurationselemente, die innerhalb der angegebenen Anzahl von Tagen zur Rezertifizierung f&auml;llig sind, mit letzter Entscheidung und Rezertifizierer. Kann auf einen Eigent&uuml;mer eingeschr&auml;nkt werden.');
+INSERT INTO txt VALUES ('H1170', 'English', 'Generic: Recertification - display the generic config items due for recertification within the given number of days, with the latest decision and recertifier. Can be restricted to one owner.');
+INSERT INTO txt VALUES ('H1171', 'German',  'Generisch: Unbenutzt - Darstellung der generischen Konfigurationselemente, die seit der angegebenen Anzahl von Tagen nicht benutzt wurden. Nur f&uuml;r Ger&auml;tetypen, die eine letzte Benutzung liefern.');
+INSERT INTO txt VALUES ('H1171', 'English', 'Generic: Unused - display the generic config items not used for the given number of days. Only for device types which deliver a last use.');
 INSERT INTO txt VALUES ('H1201', 'German',  'Vorlagen k&ouml;nnen genutzt werden, um wiederkehrende Reports zu definieren. Diese werden f&uuml;r das Scheduling ben&ouml;tigt.
     Jeder Nutzer kann seine eigenen Vorlagen definieren und sie mit anderen teilen.<br>
     Beim Anlegen einer neuen Vorlage &uuml;ber die Schaltfl&auml;che "Als Vorlage speichern" wird ein Pop-Up-Fenster ge&ouml;ffnet, in dem Name und ein Kommentar vergeben werden k&ouml;nnen.
@@ -6475,6 +6505,16 @@ mutation addSingleOwner {
 }
 </pre>
 ');
+INSERT INTO txt VALUES ('H4036', 'German',  'Generische Konfigurationselemente: Regel&auml;hnliche Elemente von Ger&auml;ten, die keine Firewalls sind (z.B. Proxy-Regeln), werden unterhalb der Firewall-Regeln angezeigt, wenn sie innerhalb des Vorausschau-Zeitraums f&auml;llig sind.<br>
+    Einzelne Elemente werden &uuml;ber "Rezertifizieren" oder "Dezertifizieren" ausgew&auml;hlt und mit "Auswahl ausf&uuml;hren" gespeichert.<br>
+    "Alle Elemente des Eigent&uuml;mers rezertifizieren" rezertifiziert den ausgew&auml;hlten Eigent&uuml;mer zusammen mit allen seinen generischen Elementen.<br>
+    Die n&auml;chste F&auml;lligkeit ergibt sich aus dem Rezertifizierungsintervall des Eigent&uuml;mers bzw. dem allgemeinen Rezertifizierungsintervall.<br>
+    Elemente ohne Entscheidung sind das initiale Rezertifizierungsintervall nach ihrem ersten Import f&auml;llig; dezertifizierte Elemente werden nicht mehr f&auml;llig.');
+INSERT INTO txt VALUES ('H4036', 'English', 'Generic config items: rule-like items of devices which are not firewalls (e.g. proxy rules) are shown below the firewall rules when they are due within the lookahead period.<br>
+    Single items are selected with "Recertify" or "Decertify" and saved with "Execute Selected".<br>
+    "Recertify all items of owner" recertifies the selected owner together with all of its generic items.<br>
+    The next due date results from the recertification interval of the owner or the general recertification interval.<br>
+    Items without decision are due the initial recertification interval after their first import; decertified items are not due any more.');
 
 INSERT INTO txt VALUES ('H4101', 'German',  'Kanal: Legt fest, auf welchem Weg die Nachrichten geschickt werden (z.Zt. nur Email).');
 INSERT INTO txt VALUES ('H4101', 'English', 'Channel: Defines on which way the notificastions are delivered (currently onl email).');

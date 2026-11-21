@@ -5,6 +5,7 @@ using FWO.Config.Api;
 using FWO.Config.Api.Data;
 using FWO.Config.File;
 using FWO.Data;
+using FWO.Data.Generic;
 using FWO.Data.Middleware;
 using FWO.Data.Report;
 using FWO.Encoders;
@@ -12,12 +13,25 @@ using FWO.Logging;
 using FWO.Middleware.Server.Services;
 using FWO.Report;
 using FWO.Services;
+using FWO.Services.Generic;
 using System;
 using System.Linq;
 using System.Text;
 
 namespace FWO.Middleware.Server
 {
+    /// <summary>
+    /// Due firewall rules and generic config items of one owner, each split into upcoming and overdue ones.
+    /// </summary>
+    public sealed record RuleRecertNotificationContent(List<Rule> UpcomingRules, List<Rule> OverdueRules,
+        List<GenericConfigItem> UpcomingItems, List<GenericConfigItem> OverdueItems)
+    {
+        /// <summary>
+        /// Whether nothing is due.
+        /// </summary>
+        public bool IsEmpty => UpcomingRules.Count == 0 && OverdueRules.Count == 0 && UpcomingItems.Count == 0 && OverdueItems.Count == 0;
+    }
+
     /// <summary>
     /// Recertification check class
     /// </summary>
@@ -59,9 +73,11 @@ namespace FWO.Middleware.Server
                         apiConnectionMiddlewareServer);
                     JwtWriter jwtWriter = new(ConfigFile.JwtPrivateKey);
                     ApiConnection apiConnectionReporter = new GraphQlApiConnection(ConfigFile.ApiServerUri ?? throw new ArgumentException("Missing api server url on startup."), jwtWriter.CreateJWTReporterViewall(tokenLifetimeProvider.GetInternalServiceTokenLifetime()));
+                    Dictionary<int, List<GenericConfigItem>> dueGenericItems = await LoadDueGenericItemsByOwner(apiConnectionReporter);
                     await ForEachOwnerUpdatingLastSent(owners, notificationService, async owner =>
                     {
-                        int ownerEmailsSent = await CheckRuleByRule(owner, apiConnectionReporter, notificationService);
+                        int ownerEmailsSent = await CheckRuleByRule(owner, apiConnectionReporter, notificationService,
+                            dueGenericItems.TryGetValue(owner.Id, out List<GenericConfigItem>? ownerItems) ? ownerItems : []);
                         emailsSent += ownerEmailsSent;
                         if (ownerEmailsSent > 0)
                         {
@@ -201,7 +217,7 @@ namespace FWO.Middleware.Server
             return nextCheck;
         }
 
-        private async Task<int> CheckRuleByRule(FwoOwner owner, ApiConnection apiConnection, NotificationService notificationService)
+        private async Task<int> CheckRuleByRule(FwoOwner owner, ApiConnection apiConnection, NotificationService notificationService, List<GenericConfigItem> dueGenericItems)
         {
             List<Rule> openRecerts = await GenerateRulesRecertificationReport(apiConnection, owner);
             List<Rule> upcomingRecerts = [];
@@ -217,7 +233,11 @@ namespace FWO.Middleware.Server
                     overdueRecerts.Add(rule);
                 }
             }
-            if (upcomingRecerts.Count == 0 && overdueRecerts.Count == 0)
+            DateTime now = DateTime.Now;
+            RuleRecertNotificationContent content = new(upcomingRecerts, overdueRecerts,
+                [.. dueGenericItems.Where(item => item.NextRecertDate >= now)],
+                [.. dueGenericItems.Where(item => item.NextRecertDate < now)]);
+            if (content.IsEmpty)
             {
                 return 0;
             }
@@ -225,7 +245,7 @@ namespace FWO.Middleware.Server
             int emailsSent = 0;
             foreach (FwoNotification notification in notificationService.Notifications.Where(n => n.OwnerId == null || n.OwnerId == owner.Id))
             {
-                string body = BuildRulesBody(notification, upcomingRecerts, overdueRecerts, owner.Name);
+                string body = BuildRulesBody(notification, content, owner.Name);
                 emailsSent += await notificationService.SendNotification(notification, owner, body);
             }
             return emailsSent;
@@ -274,6 +294,34 @@ namespace FWO.Middleware.Server
         }
 
         /// <summary>
+        /// Loads the generic config items due within the notice period, per owner; items without owner are not notified.
+        /// </summary>
+        private async Task<Dictionary<int, List<GenericConfigItem>>> LoadDueGenericItemsByOwner(ApiConnection apiConnection)
+        {
+            try
+            {
+                GenericItemService service = new(apiConnection);
+                List<GenericItemManagement> managements = await service.GetGenericManagements(await service.GetKeyConfigs());
+                if (managements.Count == 0)
+                {
+                    return [];
+                }
+                List<GenericConfigItem> items = await service.GetItemsWithRecertState(
+                    [.. managements.Select(management => management.Id)], null, globalConfig.InitialRecertificationPeriod);
+                DateTime now = DateTime.Now;
+                return items
+                    .Where(item => item.OwnerId != null && GenericRecertCalculator.IsDueWithin(item, now, globalConfig.RecertificationNoticePeriod))
+                    .GroupBy(item => item.OwnerId!.Value)
+                    .ToDictionary(group => group.Key, group => group.ToList());
+            }
+            catch (Exception exception)
+            {
+                Log.WriteError(LogMessageTitle, "Loading generic config items due for recertification leads to exception.", exception);
+                return [];
+            }
+        }
+
+        /// <summary>
         /// Sends the owner recertification notifications that are due, each with a body built for its layout.
         /// </summary>
         private async Task<int> SendOwnerNotificationsIfDue(NotificationService notificationService, FwoOwner owner, ReportBase? report)
@@ -298,9 +346,9 @@ namespace FWO.Middleware.Server
         /// <summary>
         /// Builds the rule recertification body in the form the notification's layout needs.
         /// </summary>
-        private string BuildRulesBody(FwoNotification notification, List<Rule> upcomingRecerts, List<Rule> overdueRecerts, string ownerName)
+        private string BuildRulesBody(FwoNotification notification, RuleRecertNotificationContent content, string ownerName)
         {
-            return PrepareRulesBody(upcomingRecerts, overdueRecerts, ownerName, IsHtmlBody(notification));
+            return PrepareRulesBody(content, ownerName, IsHtmlBody(notification));
         }
 
         private static bool IsHtmlBody(FwoNotification notification)
@@ -316,27 +364,39 @@ namespace FWO.Middleware.Server
             return isHtmlBody ? HtmlOutputEncoder.EncodeText(value) : value ?? "";
         }
 
-        private string PrepareRulesBody(List<Rule> upcomingRecerts, List<Rule> overdueRecerts, string ownerName, bool isHtmlBody)
+        private string PrepareRulesBody(RuleRecertNotificationContent content, string ownerName, bool isHtmlBody)
         {
             StringBuilder body = new();
-            if (upcomingRecerts.Count > 0)
+            if (content.UpcomingRules.Count > 0 || content.UpcomingItems.Count > 0)
             {
                 body.AppendLine(globalConfig.RecCheckEmailUpcomingText.Replace(Placeholder.APPNAME, ForBody(ownerName, isHtmlBody)) + "\r\n\r\n");
-                foreach (var rule in upcomingRecerts)
-                {
-                    body.AppendLine(PrepareLine(rule, isHtmlBody));
-                }
+                AppendLines(body, content.UpcomingRules, content.UpcomingItems, isHtmlBody);
             }
             body.AppendLine("\r\n\r\n");
-            if (overdueRecerts.Count > 0)
+            if (content.OverdueRules.Count > 0 || content.OverdueItems.Count > 0)
             {
                 body.AppendLine(globalConfig.RecCheckEmailOverdueText.Replace(Placeholder.APPNAME, ForBody(ownerName, isHtmlBody)) + "\r\n\r\n");
-                foreach (Rule rule in overdueRecerts)
-                {
-                    body.AppendLine(PrepareLine(rule, isHtmlBody));
-                }
+                AppendLines(body, content.OverdueRules, content.OverdueItems, isHtmlBody);
             }
             return body.ToString();
+        }
+
+        private static void AppendLines(StringBuilder body, List<Rule> rules, List<GenericConfigItem> items, bool isHtmlBody)
+        {
+            foreach (Rule rule in rules)
+            {
+                body.AppendLine(PrepareLine(rule, isHtmlBody));
+            }
+            foreach (GenericConfigItem item in items)
+            {
+                body.AppendLine(PrepareGenericLine(item, isHtmlBody));
+            }
+        }
+
+        private static string PrepareGenericLine(GenericConfigItem item, bool isHtmlBody)
+        {
+            return (item.NextRecertDate != null ? DateOnly.FromDateTime(item.NextRecertDate.Value).ToString() : "") + ": "
+                + ForBody(item.Management?.Name, isHtmlBody) + ": " + ForBody(item.DisplayName, isHtmlBody) + ":" + ForBody(item.ItemUid, isHtmlBody) + "\r\n\r\n";
         }
 
         private static string PrepareLine(Rule rule, bool isHtmlBody)

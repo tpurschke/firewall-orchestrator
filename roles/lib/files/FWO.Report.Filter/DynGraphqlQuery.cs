@@ -709,6 +709,9 @@ namespace FWO.Report.Filter
                     case ReportType.Connections:
                     case ReportType.VarianceAnalysis:
                     case ReportType.RecertificationEvent:
+                    case ReportType.GenericItems:
+                    case ReportType.GenericRecertification:
+                    case ReportType.GenericUnusedItems:
                         break;
                     default:
                         Log.WriteError("Filter", $"Unexpected report type found: {reportType}");

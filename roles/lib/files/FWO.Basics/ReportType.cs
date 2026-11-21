@@ -28,7 +28,11 @@ namespace FWO.Basics
         TicketReport = 41,
         TicketChangeReport = 42,
 
-        Owners = 51
+        Owners = 51,
+
+        GenericItems = 61,
+        GenericRecertification = 62,
+        GenericUnusedItems = 63
     }
 
     /// <summary>
@@ -211,6 +215,20 @@ namespace FWO.Basics
             return reportType == ReportType.Owners || reportType == ReportType.OwnerRecertification;
         }
 
+        /// <summary>
+        /// Reports on generic (non-firewall) config items such as proxy rules.
+        /// </summary>
+        public static bool IsGenericReport(this ReportType reportType)
+        {
+            return reportType switch
+            {
+                ReportType.GenericItems or
+                ReportType.GenericRecertification or
+                ReportType.GenericUnusedItems => true,
+                _ => false
+            };
+        }
+
         public static bool IsComplianceReport(this ReportType reportType)
         {
             return reportType == ReportType.ComplianceReport || reportType == ReportType.ComplianceDiffReport;
@@ -254,6 +272,7 @@ namespace FWO.Basics
             return reportType.IsResolvedReport()
                 || reportType.IsComplianceReport()
                 || reportType.IsOwnerReport()
+                || reportType.IsGenericReport()
                 || reportType.IsWorkflowReport() && !detailedView;
         }
 
@@ -287,6 +306,7 @@ namespace FWO.Basics
         {
             return !reportType.IsArchiveOnlyReport() && (
                 visibility.RuleRelated && reportType.IsDeviceRelatedReport() && !reportType.IsModellingReport()
+                || visibility.RuleRelated && reportType.IsGenericReport()
                 || visibility.ModellingRelated && reportType.IsModellingReport() && (modellingOwnerAllowed || reportType.IsOwnerReport())
                 || visibility.OwnerRelated && reportType == ReportType.Owners
                 || visibility.ComplianceRelated && reportType.IsComplianceReport()
@@ -321,6 +341,9 @@ namespace FWO.Basics
                 ReportType.OwnerRecertification,
                 ReportType.RecertEventReport,
                 ReportType.Owners,
+                ReportType.GenericItems,
+                ReportType.GenericRecertification,
+                ReportType.GenericUnusedItems,
                 ReportType.TicketReport,
                 ReportType.TicketChangeReport
             ];

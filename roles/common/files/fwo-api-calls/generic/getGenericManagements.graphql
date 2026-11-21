@@ -1,0 +1,7 @@
+query getGenericManagements($devTypIds: [Int!]!) {
+  management(where: { dev_typ_id: { _in: $devTypIds } }, order_by: { mgm_name: asc }) {
+    mgm_id
+    mgm_name
+    dev_typ_id
+  }
+}

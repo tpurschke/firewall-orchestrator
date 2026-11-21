@@ -1,0 +1,56 @@
+@using FWO.Data.Generic
+@using FWO.Data.Report
+@using FWO.Services.Generic
+
+@inject ApiConnection apiConnection
+@inject UserConfig userConfig
+
+<div class="p-3">
+    <h5 class="text-start" data-toggle="tooltip" title="@(userConfig.PureLine("H1113"))">@(userConfig.GetText("managements"))</h5>
+    <Dropdown ElementType="GenericItemManagement" ElementToString="@(management => management.Name)" Multiselect="true"
+              Elements="managements" SelectedElements="SelectedManagements" SelectedElementsChanged="ManagementsChanged"
+              NoneSelectedText="@(userConfig.GetText("all"))">
+        <ElementTemplate Context="management">
+            @management.Name
+        </ElementTemplate>
+    </Dropdown>
+</div>
+
+@code
+{
+    [CascadingParameter]
+    private Action<Exception?, string, string, bool> DisplayMessageInUi { get; set; } = DefaultInit.DoNothing;
+
+    /// <summary>
+    /// Selected managements; an empty selection reports on all generic managements the user may see.
+    /// </summary>
+    [Parameter]
+    public GenericFilter GenericFilter { get; set; } = new();
+
+    [Parameter]
+    public EventCallback<GenericFilter> GenericFilterChanged { get; set; }
+
+    private List<GenericItemManagement> managements = [];
+
+    private IEnumerable<GenericItemManagement> SelectedManagements =>
+        managements.Where(management => GenericFilter.ManagementIds.Contains(management.Id));
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            GenericItemService service = new(apiConnection);
+            managements = await service.GetGenericManagements(await service.GetKeyConfigs());
+        }
+        catch (Exception exception)
+        {
+            DisplayMessageInUi(exception, userConfig.GetText("managements"), "", true);
+        }
+    }
+
+    private async Task ManagementsChanged(IEnumerable<GenericItemManagement> selected)
+    {
+        GenericFilter.ManagementIds = [.. selected.Select(management => management.Id)];
+        await GenericFilterChanged.InvokeAsync(GenericFilter);
+    }
+}

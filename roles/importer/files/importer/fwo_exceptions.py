@@ -223,3 +223,11 @@ class FwoDeviceWithoutLocalPackageError(Exception):
 
 class ShutdownRequestedError(Exception):
     pass
+
+
+class FwoGenericConfigError(FwoImporterError):
+    """Raised when the config items of a generic (non-firewall) device cannot be read or parsed"""
+
+    def __init__(self, message: str = "Reading generic config items failed"):
+        self.message = message
+        super().__init__(self.message)

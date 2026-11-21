@@ -145,6 +145,18 @@
   become_user: postgres
 
 # the upgrade file is run twice within the test transaction (at its run-upgrade markers), which is always rolled back
+- name: test the generic schema of the 11.0.0 database upgrade
+  command: psql -X -q -v ON_ERROR_STOP=1 -d "{{ fworch_db_name }}"
+  args:
+    stdin: >-
+      {{ lookup('file', 'database/test-upgrade-11.0.0-generic.sql')
+         | replace('-- @run-upgrade-11.0.0', lookup('file', role_path + '/../database/files/upgrade/11.0.0.sql')) }}
+  register: test_upgrade_11_0_0_generic
+  changed_when: false
+  become: true
+  become_user: postgres
+
+# the upgrade file is run twice within the test transaction (at its run-upgrade markers), which is always rolled back
 - name: test the SecureChange template migration of the 9.8.5 database upgrade
   command: psql -X -q -v ON_ERROR_STOP=1 -d "{{ fworch_db_name }}"
   args:

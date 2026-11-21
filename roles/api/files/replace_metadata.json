@@ -11,6 +11,1161 @@
           "tables": [
             {
               "table": {
+                "name": "device_type_key_config",
+                "schema": "generic"
+              },
+              "object_relationships": [
+                {
+                  "name": "device_type",
+                  "using": {
+                    "foreign_key_constraint_on": "dev_typ_id"
+                  }
+                }
+              ],
+              "select_permissions": [
+                {
+                  "role": "auditor",
+                  "permission": {
+                    "columns": [
+                      "id",
+                      "dev_typ_id",
+                      "uid_key",
+                      "name_key",
+                      "order_key",
+                      "owner_key",
+                      "owner_match",
+                      "last_used_key",
+                      "last_used_format",
+                      "reportable_fields"
+                    ],
+                    "filter": {},
+                    "allow_aggregations": true
+                  },
+                  "comment": ""
+                },
+                {
+                  "role": "importer",
+                  "permission": {
+                    "columns": [
+                      "id",
+                      "dev_typ_id",
+                      "uid_key",
+                      "name_key",
+                      "order_key",
+                      "owner_key",
+                      "owner_match",
+                      "last_used_key",
+                      "last_used_format",
+                      "reportable_fields"
+                    ],
+                    "filter": {},
+                    "allow_aggregations": true
+                  },
+                  "comment": ""
+                },
+                {
+                  "role": "middleware-server",
+                  "permission": {
+                    "columns": [
+                      "id",
+                      "dev_typ_id",
+                      "uid_key",
+                      "name_key",
+                      "order_key",
+                      "owner_key",
+                      "owner_match",
+                      "last_used_key",
+                      "last_used_format",
+                      "reportable_fields"
+                    ],
+                    "filter": {},
+                    "allow_aggregations": true
+                  },
+                  "comment": ""
+                },
+                {
+                  "role": "modeller",
+                  "permission": {
+                    "columns": [
+                      "id",
+                      "dev_typ_id",
+                      "uid_key",
+                      "name_key",
+                      "order_key",
+                      "owner_key",
+                      "owner_match",
+                      "last_used_key",
+                      "last_used_format",
+                      "reportable_fields"
+                    ],
+                    "filter": {},
+                    "allow_aggregations": true
+                  },
+                  "comment": ""
+                },
+                {
+                  "role": "recertifier",
+                  "permission": {
+                    "columns": [
+                      "id",
+                      "dev_typ_id",
+                      "uid_key",
+                      "name_key",
+                      "order_key",
+                      "owner_key",
+                      "owner_match",
+                      "last_used_key",
+                      "last_used_format",
+                      "reportable_fields"
+                    ],
+                    "filter": {},
+                    "allow_aggregations": true
+                  },
+                  "comment": ""
+                },
+                {
+                  "role": "reporter",
+                  "permission": {
+                    "columns": [
+                      "id",
+                      "dev_typ_id",
+                      "uid_key",
+                      "name_key",
+                      "order_key",
+                      "owner_key",
+                      "owner_match",
+                      "last_used_key",
+                      "last_used_format",
+                      "reportable_fields"
+                    ],
+                    "filter": {},
+                    "allow_aggregations": true
+                  },
+                  "comment": ""
+                },
+                {
+                  "role": "reporter-viewall",
+                  "permission": {
+                    "columns": [
+                      "id",
+                      "dev_typ_id",
+                      "uid_key",
+                      "name_key",
+                      "order_key",
+                      "owner_key",
+                      "owner_match",
+                      "last_used_key",
+                      "last_used_format",
+                      "reportable_fields"
+                    ],
+                    "filter": {},
+                    "allow_aggregations": true
+                  },
+                  "comment": ""
+                }
+              ]
+            },
+            {
+              "table": {
+                "name": "config_item",
+                "schema": "generic"
+              },
+              "object_relationships": [
+                {
+                  "name": "management",
+                  "using": {
+                    "foreign_key_constraint_on": "mgm_id"
+                  }
+                },
+                {
+                  "name": "owner",
+                  "using": {
+                    "foreign_key_constraint_on": "owner_id"
+                  }
+                },
+                {
+                  "name": "created_import",
+                  "using": {
+                    "foreign_key_constraint_on": "created"
+                  }
+                },
+                {
+                  "name": "removed_import",
+                  "using": {
+                    "foreign_key_constraint_on": "removed"
+                  }
+                }
+              ],
+              "array_relationships": [
+                {
+                  "name": "recertifications",
+                  "using": {
+                    "foreign_key_constraint_on": {
+                      "column": "config_item_id",
+                      "table": {
+                        "name": "recertification",
+                        "schema": "generic"
+                      }
+                    }
+                  }
+                }
+              ],
+              "insert_permissions": [
+                {
+                  "role": "importer",
+                  "permission": {
+                    "check": {},
+                    "columns": [
+                      "mgm_id",
+                      "item_uid",
+                      "item_name",
+                      "item_order",
+                      "config_line",
+                      "owner_id",
+                      "last_used",
+                      "first_seen",
+                      "created",
+                      "removed"
+                    ]
+                  },
+                  "comment": ""
+                }
+              ],
+              "select_permissions": [
+                {
+                  "role": "auditor",
+                  "permission": {
+                    "columns": [
+                      "id",
+                      "mgm_id",
+                      "item_uid",
+                      "item_name",
+                      "item_order",
+                      "config_line",
+                      "owner_id",
+                      "last_used",
+                      "first_seen",
+                      "created",
+                      "removed"
+                    ],
+                    "filter": {},
+                    "allow_aggregations": true
+                  },
+                  "comment": ""
+                },
+                {
+                  "role": "importer",
+                  "permission": {
+                    "columns": [
+                      "id",
+                      "mgm_id",
+                      "item_uid",
+                      "item_name",
+                      "item_order",
+                      "config_line",
+                      "owner_id",
+                      "last_used",
+                      "first_seen",
+                      "created",
+                      "removed"
+                    ],
+                    "filter": {},
+                    "allow_aggregations": true
+                  },
+                  "comment": ""
+                },
+                {
+                  "role": "middleware-server",
+                  "permission": {
+                    "columns": [
+                      "id",
+                      "mgm_id",
+                      "item_uid",
+                      "item_name",
+                      "item_order",
+                      "config_line",
+                      "owner_id",
+                      "last_used",
+                      "first_seen",
+                      "created",
+                      "removed"
+                    ],
+                    "filter": {},
+                    "allow_aggregations": true
+                  },
+                  "comment": ""
+                },
+                {
+                  "role": "modeller",
+                  "permission": {
+                    "columns": [
+                      "id",
+                      "mgm_id",
+                      "item_uid",
+                      "item_name",
+                      "item_order",
+                      "config_line",
+                      "owner_id",
+                      "last_used",
+                      "first_seen",
+                      "created",
+                      "removed"
+                    ],
+                    "filter": {
+                      "_and": [
+                        {
+                          "_or": [
+                            {
+                              "_exists": {
+                                "_table": {
+                                  "name": "tenant",
+                                  "schema": "public"
+                                },
+                                "_where": {
+                                  "_and": [
+                                    {
+                                      "tenant_id": {
+                                        "_eq": "x-hasura-tenant-id"
+                                      }
+                                    },
+                                    {
+                                      "tenant_id": {
+                                        "_eq": 1
+                                      }
+                                    }
+                                  ]
+                                }
+                              }
+                            },
+                            {
+                              "mgm_id": {
+                                "_in": "x-hasura-visible-managements"
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "owner_id": {
+                            "_in": "x-hasura-editable-owners"
+                          }
+                        }
+                      ]
+                    },
+                    "allow_aggregations": true
+                  },
+                  "comment": ""
+                },
+                {
+                  "role": "recertifier",
+                  "permission": {
+                    "columns": [
+                      "id",
+                      "mgm_id",
+                      "item_uid",
+                      "item_name",
+                      "item_order",
+                      "config_line",
+                      "owner_id",
+                      "last_used",
+                      "first_seen",
+                      "created",
+                      "removed"
+                    ],
+                    "filter": {
+                      "_and": [
+                        {
+                          "_or": [
+                            {
+                              "_exists": {
+                                "_table": {
+                                  "name": "tenant",
+                                  "schema": "public"
+                                },
+                                "_where": {
+                                  "_and": [
+                                    {
+                                      "tenant_id": {
+                                        "_eq": "x-hasura-tenant-id"
+                                      }
+                                    },
+                                    {
+                                      "tenant_id": {
+                                        "_eq": 1
+                                      }
+                                    }
+                                  ]
+                                }
+                              }
+                            },
+                            {
+                              "mgm_id": {
+                                "_in": "x-hasura-visible-managements"
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "_or": [
+                            {
+                              "owner_id": {
+                                "_in": "x-hasura-recertifiable-owners"
+                              }
+                            },
+                            {
+                              "owner_id": {
+                                "_in": "x-hasura-editable-owners"
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    "allow_aggregations": true
+                  },
+                  "comment": ""
+                },
+                {
+                  "role": "reporter",
+                  "permission": {
+                    "columns": [
+                      "id",
+                      "mgm_id",
+                      "item_uid",
+                      "item_name",
+                      "item_order",
+                      "config_line",
+                      "owner_id",
+                      "last_used",
+                      "first_seen",
+                      "created",
+                      "removed"
+                    ],
+                    "filter": {
+                      "_or": [
+                        {
+                          "_exists": {
+                            "_table": {
+                              "name": "tenant",
+                              "schema": "public"
+                            },
+                            "_where": {
+                              "_and": [
+                                {
+                                  "tenant_id": {
+                                    "_eq": "x-hasura-tenant-id"
+                                  }
+                                },
+                                {
+                                  "tenant_id": {
+                                    "_eq": 1
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        },
+                        {
+                          "mgm_id": {
+                            "_in": "x-hasura-visible-managements"
+                          }
+                        }
+                      ]
+                    },
+                    "allow_aggregations": true
+                  },
+                  "comment": ""
+                },
+                {
+                  "role": "reporter-viewall",
+                  "permission": {
+                    "columns": [
+                      "id",
+                      "mgm_id",
+                      "item_uid",
+                      "item_name",
+                      "item_order",
+                      "config_line",
+                      "owner_id",
+                      "last_used",
+                      "first_seen",
+                      "created",
+                      "removed"
+                    ],
+                    "filter": {},
+                    "allow_aggregations": true
+                  },
+                  "comment": ""
+                }
+              ],
+              "update_permissions": [
+                {
+                  "role": "importer",
+                  "permission": {
+                    "columns": [
+                      "item_order",
+                      "last_used",
+                      "removed"
+                    ],
+                    "filter": {},
+                    "check": {}
+                  },
+                  "comment": ""
+                }
+              ],
+              "delete_permissions": [
+                {
+                  "role": "importer",
+                  "permission": {
+                    "filter": {}
+                  },
+                  "comment": "rollback of a failed import deletes the items it created"
+                }
+              ]
+            },
+            {
+              "table": {
+                "name": "recertification",
+                "schema": "generic"
+              },
+              "object_relationships": [
+                {
+                  "name": "config_item",
+                  "using": {
+                    "foreign_key_constraint_on": "config_item_id"
+                  }
+                },
+                {
+                  "name": "owner",
+                  "using": {
+                    "foreign_key_constraint_on": "owner_id"
+                  }
+                },
+                {
+                  "name": "owner_recertification",
+                  "using": {
+                    "foreign_key_constraint_on": "owner_recert_id"
+                  }
+                }
+              ],
+              "insert_permissions": [
+                {
+                  "role": "recertifier",
+                  "permission": {
+                    "check": {
+                      "_and": [
+                        {
+                          "owner_id": {
+                            "_in": "x-hasura-recertifiable-owners"
+                          }
+                        },
+                        {
+                          "config_item": {
+                            "owner_id": {
+                              "_in": "x-hasura-recertifiable-owners"
+                            }
+                          }
+                        },
+                        {
+                          "user_dn": {
+                            "_eq": "x-hasura-uuid"
+                          }
+                        },
+                        {
+                          "_or": [
+                            {
+                              "owner_recert_id": {
+                                "_is_null": true
+                              }
+                            },
+                            {
+                              "owner_recertification": {
+                                "owner_id": {
+                                  "_in": "x-hasura-recertifiable-owners"
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    "columns": [
+                      "config_item_id",
+                      "owner_id",
+                      "user_dn",
+                      "recertified",
+                      "comment",
+                      "next_recert_date",
+                      "owner_recert_id"
+                    ]
+                  },
+                  "comment": "append-only: recertifiers record decisions for items of their recertifiable owners under their own DN; recert_date is set by the database"
+                }
+              ],
+              "select_permissions": [
+                {
+                  "role": "auditor",
+                  "permission": {
+                    "columns": [
+                      "id",
+                      "config_item_id",
+                      "owner_id",
+                      "user_dn",
+                      "recertified",
+                      "recert_date",
+                      "comment",
+                      "next_recert_date",
+                      "owner_recert_id"
+                    ],
+                    "filter": {},
+                    "allow_aggregations": true
+                  },
+                  "comment": ""
+                },
+                {
+                  "role": "middleware-server",
+                  "permission": {
+                    "columns": [
+                      "id",
+                      "config_item_id",
+                      "owner_id",
+                      "user_dn",
+                      "recertified",
+                      "recert_date",
+                      "comment",
+                      "next_recert_date",
+                      "owner_recert_id"
+                    ],
+                    "filter": {},
+                    "allow_aggregations": true
+                  },
+                  "comment": ""
+                },
+                {
+                  "role": "modeller",
+                  "permission": {
+                    "columns": [
+                      "id",
+                      "config_item_id",
+                      "owner_id",
+                      "user_dn",
+                      "recertified",
+                      "recert_date",
+                      "comment",
+                      "next_recert_date",
+                      "owner_recert_id"
+                    ],
+                    "filter": {
+                      "_and": [
+                        {
+                          "_or": [
+                            {
+                              "_exists": {
+                                "_table": {
+                                  "name": "tenant",
+                                  "schema": "public"
+                                },
+                                "_where": {
+                                  "_and": [
+                                    {
+                                      "tenant_id": {
+                                        "_eq": "x-hasura-tenant-id"
+                                      }
+                                    },
+                                    {
+                                      "tenant_id": {
+                                        "_eq": 1
+                                      }
+                                    }
+                                  ]
+                                }
+                              }
+                            },
+                            {
+                              "config_item": {
+                                "mgm_id": {
+                                  "_in": "x-hasura-visible-managements"
+                                }
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "owner_id": {
+                            "_in": "x-hasura-editable-owners"
+                          }
+                        }
+                      ]
+                    },
+                    "allow_aggregations": true
+                  },
+                  "comment": ""
+                },
+                {
+                  "role": "recertifier",
+                  "permission": {
+                    "columns": [
+                      "id",
+                      "config_item_id",
+                      "owner_id",
+                      "user_dn",
+                      "recertified",
+                      "recert_date",
+                      "comment",
+                      "next_recert_date",
+                      "owner_recert_id"
+                    ],
+                    "filter": {
+                      "_and": [
+                        {
+                          "_or": [
+                            {
+                              "_exists": {
+                                "_table": {
+                                  "name": "tenant",
+                                  "schema": "public"
+                                },
+                                "_where": {
+                                  "_and": [
+                                    {
+                                      "tenant_id": {
+                                        "_eq": "x-hasura-tenant-id"
+                                      }
+                                    },
+                                    {
+                                      "tenant_id": {
+                                        "_eq": 1
+                                      }
+                                    }
+                                  ]
+                                }
+                              }
+                            },
+                            {
+                              "config_item": {
+                                "mgm_id": {
+                                  "_in": "x-hasura-visible-managements"
+                                }
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "_or": [
+                            {
+                              "owner_id": {
+                                "_in": "x-hasura-recertifiable-owners"
+                              }
+                            },
+                            {
+                              "owner_id": {
+                                "_in": "x-hasura-editable-owners"
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    "allow_aggregations": true
+                  },
+                  "comment": ""
+                },
+                {
+                  "role": "reporter",
+                  "permission": {
+                    "columns": [
+                      "id",
+                      "config_item_id",
+                      "owner_id",
+                      "user_dn",
+                      "recertified",
+                      "recert_date",
+                      "comment",
+                      "next_recert_date",
+                      "owner_recert_id"
+                    ],
+                    "filter": {
+                      "_or": [
+                        {
+                          "_exists": {
+                            "_table": {
+                              "name": "tenant",
+                              "schema": "public"
+                            },
+                            "_where": {
+                              "_and": [
+                                {
+                                  "tenant_id": {
+                                    "_eq": "x-hasura-tenant-id"
+                                  }
+                                },
+                                {
+                                  "tenant_id": {
+                                    "_eq": 1
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        },
+                        {
+                          "config_item": {
+                            "mgm_id": {
+                              "_in": "x-hasura-visible-managements"
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    "allow_aggregations": true
+                  },
+                  "comment": ""
+                },
+                {
+                  "role": "reporter-viewall",
+                  "permission": {
+                    "columns": [
+                      "id",
+                      "config_item_id",
+                      "owner_id",
+                      "user_dn",
+                      "recertified",
+                      "recert_date",
+                      "comment",
+                      "next_recert_date",
+                      "owner_recert_id"
+                    ],
+                    "filter": {},
+                    "allow_aggregations": true
+                  },
+                  "comment": ""
+                }
+              ]
+            },
+            {
+              "table": {
+                "name": "owner_recertification",
+                "schema": "generic"
+              },
+              "object_relationships": [
+                {
+                  "name": "owner",
+                  "using": {
+                    "foreign_key_constraint_on": "owner_id"
+                  }
+                },
+                {
+                  "name": "report",
+                  "using": {
+                    "foreign_key_constraint_on": "report_id"
+                  }
+                }
+              ],
+              "array_relationships": [
+                {
+                  "name": "recertifications",
+                  "using": {
+                    "foreign_key_constraint_on": {
+                      "column": "owner_recert_id",
+                      "table": {
+                        "name": "recertification",
+                        "schema": "generic"
+                      }
+                    }
+                  }
+                }
+              ],
+              "insert_permissions": [
+                {
+                  "role": "recertifier",
+                  "permission": {
+                    "check": {
+                      "_and": [
+                        {
+                          "owner_id": {
+                            "_in": "x-hasura-recertifiable-owners"
+                          }
+                        },
+                        {
+                          "user_dn": {
+                            "_eq": "x-hasura-uuid"
+                          }
+                        }
+                      ]
+                    },
+                    "columns": [
+                      "owner_id",
+                      "user_dn",
+                      "recertified",
+                      "comment",
+                      "next_recert_date"
+                    ]
+                  },
+                  "comment": "append-only: recertifiers record owner decisions for their recertifiable owners under their own DN"
+                }
+              ],
+              "select_permissions": [
+                {
+                  "role": "auditor",
+                  "permission": {
+                    "columns": [
+                      "id",
+                      "owner_id",
+                      "user_dn",
+                      "recertified",
+                      "recert_date",
+                      "comment",
+                      "next_recert_date",
+                      "report_id"
+                    ],
+                    "filter": {},
+                    "allow_aggregations": true
+                  },
+                  "comment": ""
+                },
+                {
+                  "role": "middleware-server",
+                  "permission": {
+                    "columns": [
+                      "id",
+                      "owner_id",
+                      "user_dn",
+                      "recertified",
+                      "recert_date",
+                      "comment",
+                      "next_recert_date",
+                      "report_id"
+                    ],
+                    "filter": {},
+                    "allow_aggregations": true
+                  },
+                  "comment": ""
+                },
+                {
+                  "role": "modeller",
+                  "permission": {
+                    "columns": [
+                      "id",
+                      "owner_id",
+                      "user_dn",
+                      "recertified",
+                      "recert_date",
+                      "comment",
+                      "next_recert_date",
+                      "report_id"
+                    ],
+                    "filter": {
+                      "_and": [
+                        {
+                          "_or": [
+                            {
+                              "_exists": {
+                                "_table": {
+                                  "name": "tenant",
+                                  "schema": "public"
+                                },
+                                "_where": {
+                                  "_and": [
+                                    {
+                                      "tenant_id": {
+                                        "_eq": "x-hasura-tenant-id"
+                                      }
+                                    },
+                                    {
+                                      "tenant_id": {
+                                        "_eq": 1
+                                      }
+                                    }
+                                  ]
+                                }
+                              }
+                            },
+                            {
+                              "owner": {
+                                "_or": [
+                                  {
+                                    "tenant_id": {
+                                      "_is_null": true
+                                    }
+                                  },
+                                  {
+                                    "tenant_id": {
+                                      "_eq": "x-hasura-tenant-id"
+                                    }
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "owner_id": {
+                            "_in": "x-hasura-editable-owners"
+                          }
+                        }
+                      ]
+                    },
+                    "allow_aggregations": true
+                  },
+                  "comment": ""
+                },
+                {
+                  "role": "recertifier",
+                  "permission": {
+                    "columns": [
+                      "id",
+                      "owner_id",
+                      "user_dn",
+                      "recertified",
+                      "recert_date",
+                      "comment",
+                      "next_recert_date",
+                      "report_id"
+                    ],
+                    "filter": {
+                      "_and": [
+                        {
+                          "_or": [
+                            {
+                              "_exists": {
+                                "_table": {
+                                  "name": "tenant",
+                                  "schema": "public"
+                                },
+                                "_where": {
+                                  "_and": [
+                                    {
+                                      "tenant_id": {
+                                        "_eq": "x-hasura-tenant-id"
+                                      }
+                                    },
+                                    {
+                                      "tenant_id": {
+                                        "_eq": 1
+                                      }
+                                    }
+                                  ]
+                                }
+                              }
+                            },
+                            {
+                              "owner": {
+                                "_or": [
+                                  {
+                                    "tenant_id": {
+                                      "_is_null": true
+                                    }
+                                  },
+                                  {
+                                    "tenant_id": {
+                                      "_eq": "x-hasura-tenant-id"
+                                    }
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "_or": [
+                            {
+                              "owner_id": {
+                                "_in": "x-hasura-recertifiable-owners"
+                              }
+                            },
+                            {
+                              "owner_id": {
+                                "_in": "x-hasura-editable-owners"
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    "allow_aggregations": true
+                  },
+                  "comment": ""
+                },
+                {
+                  "role": "reporter",
+                  "permission": {
+                    "columns": [
+                      "id",
+                      "owner_id",
+                      "user_dn",
+                      "recertified",
+                      "recert_date",
+                      "comment",
+                      "next_recert_date",
+                      "report_id"
+                    ],
+                    "filter": {
+                      "_or": [
+                        {
+                          "_exists": {
+                            "_table": {
+                              "name": "tenant",
+                              "schema": "public"
+                            },
+                            "_where": {
+                              "_and": [
+                                {
+                                  "tenant_id": {
+                                    "_eq": "x-hasura-tenant-id"
+                                  }
+                                },
+                                {
+                                  "tenant_id": {
+                                    "_eq": 1
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        },
+                        {
+                          "owner": {
+                            "_or": [
+                              {
+                                "tenant_id": {
+                                  "_is_null": true
+                                }
+                              },
+                              {
+                                "tenant_id": {
+                                  "_eq": "x-hasura-tenant-id"
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    },
+                    "allow_aggregations": true
+                  },
+                  "comment": ""
+                },
+                {
+                  "role": "reporter-viewall",
+                  "permission": {
+                    "columns": [
+                      "id",
+                      "owner_id",
+                      "user_dn",
+                      "recertified",
+                      "recert_date",
+                      "comment",
+                      "next_recert_date",
+                      "report_id"
+                    ],
+                    "filter": {},
+                    "allow_aggregations": true
+                  },
+                  "comment": ""
+                }
+              ]
+            },
+            {
+              "table": {
                 "name": "criterion",
                 "schema": "compliance"
               },
@@ -15600,6 +16755,18 @@
                 }
               ],
               "select_permissions": [
+                {
+                  "role": "importer",
+                  "permission": {
+                    "columns": [
+                      "id",
+                      "name",
+                      "app_id_external"
+                    ],
+                    "filter": {}
+                  },
+                  "comment": "owner mapping of generic config items (owner name or external app id)"
+                },
                 {
                   "role": "approver",
                   "permission": {

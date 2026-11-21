@@ -33,6 +33,15 @@ class ImportStatisticsController:
             + self.statistics.rulebase_delete_count
             + self.statistics.rulebase_link_add_count
             + self.statistics.rulebase_link_delete_count
+            + self.get_generic_item_change_number()
+        )
+
+    def get_generic_item_change_number(self) -> int:
+        """Number of changed generic (non-firewall) config items; they do not count as firewall policy changes."""
+        return (
+            self.statistics.generic_item_add_count
+            + self.statistics.generic_item_delete_count
+            + self.statistics.generic_item_change_count
         )
 
     def get_rule_change_number(self) -> int:

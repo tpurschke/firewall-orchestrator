@@ -44,11 +44,16 @@
         {
             <ReportOwnerParamSelection @bind-OwnerFilter="actReportFilters.OwnerFilter" />
         }
-        @if(actReportFilters.ReportType == ReportType.Recertification || actReportFilters.ReportType == ReportType.OwnerRecertification)
+        @if(actReportFilters.ReportType.IsGenericReport())
+        {
+            <ReportGenericParamSelection @bind-GenericFilter="actReportFilters.GenericFilter" />
+        }
+        @if(actReportFilters.ReportType == ReportType.Recertification || actReportFilters.ReportType == ReportType.OwnerRecertification
+            || actReportFilters.ReportType == ReportType.GenericRecertification)
         {
             <ReportRecertParamSelection @bind-FilterInput="filterInput" @bind-RecertFilter="actReportFilters.RecertFilter" ReportType="actReportFilters.ReportType" />
         }
-        @if(actReportFilters.ReportType == ReportType.UnusedRules)
+        @if(actReportFilters.ReportType == ReportType.UnusedRules || actReportFilters.ReportType == ReportType.GenericUnusedItems)
         {
             <div class="p-3">
                 <h5 class="text-start">@(userConfig.GetText("unused_days"))</h5>
@@ -218,6 +223,13 @@
 
                             case ReportType.Owners:
                                 <OwnersReport OwnerData="currentReport.ReportData.OwnerData" />
+                                break;
+
+                            case ReportType.GenericItems:
+                            case ReportType.GenericRecertification:
+                            case ReportType.GenericUnusedItems:
+                                <GenericItemTable Items="currentReport.ReportData.GenericItems" KeyConfigs="currentReport.ReportData.GenericKeyConfigs"
+                                                  ReportType="currentReport.ReportType" PageSize="rulesPerPage" />
                                 break;
 
                             case ReportType.RecertEventReport:
@@ -636,7 +648,8 @@
     {
         return !reportType.IsComplianceReport()
             && !reportType.IsWorkflowReport()
-            && !reportType.IsOwnerReport();
+            && !reportType.IsOwnerReport()
+            && !reportType.IsGenericReport();
     }
 
     private void SelectTime()

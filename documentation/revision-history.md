@@ -1,5 +1,13 @@
 # Firewall Orchestrator Revision History
 
+## 11.0.0 - 21.11.2026
+- recertification of generic (non-firewall) config items such as proxy rules (#5786)
+  - new database schema `generic`: per device type key configuration, versioned config items, item and owner recertification
+  - new importer module for Skyhigh Web Gateway (device type 33); the owner of a rule is taken from an `owner:` tag in the rule description
+  - new report types: generic items (61), generic recertification (62) and unused generic items (63)
+  - recertification page: recertify single generic items or all generic items of an owner
+  - the daily recertification check includes due generic items in the rule recertification notification
+
 ## 9.9.4 - 17.11.2026
 - middleware REST API: `Rule/GetRulesByFilter` accepts `RuleUid` as an exact third selector alongside `OwnerId` and `IpAddress`; all current non-removed matches are ordered by rule ID and use the existing paging and SIEM logging behavior
 - request workflow: new state action "Create external requests" (`CreateExtRequests`) implements a ticket step by step through external requests, ordered by request task and implementation task, at most one active request per ticket

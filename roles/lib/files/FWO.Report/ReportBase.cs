@@ -211,6 +211,9 @@ namespace FWO.Report
                 ReportType.TicketReport => new ReportTickets(query, userConfig, repType, workflowFilter),
                 ReportType.TicketChangeReport => new ReportTicketChanges(query, userConfig, repType, workflowFilter),
                 ReportType.Owners => new ReportOwners(query, userConfig, repType),
+                ReportType.GenericItems or
+                ReportType.GenericRecertification or
+                ReportType.GenericUnusedItems => new ReportGenericItems(query, userConfig, repType, reportFilter.ReportParams),
                 _ => throw new NotSupportedException("Report Type is not supported."),
             };
         }

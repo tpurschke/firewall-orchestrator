@@ -1,0 +1,12 @@
+query getActiveGenericConfigItems($mgmId: Int!) {
+  generic_config_item(where: { mgm_id: { _eq: $mgmId }, removed: { _is_null: true } }) {
+    id
+    item_uid
+    item_name
+    item_order
+    config_line
+    owner_id
+    last_used
+    first_seen
+  }
+}

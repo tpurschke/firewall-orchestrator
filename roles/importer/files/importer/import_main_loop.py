@@ -112,8 +112,9 @@ def import_single_management(
         wait_with_shutdown_check(sleep_timer)
         return
 
-    # only handle CPR8x Manager, fortiManager, Cisco MgmCenter, Palo Panorama, Palo FW, FortiOS REST, Cisco Asa, Asa on FirePower
-    if mgm_details["deviceType"]["id"] not in (9, 12, 17, 22, 23, 24, 28, 29):
+    # only handle CPR8x Manager, fortiManager, Cisco MgmCenter, Palo Panorama, Palo FW, FortiOS REST, Cisco Asa, Asa on FirePower,
+    # Skyhigh Web Gateway (generic config items)
+    if mgm_details["deviceType"]["id"] not in (9, 12, 17, 22, 23, 24, 28, 29, 33):
         return
 
     FWOLogger.debug(f"import_main_loop: starting import of mgm_id={mgm_id}")

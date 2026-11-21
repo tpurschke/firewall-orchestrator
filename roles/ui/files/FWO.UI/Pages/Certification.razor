@@ -114,6 +114,8 @@
     <RulesReport Recertification="true" ReadonlyMode="@( !CanWriteSelectedOwner() )" Managements="managementsReport"
                  RulesPerPage="rulesPerPage" @bind-SelectedRules="selectedRules"
                  SelectedReportType="ReportType.Recertification" />
+    <GenericRecertSection @ref="genericRecertSection" SelectedOwner="selectedOwner" RecertifiableOwnerIds="recertifiableOwnerIds"
+                          ReadableOwnerIds="@([.. collectedOwnerships.Select(owner => owner.Id)])" />
 </div>
 
 <PopUp Title="@(userConfig.GetText("add_comment"))" Show="@AddCommentMode" Size=PopupSize.Large
@@ -174,6 +176,7 @@
     private List<Rule> selectedRules = [];
 
     private ReportBase? currentReport;
+    private GenericRecertSection? genericRecertSection;
 
     private bool AddCommentMode = false;
     private string actComment = "";
@@ -243,9 +246,17 @@
 
         try
         {
-            if (!deviceFilter.IsAnyDeviceFilterSet()) // display pop-up with warning
+            if (genericRecertSection != null)
             {
-                DisplayMessageInUi(null, userConfig.GetText("no_device_selected"), userConfig.GetText("E1001"), true);
+                await genericRecertSection.Load(recertLookAheadDays);
+            }
+            if (!deviceFilter.IsAnyDeviceFilterSet())
+            {
+                // without firewall device selection only the generic items are loaded
+                if (genericRecertSection?.HasGenericManagements != true)
+                {
+                    DisplayMessageInUi(null, userConfig.GetText("no_device_selected"), userConfig.GetText("E1001"), true);
+                }
                 processing = false;
                 return;
             }

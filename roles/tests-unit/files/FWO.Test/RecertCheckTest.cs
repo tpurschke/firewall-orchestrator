@@ -6,6 +6,7 @@ using FWO.Basics;
 using FWO.Config.Api;
 using FWO.Config.Api.Data;
 using FWO.Data;
+using FWO.Data.Generic;
 using FWO.Data.Report;
 using FWO.Data.Workflow;
 using FWO.Middleware.Server;
@@ -330,7 +331,7 @@ namespace FWO.Test
             List<Rule> overdueRules = [];
 
             string ownerBody = InvokePrivate<string>(recertCheck, "BuildOwnerBody", notification, owner);
-            string rulesBody = InvokePrivate<string>(recertCheck, "BuildRulesBody", notification, upcomingRules, overdueRules, kPayload);
+            string rulesBody = InvokePrivate<string>(recertCheck, "BuildRulesBody", notification, RulesOnly(upcomingRules, overdueRules), kPayload);
 
             string expectedValue = encoded ? System.Net.WebUtility.HtmlEncode(kPayload) : kPayload;
             Assert.Multiple(() =>
@@ -351,7 +352,7 @@ namespace FWO.Test
             List<Rule> overdueRules = [];
 
             string ownerBody = InvokePrivate<string>(recertCheck, "PrepareOwnerBody", owner, isHtmlBody);
-            string rulesBody = InvokePrivate<string>(recertCheck, "PrepareRulesBody", upcomingRules, overdueRules, kPayload, isHtmlBody);
+            string rulesBody = InvokePrivate<string>(recertCheck, "PrepareRulesBody", RulesOnly(upcomingRules, overdueRules), kPayload, isHtmlBody);
 
             string expectedValue = isHtmlBody ? System.Net.WebUtility.HtmlEncode(kPayload) : kPayload;
             Assert.Multiple(() =>
@@ -401,7 +402,7 @@ namespace FWO.Test
             Rule upcomingRule = CreateRule("Upcoming Rule", "UID-UP", new DateTime(2026, 7, 24));
             Rule overdueRule = CreateRule("Overdue Rule", "UID-OVER", new DateTime(2026, 7, 10));
 
-            string body = InvokePrivate<string>(recertCheck, "PrepareRulesBody", new List<Rule> { upcomingRule }, new List<Rule> { overdueRule }, "Owner A", false);
+            string body = InvokePrivate<string>(recertCheck, "PrepareRulesBody", RulesOnly([upcomingRule], [overdueRule]), "Owner A", false);
 
             Assert.Multiple(() =>
             {
@@ -413,6 +414,100 @@ namespace FWO.Test
                 Assert.That(body, Does.Contain("UID-UP"));
                 Assert.That(body, Does.Contain("UID-OVER"));
             });
+        }
+
+        [TestCase(true)]
+        [TestCase(false)]
+        public void PrepareRulesBody_ListsGenericItemsEncodedOnlyForHtmlBodies(bool isHtmlBody)
+        {
+            const string kPayload = "<b>x</b>\" onmouseover=\"x'";
+            SimulatedGlobalConfig globalConfig = CreateGlobalConfig();
+            globalConfig.RecCheckEmailUpcomingText = kUpcomingText;
+            globalConfig.RecCheckEmailOverdueText = kOverdueText;
+            RecertCheck recertCheck = CreateRecertCheck(new RecertCheckApiConnection(), globalConfig);
+            GenericConfigItem upcomingItem = new()
+            {
+                ItemUid = kPayload,
+                ItemName = "Proxy Rule Up",
+                NextRecertDate = new DateTime(2026, 7, 24),
+                Management = new GenericItemManagement { Name = kPayload }
+            };
+            GenericConfigItem overdueItem = new() { ItemUid = "UID-OVER", NextRecertDate = null };
+            RuleRecertNotificationContent content = new([], [], [upcomingItem], [overdueItem]);
+
+            string body = InvokePrivate<string>(recertCheck, "PrepareRulesBody", content, "Owner A", isHtmlBody);
+
+            string expectedValue = isHtmlBody ? System.Net.WebUtility.HtmlEncode(kPayload) : kPayload;
+            Assert.Multiple(() =>
+            {
+                Assert.That(body, Does.Contain("upcoming"));
+                Assert.That(body, Does.Contain("overdue"));
+                Assert.That(body, Does.Contain("Proxy Rule Up"));
+                Assert.That(body, Does.Contain(DateOnly.FromDateTime(new DateTime(2026, 7, 24)).ToString()));
+                // the item without name is shown with its uid as name and as uid
+                Assert.That(body.Split("UID-OVER").Length - 1, Is.EqualTo(2));
+                // management name and uid of the upcoming item
+                Assert.That(body.Split(expectedValue).Length - 1, Is.EqualTo(2));
+                Assert.That(body.Contains("<b>x</b>"), Is.EqualTo(!isHtmlBody));
+            });
+        }
+
+        [Test]
+        public void RuleRecertNotificationContent_IsEmptyOnlyWithoutRulesAndItems()
+        {
+            Assert.Multiple(() =>
+            {
+                Assert.That(new RuleRecertNotificationContent([], [], [], []).IsEmpty, Is.True);
+                Assert.That(new RuleRecertNotificationContent([], [], [], [new GenericConfigItem()]).IsEmpty, Is.False);
+                Assert.That(new RuleRecertNotificationContent([new Rule()], [], [], []).IsEmpty, Is.False);
+            });
+        }
+
+        [Test]
+        public async Task LoadDueGenericItemsByOwner_GroupsDueItemsOfOwnedItems()
+        {
+            SimulatedGlobalConfig globalConfig = CreateGlobalConfig();
+            globalConfig.RecertificationNoticePeriod = 10;
+            globalConfig.InitialRecertificationPeriod = 30;
+            RecertCheck recertCheck = CreateRecertCheck(new RecertCheckApiConnection(), globalConfig);
+            GenericItemManagement proxy = new() { Id = 1, Name = "proxy", DevTypId = 33 };
+            SimulatedGenericApiConnection genericApi = new()
+            {
+                KeyConfigs = [new GenericKeyConfig { DevTypId = 33 }],
+                Managements = [proxy],
+                Items =
+                [
+                    new GenericConfigItem { Id = 1, MgmId = 1, ItemUid = "due", OwnerId = 7, FirstSeen = DateTime.Now.AddDays(-100), Management = proxy },
+                    new GenericConfigItem { Id = 2, MgmId = 1, ItemUid = "soon", OwnerId = 7, FirstSeen = DateTime.Now.AddDays(-25), Management = proxy },
+                    new GenericConfigItem { Id = 3, MgmId = 1, ItemUid = "later", OwnerId = 7, FirstSeen = DateTime.Now, Management = proxy },
+                    new GenericConfigItem { Id = 4, MgmId = 1, ItemUid = "unowned", FirstSeen = DateTime.Now.AddDays(-100), Management = proxy }
+                ]
+            };
+
+            Dictionary<int, List<GenericConfigItem>> dueItems = await InvokePrivateAsync<Dictionary<int, List<GenericConfigItem>>>(
+                recertCheck, "LoadDueGenericItemsByOwner", genericApi);
+
+            Assert.That(dueItems.Keys, Is.EqualTo([7]));
+            Assert.That(dueItems[7].Select(item => item.ItemUid), Is.EquivalentTo(["due", "soon"]));
+        }
+
+        [Test]
+        public async Task LoadDueGenericItemsByOwner_IsEmptyWithoutGenericManagementsOrOnErrors()
+        {
+            RecertCheck recertCheck = CreateRecertCheck(new RecertCheckApiConnection(), CreateGlobalConfig());
+
+            Dictionary<int, List<GenericConfigItem>> withoutManagements = await InvokePrivateAsync<Dictionary<int, List<GenericConfigItem>>>(
+                recertCheck, "LoadDueGenericItemsByOwner", new SimulatedGenericApiConnection());
+            Dictionary<int, List<GenericConfigItem>> onError = await InvokePrivateAsync<Dictionary<int, List<GenericConfigItem>>>(
+                recertCheck, "LoadDueGenericItemsByOwner", new SimulatedApiConnection());
+
+            Assert.That(withoutManagements, Is.Empty);
+            Assert.That(onError, Is.Empty);
+        }
+
+        private static RuleRecertNotificationContent RulesOnly(List<Rule> upcomingRules, List<Rule> overdueRules)
+        {
+            return new RuleRecertNotificationContent(upcomingRules, overdueRules, [], []);
         }
 
         [Test]

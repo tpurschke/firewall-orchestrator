@@ -206,3 +206,14 @@ CREATE INDEX IF NOT EXISTS idx_change_history_audit_proof ON change_history (cha
 -- leads with owner_id and cannot answer it.
 CREATE INDEX IF NOT EXISTS idx_log_entry_source ON logging.log_entry (source);
 CREATE INDEX IF NOT EXISTS idx_log_entry_destination ON logging.log_entry (destination);
+
+-- generic schema: one active version per item, active items per management, owner and due-date lookups
+CREATE UNIQUE INDEX IF NOT EXISTS uidx_generic_config_item_active_uid ON generic.config_item (mgm_id, item_uid) WHERE removed IS NULL;
+CREATE INDEX IF NOT EXISTS idx_generic_config_item_mgm_id_removed ON generic.config_item (mgm_id, removed);
+CREATE INDEX IF NOT EXISTS idx_generic_config_item_owner_id ON generic.config_item (owner_id);
+CREATE INDEX IF NOT EXISTS idx_generic_config_item_created ON generic.config_item (created);
+CREATE INDEX IF NOT EXISTS idx_generic_config_item_removed ON generic.config_item (removed) WHERE removed IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_generic_recertification_owner_id ON generic.recertification (owner_id);
+CREATE INDEX IF NOT EXISTS idx_generic_recertification_next_recert_date ON generic.recertification (next_recert_date);
+CREATE INDEX IF NOT EXISTS idx_generic_recertification_config_item_id ON generic.recertification (config_item_id);
+CREATE INDEX IF NOT EXISTS idx_generic_owner_recertification_owner_id ON generic.owner_recertification (owner_id);

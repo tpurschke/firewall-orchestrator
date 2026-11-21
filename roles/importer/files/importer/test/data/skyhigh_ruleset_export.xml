@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<libraryContent>
+  <ruleGroup id="2000" name="URL Filtering" enabled="true">
+    <description/>
+    <condition always="true"/>
+    <rules>
+      <rule id="3001" name="Block Malware Sites" enabled="true">
+        <description>Blocks known malware categories
+owner: APP-1234</description>
+        <condition always="false">
+          <expressions>
+            <conditionExpression openingBracketCount="0" closingBracketCount="0" operatorId="com.scur.operator.in">
+              <propertyInstance propertyId="com.scur.engine.system.urlfilter.categories"/>
+              <parameter typeId="com.scur.type.list" valueTyp="2">
+                <value><listValue id="malware" name="Malware Categories"/></value>
+              </parameter>
+            </conditionExpression>
+          </expressions>
+        </condition>
+        <actionContainer actionId="com.scur.mainaction.block"/>
+      </rule>
+      <rule name="Allow Intranet" enabled="false">
+        <description>Owner=APP-9</description>
+        <condition always="true"/>
+        <actionContainer actionId="com.scur.mainaction.continue"/>
+      </rule>
+    </rules>
+    <ruleGroups>
+      <ruleGroup id="2100" name="Coaching" enabled="true">
+        <description>coaching group</description>
+        <condition always="false">
+          <expressions>
+            <conditionExpression openingBracketCount="1" closingBracketCount="0" operatorId="com.scur.operator.equals">
+              <propertyInstance propertyId="com.scur.engine.system.authentication.isauthenticated"/>
+              <parameter typeId="com.scur.type.boolean" valueTyp="2" valueId="com.scur.type.boolean.true"/>
+            </conditionExpression>
+            <conditionExpression prefix="AND" openingBracketCount="0" closingBracketCount="1" operatorId="com.scur.operator.equals">
+              <propertyInstance propertyId="com.scur.engine.system.header.get">
+                <parameters>
+                  <entry><parameter typeId="com.scur.type.string" valueTyp="3"><value><stringValue value="X-Coach"/></value></parameter></entry>
+                </parameters>
+              </propertyInstance>
+              <parameter typeId="com.scur.type.string" valueTyp="3"><value><stringValue value="yes"/></value></parameter>
+            </conditionExpression>
+          </expressions>
+        </condition>
+        <rules>
+          <rule id="3101" name="Coach Social Media" enabled="true">
+            <description/>
+            <condition always="true"/>
+            <actionContainer actionId="com.scur.mainaction.redirect"/>
+          </rule>
+        </rules>
+        <ruleGroups/>
+      </ruleGroup>
+      <ruleGroup id="2200" name="Disabled Group" enabled="false">
+        <condition always="true"/>
+        <rules>
+          <rule id="3201" name="Inside Disabled" enabled="true">
+            <condition always="true"/>
+            <actionContainer actionId="com.scur.mainaction.block"/>
+          </rule>
+        </rules>
+      </ruleGroup>
+    </ruleGroups>
+  </ruleGroup>
+</libraryContent>

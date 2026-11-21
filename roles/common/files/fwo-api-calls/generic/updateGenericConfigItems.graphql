@@ -1,0 +1,17 @@
+mutation updateGenericConfigItems(
+  $importId: bigint!
+  $removedIds: [bigint!]!
+  $newItems: [generic_config_item_insert_input!]!
+  $inPlaceUpdates: [generic_config_item_updates!]!
+) {
+  # order matters: an item is marked removed before its new version is inserted (one active version per item)
+  update_generic_config_item(where: { id: { _in: $removedIds } }, _set: { removed: $importId }) {
+    affected_rows
+  }
+  insert_generic_config_item(objects: $newItems) {
+    affected_rows
+  }
+  update_generic_config_item_many(updates: $inPlaceUpdates) {
+    affected_rows
+  }
+}

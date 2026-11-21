@@ -89,6 +89,9 @@ namespace FWO.Data.Report
         [JsonProperty("workflow_filter"), JsonPropertyName("workflow_filter")]
         public WorkflowFilter WorkflowFilter { get; set; } = new();
 
+        [JsonProperty("generic_filter"), JsonPropertyName("generic_filter")]
+        public GenericFilter GenericFilter { get; set; } = new();
+
         public ReportParams()
         { }
 

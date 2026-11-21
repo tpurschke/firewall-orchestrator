@@ -90,3 +90,10 @@ CHECK (
 -- rule_owner
 ALTER TABLE rule_owner ADD CONSTRAINT rule_owner_matched_objects_for_ip_based
 CHECK ( owner_mapping_source_id  != 1 OR matched_objects IS NOT NULL );
+
+-- generic
+ALTER TABLE generic.device_type_key_config ADD CONSTRAINT generic_device_type_key_config_dev_typ_id_unique UNIQUE (dev_typ_id);
+ALTER TABLE generic.device_type_key_config ADD CONSTRAINT generic_device_type_key_config_owner_match_check
+CHECK ( owner_match IN ('name', 'ext_id') );
+ALTER TABLE generic.device_type_key_config ADD CONSTRAINT generic_device_type_key_config_last_used_format_check
+CHECK ( last_used_format IS NULL OR last_used_format IN ('iso8601', 'unix', 'unix_ms') );
