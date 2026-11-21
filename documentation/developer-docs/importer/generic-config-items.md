@@ -1,6 +1,6 @@
 # Generic (non-firewall) config items
 
-Since 11.0.0 Firewall Orchestrator imports and recertifies rule-like config items of devices that are not firewalls,
+Since 10.1.0 Firewall Orchestrator imports and recertifies rule-like config items of devices that are not firewalls,
 for example proxy or load balancer rules (#5786). This page explains the data model and how to add a new device type.
 
 ## Data model (schema `generic`)

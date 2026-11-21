@@ -1,6 +1,6 @@
 # Firewall Orchestrator Revision History
 
-## 11.0.0 - 21.11.2026
+## 10.1.0 - 21.11.2026
 - recertification of generic (non-firewall) config items such as proxy rules (#5786)
   - new database schema `generic`: per device type key configuration, versioned config items, item and owner recertification
   - new importer module for Skyhigh Web Gateway (device type 33); the owner of a rule is taken from an `owner:` tag in the rule description

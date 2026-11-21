@@ -1,6 +1,6 @@
 --- Generic (non-firewall) config items and their recertification ---
 -- Rule-like config items of devices that are not firewalls (proxy, load balancer, ...).
--- Keep in sync with the generic part of roles/database/files/upgrade/11.0.0.sql.
+-- Keep in sync with the generic part of roles/database/files/upgrade/10.1.0.sql.
 create schema generic;
 
 -- per device type: which JSON keys of a config item carry which meaning

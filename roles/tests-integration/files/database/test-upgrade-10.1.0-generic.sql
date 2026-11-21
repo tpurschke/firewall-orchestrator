@@ -1,4 +1,4 @@
--- Test of the generic schema of upgrade/11.0.0.sql (#5786). The test task inserts the upgrade file at the two
+-- Test of the generic schema of upgrade/10.1.0.sql (#5786). The test task inserts the upgrade file at the two
 -- run-upgrade markers below, which also shows that the upgrade can be repeated on a fresh as well as on an upgraded
 -- installation. This probes: the generic tables, constraints and indexes have the same names as in the creation
 -- scripts, the Skyhigh device type and its key configuration exist once, the generic report types are available,
@@ -8,9 +8,9 @@
 \set ON_ERROR_STOP 1
 BEGIN;
 
--- @run-upgrade-11.0.0
+-- @run-upgrade-10.1.0
 
--- @run-upgrade-11.0.0
+-- @run-upgrade-10.1.0
 
 DO $$
 DECLARE
@@ -31,7 +31,7 @@ BEGIN
         ('generic_recertification_owner_recertification_foreign_key'),
         ('generic_owner_recertification_owner_foreign_key'),
         ('generic_owner_recertification_report_foreign_key'),
-        ('generic_responsible_type_dev_type_owner_responsible_type_foreign_key'),
+        ('generic_responsible_type_dev_type_responsible_type_foreign_key'),
         ('generic_responsible_type_dev_type_stm_dev_typ_foreign_key')
     ) AS expected(name)
     WHERE NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = expected.name);
