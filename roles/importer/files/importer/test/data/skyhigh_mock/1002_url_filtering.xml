@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<libraryContent>
+  <ruleGroup id="1002" name="URL Filtering" enabled="true" defaultRights="2" cycleRequest="true" cycleResponse="false" cycleEmbeddedObject="false">
+    <acElements/>
+    <condition always="true"/>
+    <description>Category based filtering of web requests.</description>
+    <rules>
+      <rule id="10021" name="Block Malicious Categories" enabled="true">
+        <description>Blocks malware, phishing and botnet categories.
+owner: APP-0002</description>
+        <condition always="false">
+          <expressions>
+            <conditionExpression openingBracketCount="0" closingBracketCount="0" operatorId="com.scur.operator.atLeastOneInList">
+              <propertyInstance propertyId="com.scur.engine.system.urlfilter.categories" useMostRecentConfiguration="false"/>
+              <parameter typeId="com.scur.type.list" valueTyp="2">
+                <value><listValue id="com.scur.type.list.category.malicious" name="Malicious Categories"/></value>
+              </parameter>
+            </conditionExpression>
+          </expressions>
+        </condition>
+        <actionContainer actionId="com.scur.mainaction.block"/>
+      </rule>
+      <rule id="10022" name="Allow Business Partners" enabled="true">
+        <description>Partner portals are always allowed.
+Owner = APP-0002</description>
+        <condition always="false">
+          <expressions>
+            <conditionExpression openingBracketCount="0" closingBracketCount="0" operatorId="com.scur.operator.in">
+              <propertyInstance propertyId="com.scur.engine.system.url.host" useMostRecentConfiguration="false"/>
+              <parameter typeId="com.scur.type.list" valueTyp="2">
+                <value><listValue id="com.scur.type.list.wildcard.partner_portals" name="Partner Portals"/></value>
+              </parameter>
+            </conditionExpression>
+          </expressions>
+        </condition>
+        <actionContainer actionId="com.scur.mainaction.stopRuleSet"/>
+      </rule>
+    </rules>
+    <ruleGroups>
+      <ruleGroup id="1100" name="Coaching" enabled="true">
+        <condition always="false">
+          <expressions>
+            <conditionExpression openingBracketCount="0" closingBracketCount="0" operatorId="com.scur.operator.equals">
+              <propertyInstance propertyId="com.scur.engine.system.authentication.isauthenticated" useMostRecentConfiguration="false"/>
+              <parameter typeId="com.scur.type.boolean" valueTyp="2" valueId="com.scur.type.boolean.true"/>
+            </conditionExpression>
+          </expressions>
+        </condition>
+        <description>Coaching pages for authenticated users.</description>
+        <rules>
+          <rule id="11001" name="Coach Social Media" enabled="true">
+            <description>Shows a coaching page before social media access.
+owner: APP-0002</description>
+            <condition always="false">
+              <expressions>
+                <conditionExpression openingBracketCount="0" closingBracketCount="0" operatorId="com.scur.operator.atLeastOneInList">
+                  <propertyInstance propertyId="com.scur.engine.system.urlfilter.categories" useMostRecentConfiguration="false"/>
+                  <parameter typeId="com.scur.type.list" valueTyp="2">
+                    <value><listValue id="com.scur.type.list.category.social" name="Social Networking"/></value>
+                  </parameter>
+                </conditionExpression>
+              </expressions>
+            </condition>
+            <actionContainer actionId="com.scur.mainaction.redirect"/>
+          </rule>
+          <rule id="11002" name="Coach Streaming" enabled="false">
+            <description>Disabled until the streaming policy is approved.</description>
+            <condition always="true"/>
+            <actionContainer actionId="com.scur.mainaction.redirect"/>
+          </rule>
+        </rules>
+        <ruleGroups/>
+      </ruleGroup>
+    </ruleGroups>
+  </ruleGroup>
+</libraryContent>

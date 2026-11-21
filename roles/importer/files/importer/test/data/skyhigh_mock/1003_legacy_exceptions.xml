@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<libraryContent>
+  <ruleGroup id="1003" name="Legacy Exceptions" enabled="false" defaultRights="2" cycleRequest="true" cycleResponse="false" cycleEmbeddedObject="false">
+    <acElements/>
+    <condition always="true"/>
+    <description>Old exceptions kept for reference, rule set switched off.</description>
+    <rules>
+      <rule id="10031" name="Allow Old Intranet" enabled="true">
+        <description>No owner tag: shows up as item without owner.</description>
+        <condition always="false">
+          <expressions>
+            <conditionExpression openingBracketCount="0" closingBracketCount="0" operatorId="com.scur.operator.equals">
+              <propertyInstance propertyId="com.scur.engine.system.url.host" useMostRecentConfiguration="false"/>
+              <parameter typeId="com.scur.type.string" valueTyp="3">
+                <value><stringValue value="intranet.example.local"/></value>
+              </parameter>
+            </conditionExpression>
+          </expressions>
+        </condition>
+        <actionContainer actionId="com.scur.mainaction.continue"/>
+      </rule>
+    </rules>
+    <ruleGroups/>
+  </ruleGroup>
+</libraryContent>

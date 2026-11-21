@@ -54,6 +54,24 @@ with `uid`, `name`, `path`, `ruleset`, `enabled`, `condition`, `group_condition`
 The owner is taken from a line `owner: <external app id>` in the rule description.
 Links to other hosts in the rule set list are ignored, as the session cookie would be sent there.
 
+### Testing without a Skyhigh gateway
+
+There is no public Skyhigh test system. `test/mock_servers/skyhigh_konfigurator_mock.py` in the importer directory
+mocks the four Konfigurator calls the module uses (login, rule set list, rule set export, logout) with a cookie
+session over HTTPS, following the Skyhigh documentation of the REST interface. It serves the rule set exports in
+`test/data/skyhigh_mock/` (see the README there for the owner tags used).
+
+```console
+cd /usr/local/fworch/importer
+SKYHIGH_MOCK_PASSWORD=<password> importer-venv/bin/python -m test.mock_servers.skyhigh_konfigurator_mock --host 127.0.0.1 --port 4712
+```
+
+Without `--cert`/`--key` a self-signed certificate is created and its path is logged. Create a management of type
+"Skyhigh Web Gateway" with host and port of the mock and an import credential with user `mockadmin` (or `--user`)
+and the password, and either trust the certificate or switch off the certificate check for firewall connections.
+The mock only proves that the module matches our reading of the documentation; it does not replace a test against
+a real gateway.
+
 ## Access
 
 - Config items are written by the `importer` role only.

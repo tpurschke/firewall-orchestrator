@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<libraryContent>
+  <ruleGroup id="1001" name="Global Block Lists" enabled="true" defaultRights="2" cycleRequest="true" cycleResponse="true" cycleEmbeddedObject="true">
+    <acElements/>
+    <condition always="true"/>
+    <description>Requests to known bad destinations are blocked first.</description>
+    <rules>
+      <rule id="10011" name="Block URL Blocklist" enabled="true">
+        <description>Global URL blocklist maintained by the security team.
+owner: APP-0001</description>
+        <condition always="false">
+          <expressions>
+            <conditionExpression openingBracketCount="0" closingBracketCount="0" operatorId="com.scur.operator.in">
+              <propertyInstance propertyId="com.scur.engine.system.url.host" useMostRecentConfiguration="false"/>
+              <parameter typeId="com.scur.type.list" valueTyp="2">
+                <value><listValue id="com.scur.type.list.wildcard.global_url_blocklist" name="Global URL Blocklist"/></value>
+              </parameter>
+            </conditionExpression>
+          </expressions>
+        </condition>
+        <actionContainer actionId="com.scur.mainaction.block"/>
+      </rule>
+      <rule id="10012" name="Block IP Blocklist" enabled="true">
+        <description>owner: APP-0001</description>
+        <condition always="false">
+          <expressions>
+            <conditionExpression openingBracketCount="0" closingBracketCount="0" operatorId="com.scur.operator.in">
+              <propertyInstance propertyId="com.scur.engine.system.url.destination.ip" useMostRecentConfiguration="false"/>
+              <parameter typeId="com.scur.type.list" valueTyp="2">
+                <value><listValue id="com.scur.type.list.ip.global_ip_blocklist" name="Global IP Blocklist"/></value>
+              </parameter>
+            </conditionExpression>
+          </expressions>
+        </condition>
+        <actionContainer actionId="com.scur.mainaction.block"/>
+      </rule>
+    </rules>
+    <ruleGroups/>
+  </ruleGroup>
+</libraryContent>
