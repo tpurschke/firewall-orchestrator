@@ -149,6 +149,21 @@
                and not (internalca_preserve_ldap_certificate | default(false) | bool)
              else []
         )
+        + (
+          [
+            {
+              'name': 'skyhigh-mock-server',
+              'certificate': internalca_skyhigh_mock_certificate,
+              'private_key': internalca_skyhigh_mock_private_key,
+              'csr': internalca_skyhigh_mock_csr,
+              'owner': fworch_user,
+              'group': fworch_group,
+              'common_name': 'localhost',
+              'subject_alt_name': ['DNS:localhost', 'IP:127.0.0.1'],
+              'extended_key_usage': ['serverAuth']
+            }
+          ] if 'importers' in group_names and add_demo_data | bool else []
+        )
       }}
   vars:
     # The slapd account when it already exists on this host, root otherwise (the fresh

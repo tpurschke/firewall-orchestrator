@@ -168,6 +168,17 @@
         | length > 0
       }}
 
+- name: Record renewal of the Skyhigh mock server identity of the demo data
+  set_fact:
+    internalca_skyhigh_mock_identity_changed: >-
+      {{
+        internalca_installed_certificates.results
+        | selectattr('item.item.name', 'equalto', 'skyhigh-mock-server')
+        | selectattr('changed')
+        | list
+        | length > 0
+      }}
+
 - name: Record renewal of the LDAP server identity
   set_fact:
     internalca_ldap_identity_changed: >-

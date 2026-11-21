@@ -72,6 +72,20 @@ and the password, and either trust the certificate or switch off the certificate
 The mock only proves that the module matches our reading of the documentation; it does not replace a test against
 a real gateway.
 
+### Demo installations
+
+With demo data (`add_demo_data`, set by `testkeys=yes`) the installer sets this up without further steps:
+
+- every importer host runs the mock as service `fworch-skyhigh-mock` on `127.0.0.1:4712`
+  (`demo_skyhigh_mock_*` in `inventory/group_vars/all.yml`), with a server certificate of the internal CA
+  (profile `skyhigh-mock-server`), so the default certificate check of firewall connections passes,
+- the management `skyhigh_demo` (credential `credential_skyhigh_demo`) imports from it,
+- the sample rules carry the owner tags of the demo owners (`ownerF_demo` = `123`, `ownerD_demo` = `234`),
+- main responsibles may recertify Skyhigh items, and both demo tenants see the management, so `user1_demo`
+  recertifies the items of `ownerF_demo` and `user2_demo` those of `ownerD_demo`.
+
+Installations without demo data remove a mock service left from an earlier demo installation.
+
 ## Access
 
 - Config items are written by the `importer` role only.

@@ -1,3 +1,5 @@
+# the demo owner data also lets main responsibles (type 1) recertify the proxy rules of the
+# Skyhigh demo management (device type 33, generic recertification)
 - name: adding demo owner data
 
   postgresql_query:
@@ -23,6 +25,10 @@
             ON CONFLICT DO NOTHING;
         INSERT INTO owner_responsible (owner_id, dn, responsible_type)
             VALUES    ((SELECT id FROM owner WHERE name='ownerD_demo'), 'cn=ownergroup_D_demo,ou=group,dc=fworch,dc=internal', 2)
+            ON CONFLICT DO NOTHING;
+
+        INSERT INTO generic.responsible_type_dev_type (owner_responsible_type_id, dev_typ_id)
+            VALUES    (1, 33)
             ON CONFLICT DO NOTHING;
 
         INSERT INTO owner_network (owner_id, name, ip, ip_end)

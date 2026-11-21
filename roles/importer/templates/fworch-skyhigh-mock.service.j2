@@ -1,0 +1,29 @@
+# Demo data only: mock of the Skyhigh Web Gateway REST API serving sample proxy rules for the
+# generic recertification. It listens on loopback, the importer on this host reaches it there.
+[Unit]
+Description={{ product_name }} Skyhigh Web Gateway mock (demo data)
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec={{ fworch_systemd_start_limit_interval_sec }}
+StartLimitBurst={{ fworch_systemd_start_limit_burst }}
+
+[Service]
+Type=simple
+WorkingDirectory={{ importer_home }}
+ExecStart={{ importer_venv_dir }}/bin/python -m test.mock_servers.skyhigh_konfigurator_mock --host 127.0.0.1 --port {{ demo_skyhigh_mock_port }} --user {{ demo_skyhigh_mock_user }} --cert {{ internalca_skyhigh_mock_certificate }} --key {{ internalca_skyhigh_mock_private_key }}
+Environment="PATH={{ importer_venv_dir }}/bin:/usr/bin:/bin"
+Environment="VIRTUAL_ENV={{ importer_venv_dir }}"
+Environment="SKYHIGH_MOCK_PASSWORD={{ demo_skyhigh_mock_password }}"
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier={{ demo_skyhigh_mock_service_name }}
+User={{ fworch_user }}
+Group={{ fworch_group }}
+NoNewPrivileges=true
+Restart=always
+RestartSec={{ fworch_systemd_restart_sec }}
+MemoryMax={{ demo_skyhigh_mock_memory_max }}
+OOMPolicy=stop
+
+[Install]
+WantedBy=multi-user.target

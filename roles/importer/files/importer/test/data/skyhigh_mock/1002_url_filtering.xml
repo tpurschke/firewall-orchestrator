@@ -7,7 +7,7 @@
     <rules>
       <rule id="10021" name="Block Malicious Categories" enabled="true">
         <description>Blocks malware, phishing and botnet categories.
-owner: APP-0002</description>
+owner: 234</description>
         <condition always="false">
           <expressions>
             <conditionExpression openingBracketCount="0" closingBracketCount="0" operatorId="com.scur.operator.atLeastOneInList">
@@ -22,7 +22,7 @@ owner: APP-0002</description>
       </rule>
       <rule id="10022" name="Allow Business Partners" enabled="true">
         <description>Partner portals are always allowed.
-Owner = APP-0002</description>
+Owner = 234</description>
         <condition always="false">
           <expressions>
             <conditionExpression openingBracketCount="0" closingBracketCount="0" operatorId="com.scur.operator.in">
@@ -50,7 +50,7 @@ Owner = APP-0002</description>
         <rules>
           <rule id="11001" name="Coach Social Media" enabled="true">
             <description>Shows a coaching page before social media access.
-owner: APP-0002</description>
+owner: 234</description>
             <condition always="false">
               <expressions>
                 <conditionExpression openingBracketCount="0" closingBracketCount="0" operatorId="com.scur.operator.atLeastOneInList">

@@ -95,6 +95,15 @@ testkeys: no
 # development, test and demo installations. It is created automatically with testkeys=yes and can be
 # requested explicitly with -e add_demo_data=yes.
 add_demo_data: "{{ testkeys | default(false) | bool }}"
+# Demo data only: a mock of the Skyhigh Web Gateway REST API on every importer host, listening on loopback,
+# serving sample proxy rules for the generic recertification (management skyhigh_demo). The credentials are
+# publicly known like all demo credentials.
+demo_skyhigh_name: skyhigh_demo
+demo_skyhigh_mock_service_name: "{{ product_name }}-skyhigh-mock"
+demo_skyhigh_mock_port: 4712
+demo_skyhigh_mock_user: skyhighdemo
+demo_skyhigh_mock_password: skyhigh-demo
+demo_skyhigh_mock_memory_max: 256M
 api_docu: false
 force_install: false
 allowRepoChangesForRedhat: false
@@ -142,7 +151,7 @@ fworch_systemd_unit_search_dirs:
   - "{{ fworch_systemd_vendor_unit_dir }}"
 # all systemd units owned by fworch, used for relocation and uninstall
 fworch_systemd_unit_names: >-
-  {{ [api_service_name, middleware_service_name, product_name ~ '-ui', product_name ~ '-importer-api'] }}
+  {{ [api_service_name, middleware_service_name, product_name ~ '-ui', product_name ~ '-importer-api', demo_skyhigh_mock_service_name] }}
 # restart delay for all fworch services - long enough to keep a service that waits for a
 # dependency from running into the default systemd start rate limit
 fworch_systemd_restart_sec: 10
@@ -294,6 +303,9 @@ internalca_endpoint_host_names: >-
 # read by roles/common (fworch.json) and roles/tests-integration
 internalca_client_certificate: "{{ fworch_secrets_dir }}/client/client.crt"
 internalca_client_private_key: "{{ fworch_secrets_dir }}/client/client.key"
+# server identity of the Skyhigh mock of the demo data (roles/internalCA and roles/importer)
+internalca_skyhigh_mock_certificate: "{{ fworch_secrets_dir }}/skyhigh-mock/server.crt"
+internalca_skyhigh_mock_private_key: "{{ fworch_secrets_dir }}/skyhigh-mock/server.key"
 
 # Shared by roles/internalCA and roles/openldap-server. Disable this only when the
 # administrator supplies and maintains the slapd identity at the configured paths.

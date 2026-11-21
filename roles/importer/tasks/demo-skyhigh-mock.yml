@@ -1,0 +1,24 @@
+# Demo data only: runs the Skyhigh Web Gateway mock (importer test/mock_servers) on loopback, so the
+# demo management skyhigh_demo has rules to import for the generic recertification. Its server
+# identity is issued by the internal CA (profile skyhigh-mock-server), which the importer trusts.
+
+- name: install the Skyhigh mock service of the demo data
+  template:
+    src: "{{ product_name }}-skyhigh-mock.service.j2"
+    dest: "{{ fworch_systemd_unit_dir }}/{{ demo_skyhigh_mock_service_name }}.service"
+    mode: "0640"
+    owner: root
+    group: root
+  register: demo_skyhigh_mock_unit
+  become: true
+
+- name: run the Skyhigh mock service of the demo data
+  ansible.builtin.systemd:
+    name: "{{ demo_skyhigh_mock_service_name }}"
+    enabled: true
+    daemon_reload: "{{ demo_skyhigh_mock_unit is changed }}"
+    # a renewed certificate or changed unit is only picked up by a restart
+    state: >-
+      {{ 'restarted' if demo_skyhigh_mock_unit is changed or internalca_skyhigh_mock_identity_changed | default(false) | bool
+         else 'started' }}
+  become: true

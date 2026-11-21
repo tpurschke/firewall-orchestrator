@@ -8,6 +8,7 @@
   - recertification page: recertify single generic items or all generic items of an owner
   - the daily recertification check includes due generic items in the rule recertification notification
   - generic items can only be recertified for the device types assigned to the owner responsible type (settings, #5788); new JWT claim `x-hasura-generic-recert-dev-types`; without assignment no generic items can be recertified
+  - demo data: Skyhigh Web Gateway mock (Konfigurator REST API) on every importer host and demo management `skyhigh_demo` with sample proxy rules of the demo owners (#5789)
 
 ## 9.9.4 - 17.11.2026
 - middleware REST API: `Rule/GetRulesByFilter` accepts `RuleUid` as an exact third selector alongside `OwnerId` and `IpAddress`; all current non-removed matches are ordered by rule ID and use the existing paging and SIEM logging behavior

@@ -76,6 +76,21 @@
           END IF; 
         END $do$
 
+  # both demo tenants see the Skyhigh demo management, each recertifies the proxy rules of its own owner
+  - name: add Skyhigh demo management mapping for the demo tenants
+    postgresql_query:
+      db: "{{ fworch_db_name }}"
+      query: >
+        INSERT INTO tenant_to_management (tenant_id, management_id, shared)
+          SELECT tenant.tenant_id, management.mgm_id, TRUE
+          FROM tenant CROSS JOIN management
+          WHERE tenant.tenant_name IN ('tenant1{{ sample_postfix }}', 'tenant2{{ sample_postfix }}')
+            AND management.mgm_name = '{{ demo_skyhigh_name }}'
+            AND NOT EXISTS (
+              SELECT 1 FROM tenant_to_management existing
+              WHERE existing.tenant_id = tenant.tenant_id AND existing.management_id = management.mgm_id)
+    when: sample_role_purpose is not match('test')
+
   - name: insert demo tenant network data 
     postgresql_query:
       db: "{{ fworch_db_name }}"

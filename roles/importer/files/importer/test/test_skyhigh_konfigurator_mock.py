@@ -115,8 +115,8 @@ class TestAgainstTheModule:
 
         by_uid = {item["uid"]: item for item in items}
         assert sorted(by_uid) == ["10011", "10012", "10021", "10022", "10031", "11001", "11002"]
-        assert by_uid["10011"]["owner"] == "APP-0001"
-        assert by_uid["10022"]["owner"] == "APP-0002"
+        assert by_uid["10011"]["owner"] == "123"
+        assert by_uid["10022"]["owner"] == "234"
         assert by_uid["10031"]["owner"] is None
         assert by_uid["10031"]["enabled"] is False
         assert by_uid["11002"]["enabled"] is False

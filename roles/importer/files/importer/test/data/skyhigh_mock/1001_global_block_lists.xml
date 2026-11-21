@@ -7,7 +7,7 @@
     <rules>
       <rule id="10011" name="Block URL Blocklist" enabled="true">
         <description>Global URL blocklist maintained by the security team.
-owner: APP-0001</description>
+owner: 123</description>
         <condition always="false">
           <expressions>
             <conditionExpression openingBracketCount="0" closingBracketCount="0" operatorId="com.scur.operator.in">
@@ -21,7 +21,7 @@ owner: APP-0001</description>
         <actionContainer actionId="com.scur.mainaction.block"/>
       </rule>
       <rule id="10012" name="Block IP Blocklist" enabled="true">
-        <description>owner: APP-0001</description>
+        <description>owner: 123</description>
         <condition always="false">
           <expressions>
             <conditionExpression openingBracketCount="0" closingBracketCount="0" operatorId="com.scur.operator.in">

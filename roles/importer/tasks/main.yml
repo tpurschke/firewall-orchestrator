@@ -139,6 +139,14 @@
         daemon_reload: true
       become: true
 
+    - name: run the Skyhigh mock of the demo data
+      include_tasks: demo-skyhigh-mock.yml
+      when: add_demo_data | bool
+
+    - name: remove the Skyhigh mock of earlier demo data
+      include_tasks: remove-demo-skyhigh-mock.yml
+      when: not add_demo_data | bool
+
     - name: finalize handler for datarecovery
       set_fact:
         importer_handler_guard: stop

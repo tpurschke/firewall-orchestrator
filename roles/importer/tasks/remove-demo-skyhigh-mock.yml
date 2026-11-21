@@ -1,0 +1,26 @@
+# A host which no longer gets demo data keeps no Skyhigh mock from an earlier demo installation.
+
+- name: check for a Skyhigh mock service of earlier demo data
+  stat:
+    path: "{{ fworch_systemd_unit_dir }}/{{ demo_skyhigh_mock_service_name }}.service"
+  register: demo_skyhigh_mock_unit_file
+  become: true
+
+- name: remove the Skyhigh mock service of earlier demo data
+  when: demo_skyhigh_mock_unit_file.stat.exists
+  become: true
+  block:
+    - name: stop and disable the Skyhigh mock service
+      ansible.builtin.systemd:
+        name: "{{ demo_skyhigh_mock_service_name }}"
+        state: stopped
+        enabled: false
+
+    - name: remove the Skyhigh mock unit file
+      file:
+        path: "{{ fworch_systemd_unit_dir }}/{{ demo_skyhigh_mock_service_name }}.service"
+        state: absent
+
+    - name: reload systemd after removing the Skyhigh mock unit
+      ansible.builtin.systemd:
+        daemon_reload: true

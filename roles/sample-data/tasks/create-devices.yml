@@ -95,6 +95,33 @@
   become_user: postgres
   when: sample_role_purpose is not match('test')
 
+- block: # demo only: Skyhigh Web Gateway mock run by the importer role on every importer host (generic recertification)
+    - name: insert demo import credential for the Skyhigh mock
+      postgresql_query:
+        db: "{{ fworch_db_name }}"
+        query: >
+          DO $do$ BEGIN
+          IF NOT EXISTS (SELECT * FROM credential WHERE credential_name='credential_skyhigh_demo') THEN
+          insert into credential (credential_name,username,secret,is_key_pair)
+          VALUES ('credential_skyhigh_demo','{{ demo_skyhigh_mock_user }}','{{ demo_skyhigh_mock_password }}',false);
+          END IF; END $do$
+
+    - name: insert demo Skyhigh Web Gateway management {{ demo_skyhigh_name }}
+      postgresql_query:
+        db: "{{ fworch_db_name }}"
+        query: >
+          DO $do$ BEGIN
+          IF NOT EXISTS (SELECT * FROM management WHERE mgm_name='{{ demo_skyhigh_name }}') THEN
+          insert into management (dev_typ_id,mgm_name,import_credential_id,ssh_hostname,ssh_port,do_not_import)
+          VALUES (33,'{{ demo_skyhigh_name }}',
+            (select id from credential where credential_name='credential_skyhigh_demo'),
+            '127.0.0.1',{{ demo_skyhigh_mock_port }},{{ do_not_import }});
+          END IF; END $do$
+
+  become: true
+  become_user: postgres
+  when: sample_role_purpose is not match('test')
+
 - block: # testing only
     - name: insert test check point R8x management {{ sample_checkpoint_name }}
       postgresql_query:

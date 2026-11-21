@@ -55,6 +55,7 @@ internalca_key_size: 3072
 # The certificate and key paths they belong to are global.
 internalca_client_csr: "{{ fworch_secrets_dir }}/client/client.csr"
 internalca_apache_csr: "{{ fworch_secrets_dir }}/apache/server.csr"
+internalca_skyhigh_mock_csr: "{{ fworch_secrets_dir }}/skyhigh-mock/server.csr"
 
 # Apache serves the API, middleware and UI endpoints. A host running more
 # than one of these services uses one host identity with all local endpoint
