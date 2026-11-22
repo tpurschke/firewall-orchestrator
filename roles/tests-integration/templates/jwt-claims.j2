@@ -1,0 +1,3 @@
+{#- claims of a JWT: its base64url encoded payload, padded and decoded (input: jwt) -#}
+{%- set payload = jwt.split('.')[1] | replace('-', '+') | replace('_', '/') -%}
+{{ (payload ~ ('=' * ((4 - payload | length % 4) % 4))) | b64decode }}

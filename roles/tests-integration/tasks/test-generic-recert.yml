@@ -1,0 +1,315 @@
+---
+# Generic (non-firewall) recertification (#5786, #5788, #5792):
+# - the recertifier may only record decisions for items of its recertifiable owners and generic device types,
+#   under its own DN; the recertification date is set by the database; decisions cannot be changed or deleted,
+# - reporters and recertifiers only read the items they may see,
+# - the JWT claim x-hasura-generic-recert-dev-types follows the device types of the user's responsible types,
+#   at login and at token refresh, and is an empty set without assignment.
+# The fixtures (owners, a responsible type, two managements, items) are created for the first sample user and
+# removed again in any case.
+
+- name: "generic recert: names of the fixtures"
+  set_fact:
+    generic_fixture: "generic{{ test_postfix }}"
+    generic_graphql_url: https://{{ api_network_listening_ip_address }}:{{ api_web_port }}/api/v1/graphql
+    generic_skyhigh_dev_typ_id: 33
+    generic_other_dev_typ_id: 30
+    generic_insert_recert: >-
+      mutation addGenericRecertifications($recertifications: [generic_recertification_insert_input!]!) {
+        insert_generic_recertification(objects: $recertifications) { returning { id recert_date user_dn } } }
+    generic_insert_owner_recert: >-
+      mutation addGenericOwnerRecertification($ownerRecert: generic_owner_recertification_insert_input!) {
+        insert_generic_owner_recertification_one(object: $ownerRecert) { id } }
+    generic_update_recert: >-
+      mutation changeGenericRecertification($id: bigint!) {
+        update_generic_recertification(where: {id: {_eq: $id}}, _set: {recertified: false}) { affected_rows } }
+    generic_read_items: >-
+      query readGenericItems($mgmIds: [Int!]!) {
+        generic_config_item(where: {mgm_id: {_in: $mgmIds}}, order_by: {item_uid: asc}) { item_uid } }
+
+- name: "generic recert: read the hasura admin secret"
+  slurp:
+    src: "{{ fworch_secrets_dir }}/hasura_admin_pwd"
+  register: generic_admin_secret_file
+  become: true
+  no_log: true
+
+- name: "generic recert: keep the hasura admin secret"
+  set_fact:
+    generic_api_admin_secret: "{{ generic_admin_secret_file.content | b64decode | trim }}"
+  no_log: true
+
+- name: "generic recert: log in the first sample user"
+  uri:
+    url: "{{ test_middleware_uri }}api/AuthenticationToken/GetTokenPair/"
+    method: POST
+    headers:
+      Content-Type: application/json
+    body:
+      Username: "user1{{ test_postfix }}"
+      Password: "{{ test_user1_pw }}"
+    body_format: json
+    validate_certs: true
+    ca_path: "{{ internalca_trust_bundle }}"
+    return_content: true
+  register: generic_login
+  changed_when: false
+  no_log: true
+
+- name: "generic recert: claims of the first login"
+  set_fact:
+    generic_claims_login: "{{ lookup('ansible.builtin.template', 'jwt-claims.j2', template_vars={'jwt': generic_login.json.AccessToken}) | from_json }}"
+  no_log: true
+
+- name: "generic recert: without assignment the user may recertify no generic device type"
+  assert:
+    that:
+      - generic_claims_login['x-hasura-generic-recert-dev-types'] == '{}'
+    fail_msg: "unexpected claim at login: {{ generic_claims_login['x-hasura-generic-recert-dev-types'] | default('missing') }}"
+
+- name: "generic recert: keep the DN of the first sample user"
+  set_fact:
+    generic_user_dn: "{{ generic_claims_login['x-hasura-uuid'] }}"
+
+- name: "generic recert: run the checks and remove the fixtures in any case"
+  block:
+    - name: "generic recert: create the fixtures"
+      postgresql_query:
+        db: "{{ fworch_db_name }}"
+        query: >
+          DO $do$ BEGIN
+            INSERT INTO owner (name, app_id_external) VALUES ('{{ generic_fixture }}_A', '{{ generic_fixture }}_A'), ('{{ generic_fixture }}_B', '{{ generic_fixture }}_B');
+            INSERT INTO owner_responsible_type (name, active, sort_order, allow_modelling, allow_recertification)
+              VALUES ('{{ generic_fixture }}', true, 999, false, true);
+            INSERT INTO owner_responsible (owner_id, dn, responsible_type)
+              VALUES ((SELECT id FROM owner WHERE name = '{{ generic_fixture }}_A'), '{{ generic_user_dn }}',
+                      (SELECT id FROM owner_responsible_type WHERE name = '{{ generic_fixture }}'));
+            INSERT INTO generic.responsible_type_dev_type (owner_responsible_type_id, dev_typ_id)
+              VALUES ((SELECT id FROM owner_responsible_type WHERE name = '{{ generic_fixture }}'), {{ generic_skyhigh_dev_typ_id }});
+            INSERT INTO management (dev_typ_id, mgm_name, import_credential_id, ssh_hostname, do_not_import)
+              VALUES ({{ generic_skyhigh_dev_typ_id }}, '{{ generic_fixture }}_proxy', (SELECT min(id) FROM credential), '127.0.0.1', true),
+                     ({{ generic_other_dev_typ_id }}, '{{ generic_fixture }}_other', (SELECT min(id) FROM credential), '127.0.0.1', true);
+            INSERT INTO import_control (import_type_id, mgm_id, stop_time, successful_import)
+              SELECT 1, mgm_id, now(), true FROM management WHERE mgm_name LIKE '{{ generic_fixture }}_%';
+            INSERT INTO generic.config_item (mgm_id, item_uid, item_name, config_line, owner_id, created)
+              SELECT management.mgm_id, item.uid, item.uid, '{}'::jsonb, owner.id,
+                     (SELECT max(control_id) FROM import_control WHERE import_control.mgm_id = management.mgm_id)
+              FROM (VALUES ('a', '_proxy', '_A'), ('b', '_proxy', '_B'), ('c', '_other', '_A')) AS item(uid, mgm_suffix, owner_suffix)
+              JOIN management ON management.mgm_name = '{{ generic_fixture }}' || item.mgm_suffix
+              JOIN owner ON owner.name = '{{ generic_fixture }}' || item.owner_suffix;
+          END $do$
+      become: true
+      become_user: postgres
+
+    - name: "generic recert: read the ids of the fixtures"
+      postgresql_query:
+        db: "{{ fworch_db_name }}"
+        query: >
+          SELECT json_build_object(
+            'owner_a', (SELECT id FROM owner WHERE name = '{{ generic_fixture }}_A'),
+            'owner_b', (SELECT id FROM owner WHERE name = '{{ generic_fixture }}_B'),
+            'mgm_proxy', (SELECT mgm_id FROM management WHERE mgm_name = '{{ generic_fixture }}_proxy'),
+            'mgm_other', (SELECT mgm_id FROM management WHERE mgm_name = '{{ generic_fixture }}_other'),
+            'items', (SELECT json_object_agg(item_uid, id) FROM generic.config_item
+                      WHERE mgm_id IN (SELECT mgm_id FROM management WHERE mgm_name LIKE '{{ generic_fixture }}_%'))
+          ) AS ids
+      register: generic_ids_query
+      become: true
+      become_user: postgres
+
+    - name: "generic recert: keep the ids and the recertifier session"
+      set_fact:
+        generic_ids: "{{ generic_ids_query.query_result[0].ids }}"
+        generic_recertifier_session:
+          x-hasura-user-id: "0"
+          x-hasura-tenant-id: "0"
+          x-hasura-uuid: "{{ generic_user_dn }}"
+          x-hasura-recertifiable-owners: "{{ '{' ~ generic_ids_query.query_result[0].ids.owner_a ~ '}' }}"
+          x-hasura-editable-owners: "{}"
+          x-hasura-generic-recert-dev-types: "{{ '{' ~ generic_skyhigh_dev_typ_id ~ '}' }}"
+          x-hasura-visible-managements: >-
+            {{ '{' ~ generic_ids_query.query_result[0].ids.mgm_proxy ~ ',' ~ generic_ids_query.query_result[0].ids.mgm_other ~ '}' }}
+          x-hasura-visible-devices: "{}"
+
+    - name: "generic recert: refresh the token of the first sample user"
+      uri:
+        url: "{{ test_middleware_uri }}api/AuthenticationToken/Refresh/"
+        method: POST
+        headers:
+          Content-Type: application/json
+        body:
+          RefreshToken: "{{ generic_login.json.RefreshToken }}"
+        body_format: json
+        validate_certs: true
+        ca_path: "{{ internalca_trust_bundle }}"
+        return_content: true
+      register: generic_refresh
+      changed_when: false
+      no_log: true
+
+    - name: "generic recert: the refreshed token carries the assigned device type"
+      assert:
+        that:
+          - claims['x-hasura-generic-recert-dev-types'] == '{' ~ generic_skyhigh_dev_typ_id ~ '}'
+          - generic_ids.owner_a | string in claims['x-hasura-recertifiable-owners']
+        fail_msg: "unexpected claims after refresh: {{ claims['x-hasura-generic-recert-dev-types'] | default('missing') }}"
+      vars:
+        claims: "{{ lookup('ansible.builtin.template', 'jwt-claims.j2', template_vars={'jwt': generic_refresh.json.AccessToken}) | from_json }}"
+
+    - name: "generic recert: decisions of the recertifier"
+      include_tasks: test-generic-recert-case.yml
+      vars:
+        generic_case_name: "{{ item.name }}"
+        generic_case_role: recertifier
+        generic_case_session: "{{ generic_recertifier_session }}"
+        generic_case_query: "{{ item.query | default(generic_insert_recert) }}"
+        generic_case_vars: "{{ item.vars }}"
+        generic_case_expect: "{{ item.expect }}"
+      loop:
+        - name: "recertifier recertifies an item of its owner and device type"
+          vars: {recertifications: [{config_item_id: "{{ generic_ids['items']['a'] }}", owner_id: "{{ generic_ids.owner_a }}", user_dn: "{{ generic_user_dn }}", recertified: true}]}
+          expect: ok
+        - name: "recertifier cannot recertify an item of another owner"
+          vars: {recertifications: [{config_item_id: "{{ generic_ids['items']['b'] }}", owner_id: "{{ generic_ids.owner_b }}", user_dn: "{{ generic_user_dn }}", recertified: true}]}
+          expect: rejected
+        - name: "recertifier cannot claim another owner's item for its own owner"
+          vars: {recertifications: [{config_item_id: "{{ generic_ids['items']['b'] }}", owner_id: "{{ generic_ids.owner_a }}", user_dn: "{{ generic_user_dn }}", recertified: true}]}
+          expect: rejected
+        - name: "recertifier cannot recertify an item of another device type"
+          vars: {recertifications: [{config_item_id: "{{ generic_ids['items']['c'] }}", owner_id: "{{ generic_ids.owner_a }}", user_dn: "{{ generic_user_dn }}", recertified: true}]}
+          expect: rejected
+        - name: "recertifier cannot record a decision under another DN"
+          vars: {recertifications: [{config_item_id: "{{ generic_ids['items']['a'] }}", owner_id: "{{ generic_ids.owner_a }}", user_dn: "uid=someone-else", recertified: true}]}
+          expect: rejected
+        - name: "recertifier cannot set the recertification date"
+          vars: {recertifications: [{config_item_id: "{{ generic_ids['items']['a'] }}", owner_id: "{{ generic_ids.owner_a }}", user_dn: "{{ generic_user_dn }}", recertified: true, recert_date: "2000-01-01T00:00:00Z"}]}
+          expect: rejected
+        - name: "recertifier recertifies its owner"
+          query: "{{ generic_insert_owner_recert }}"
+          vars: {ownerRecert: {owner_id: "{{ generic_ids.owner_a }}", user_dn: "{{ generic_user_dn }}", recertified: true}}
+          expect: ok
+        - name: "recertifier cannot recertify another owner"
+          query: "{{ generic_insert_owner_recert }}"
+          vars: {ownerRecert: {owner_id: "{{ generic_ids.owner_b }}", user_dn: "{{ generic_user_dn }}", recertified: true}}
+          expect: rejected
+        - name: "recertifier cannot change a decision"
+          query: "{{ generic_update_recert }}"
+          vars: {id: 0}
+          expect: rejected
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: "generic recert: the accepted decision is dated by the database under the recertifier's DN"
+      postgresql_query:
+        db: "{{ fworch_db_name }}"
+        query: >
+          SELECT count(*) AS decisions,
+                 count(*) FILTER (WHERE recert_date > now() - interval '1 hour' AND user_dn = %(dn)s) AS dated_by_database
+          FROM generic.recertification WHERE config_item_id IN (%(a)s, %(b)s, %(c)s)
+        named_args:
+          dn: "{{ generic_user_dn }}"
+          a: "{{ generic_ids['items']['a'] | int }}"
+          b: "{{ generic_ids['items']['b'] | int }}"
+          c: "{{ generic_ids['items']['c'] | int }}"
+      register: generic_decisions
+      become: true
+      become_user: postgres
+
+    - name: "generic recert: exactly the accepted decision was stored"
+      assert:
+        that:
+          - generic_decisions.query_result[0].decisions == 1
+          - generic_decisions.query_result[0].dated_by_database == 1
+        fail_msg: "unexpected decisions: {{ generic_decisions.query_result }}"
+
+    - name: "generic recert: items visible to each role"
+      uri:
+        url: "{{ generic_graphql_url }}"
+        method: POST
+        headers: >-
+          {{ {'Content-Type': 'application/json', 'x-hasura-admin-secret': generic_api_admin_secret, 'x-hasura-role': item.role}
+             | combine(item.session) }}
+        body: "{{ {'query': generic_read_items, 'variables': {'mgmIds': [generic_ids.mgm_proxy, generic_ids.mgm_other]}} }}"
+        body_format: json
+        validate_certs: true
+        ca_path: "{{ internalca_trust_bundle }}"
+        client_cert: "{{ internalca_client_certificate }}"
+        client_key: "{{ internalca_client_private_key }}"
+        return_content: true
+      register: generic_read_results
+      become: true
+      changed_when: false
+      environment: "{{ proxy_env }}"
+      no_log: true
+      loop:
+        - name: "recertifier reads the items of its owners"
+          role: recertifier
+          session: "{{ generic_recertifier_session }}"
+          expected: [a, c]
+        - name: "reporter reads the items of its visible managements"
+          role: reporter
+          session: "{{ generic_recertifier_session | combine({'x-hasura-visible-managements': '{' ~ generic_ids.mgm_proxy ~ '}'}) }}"
+          expected: [a, b]
+        - name: "reporter without visible managements reads no items"
+          role: reporter
+          session: "{{ generic_recertifier_session | combine({'x-hasura-visible-managements': '{}'}) }}"
+          expected: []
+
+    - name: "generic recert: each role reads exactly the items it may see"
+      assert:
+        that:
+          - result.json.errors is not defined
+          - result.item.expected == (result.json.data.generic_config_item | map(attribute='item_uid') | list)
+        fail_msg: "{{ result.item.name }}: {{ result.content | default('-') }}"
+      loop: "{{ generic_read_results.results }}"
+      loop_control:
+        loop_var: result
+        label: "{{ result.item.name }}"
+
+    - name: "generic recert: remove the device type of the responsible type"
+      postgresql_query:
+        db: "{{ fworch_db_name }}"
+        query: >
+          DELETE FROM generic.responsible_type_dev_type
+          WHERE owner_responsible_type_id = (SELECT id FROM owner_responsible_type WHERE name = '{{ generic_fixture }}')
+      become: true
+      become_user: postgres
+
+    - name: "generic recert: refresh the token again"
+      uri:
+        url: "{{ test_middleware_uri }}api/AuthenticationToken/Refresh/"
+        method: POST
+        headers:
+          Content-Type: application/json
+        body:
+          RefreshToken: "{{ generic_refresh.json.RefreshToken }}"
+        body_format: json
+        validate_certs: true
+        ca_path: "{{ internalca_trust_bundle }}"
+        return_content: true
+      register: generic_second_refresh
+      changed_when: false
+      no_log: true
+
+    - name: "generic recert: without the assignment the refreshed token allows no generic device type"
+      assert:
+        that:
+          - claims['x-hasura-generic-recert-dev-types'] == '{}'
+        fail_msg: "unexpected claim after removing the assignment: {{ claims['x-hasura-generic-recert-dev-types'] | default('missing') }}"
+      vars:
+        claims: "{{ lookup('ansible.builtin.template', 'jwt-claims.j2', template_vars={'jwt': generic_second_refresh.json.AccessToken}) | from_json }}"
+
+  always:
+    # deleting the managements cascades to their import rows, items and decisions, deleting the owners to
+    # their responsibles and owner decisions; the responsible type goes last
+    - name: "generic recert: remove the fixtures"
+      postgresql_query:
+        db: "{{ fworch_db_name }}"
+        query: >
+          DO $do$ BEGIN
+            DELETE FROM management WHERE mgm_name LIKE '{{ generic_fixture }}_%';
+            DELETE FROM owner WHERE name LIKE '{{ generic_fixture }}_%';
+            DELETE FROM owner_responsible_type WHERE name = '{{ generic_fixture }}';
+          END $do$
+      become: true
+      become_user: postgres

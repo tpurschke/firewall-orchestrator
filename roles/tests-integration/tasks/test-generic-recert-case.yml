@@ -1,0 +1,45 @@
+---
+# One GraphQL call of the generic recertification permission checks in test-generic-recert.yml,
+# sent with the Hasura admin secret impersonating a role with the given session variables.
+#
+# Inputs:
+#   generic_case_name     - what the case checks
+#   generic_case_role     - the role whose permissions apply
+#   generic_case_session  - the x-hasura-* session variables of the role (dict)
+#   generic_case_query    - the GraphQL operation
+#   generic_case_vars     - its variables (dict)
+#   generic_case_expect   - 'ok' (no GraphQL error) or 'rejected' (a GraphQL error)
+# Output:
+#   generic_case_result   - the registered response
+
+- name: "generic recert: {{ generic_case_name }}"
+  uri:
+    url: https://{{ api_network_listening_ip_address }}:{{ api_web_port }}/api/v1/graphql
+    method: POST
+    headers: >-
+      {{ {'Content-Type': 'application/json',
+          'x-hasura-admin-secret': generic_api_admin_secret,
+          'x-hasura-role': generic_case_role}
+         | combine(generic_case_session) }}
+    body: "{{ {'query': generic_case_query, 'variables': generic_case_vars} }}"
+    body_format: json
+    validate_certs: true
+    ca_path: "{{ internalca_trust_bundle }}"
+    client_cert: "{{ internalca_client_certificate }}"
+    client_key: "{{ internalca_client_private_key }}"
+    return_content: true
+  register: generic_case_result
+  become: true
+  changed_when: false
+  failed_when: false
+  environment: "{{ proxy_env }}"
+  no_log: true
+
+- name: "generic recert: {{ generic_case_name }} - result"
+  assert:
+    that:
+      - generic_case_result.status | default(0) == 200
+      - (generic_case_result.json.errors is defined) == (generic_case_expect == 'rejected')
+    fail_msg: >-
+      expected the call to be {{ generic_case_expect }}, got HTTP {{ generic_case_result.status | default('-') }}:
+      {{ generic_case_result.content | default('') }}

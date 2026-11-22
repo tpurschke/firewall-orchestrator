@@ -97,3 +97,12 @@ Installations without demo data remove a mock service left from an earlier demo 
   to all owners the user may recertify; "proxies for owner A, load balancers for owner B" cannot be expressed.
 - `reporter` sees items of its visible managements, `recertifier` and `modeller` additionally only items of their owners.
 - The daily recertification check (rule-by-rule mode) adds due generic items to the rule recertification notification.
+
+No middleware REST endpoint exists for generic items or their recertification state (decision of #5792): the
+UI, the reports and the daily check read them through GraphQL with the permissions above, and no external system
+needs them yet. A future endpoint has to follow the REST rules (`fwo-rest-api`: rate limit, `limit` / `offset` /
+`X-Has-More`, bounded inputs) and must not widen what a caller may see.
+
+The permissions are checked against a running installation by the integration test
+`roles/tests-integration/tasks/test-generic-recert.yml` (decisions per owner, device type and DN, read filters
+per role, and the device type claim at login and token refresh).

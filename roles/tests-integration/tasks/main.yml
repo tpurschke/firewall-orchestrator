@@ -121,6 +121,12 @@
   import_tasks: test-api.yml
   when: "'apiserver' in group_names"
 
+# On a host with middleware, API and database: the test logs in a sample user, impersonates roles with the
+# Hasura admin secret and creates its fixtures directly in the database.
+- name: generic recertification testing
+  import_tasks: test-generic-recert.yml
+  when: "['middlewareserver', 'apiserver', 'databaseserver'] | difference(group_names) | length == 0"
+
 - name: imorter testing
   import_tasks: test-importer.yml
   when: "'sampleserver' in group_names"
