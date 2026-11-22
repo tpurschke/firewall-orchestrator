@@ -73,14 +73,16 @@
 
 - name: "generic recert: run the checks and remove the fixtures in any case"
   block:
+    # The responsible type gets an explicit id: on a fresh installation the id sequence of owner_responsible_type
+    # still starts at 1 although the seed has used the ids 1 to 3 (#5803).
     - name: "generic recert: create the fixtures"
       postgresql_query:
         db: "{{ fworch_db_name }}"
         query: >
           DO $do$ BEGIN
             INSERT INTO owner (name, app_id_external) VALUES ('{{ generic_fixture }}_A', '{{ generic_fixture }}_A'), ('{{ generic_fixture }}_B', '{{ generic_fixture }}_B');
-            INSERT INTO owner_responsible_type (name, active, sort_order, allow_modelling, allow_recertification)
-              VALUES ('{{ generic_fixture }}', true, 999, false, true);
+            INSERT INTO owner_responsible_type (id, name, active, sort_order, allow_modelling, allow_recertification)
+              VALUES ((SELECT max(id) + 1 FROM owner_responsible_type), '{{ generic_fixture }}', true, 999, false, true);
             INSERT INTO owner_responsible (owner_id, dn, responsible_type)
               VALUES ((SELECT id FROM owner WHERE name = '{{ generic_fixture }}_A'), '{{ generic_user_dn }}',
                       (SELECT id FROM owner_responsible_type WHERE name = '{{ generic_fixture }}'));
