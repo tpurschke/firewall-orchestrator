@@ -151,6 +151,13 @@ WHERE config_key = 'availableReportTypes' AND config_user = 0
 	AND jsonb_typeof(config_value::jsonb) = 'array'
 	AND NOT (config_value::jsonb @> '[61, 62, 63]'::jsonb);
 
+-- the generic recertification module (7) stays off on existing installations until an admin enables it:
+-- a missing or empty module list means "all modules", so it is pinned to the modules existing before
+INSERT INTO config (config_key, config_value, config_user) VALUES ('availableModules', '[1,2,3,4,5,6]', 0)
+ON CONFLICT (config_key, config_user) DO NOTHING;
+UPDATE config SET config_value = '[1,2,3,4,5,6]'
+WHERE config_key = 'availableModules' AND config_user = 0 AND (config_value IS NULL OR trim(config_value) = '');
+
 -- read-only user (fresh installs get these grants through db_schemata)
 GRANT USAGE ON SCHEMA generic TO fwo_ro;
 GRANT SELECT ON ALL TABLES IN SCHEMA generic TO fwo_ro;

@@ -295,11 +295,16 @@ namespace FWO.Middleware.Server
 
         /// <summary>
         /// Loads the generic config items due within the notice period, per owner; items without owner are not notified.
+        /// Nothing is loaded while the generic recertification module is switched off.
         /// </summary>
         private async Task<Dictionary<int, List<GenericConfigItem>>> LoadDueGenericItemsByOwner(ApiConnection apiConnection)
         {
             try
             {
+                if (!globalConfig.IsModuleAvailable(Module.GenericRecertification))
+                {
+                    return [];
+                }
                 GenericItemService service = new(apiConnection);
                 List<GenericItemManagement> managements = await service.GetGenericManagements(await service.GetKeyConfigs());
                 if (managements.Count == 0)

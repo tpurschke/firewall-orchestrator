@@ -243,6 +243,27 @@ namespace FWO.Test
         }
 
         [Test]
+        public async Task SaveResponsibleType_WithoutGenericRecertificationModuleKeepsAssignments()
+        {
+            SettingsResponsibles component = new();
+            SettingsResponsiblesTestApiConn apiConn = CreateGenericApi();
+            SetInjectedApiConnection(component, apiConn);
+            SetInjectedUserConfig(component, new EditOwnerTestUserConfig { AvailableModules = "[1,2,3,4,5,6]" });
+            await (Task)GetPrivateMethod("LoadTypes").Invoke(component, null)!;
+
+            GetPrivateMethod("EditResponsibleType").Invoke(component, [apiConn.ResponsibleTypes[0]]);
+            await (Task)GetPrivateMethod("SaveResponsibleType").Invoke(component, null)!;
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(GetPrivateField<List<GenericKeyConfig>>(component, "genericDevTypes"), Is.Empty);
+                Assert.That(GetPrivateField<IEnumerable<GenericKeyConfig>>(component, "actDevTypes"), Is.Empty);
+                Assert.That(apiConn.UpdateCalls, Is.EqualTo(1));
+                Assert.That(apiConn.SetDevTypeCalls, Is.Empty);
+            });
+        }
+
+        [Test]
         public async Task SaveResponsibleType_WithoutGenericDeviceTypesWritesNoAssignments()
         {
             SettingsResponsibles component = new();

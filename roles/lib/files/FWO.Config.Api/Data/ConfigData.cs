@@ -43,6 +43,21 @@ namespace FWO.Config.Api.Data
         [JsonProperty("availableModules"), JsonPropertyName("availableModules")]
         public string AvailableModules { get; set; } = "";
 
+        /// <summary>
+        /// Whether the given module is offered in the UI; an empty setting offers all modules.
+        /// </summary>
+        /// <exception cref="System.Text.Json.JsonException">The setting is no list of modules.</exception>
+        public bool IsModuleAvailable(Module module)
+        {
+            if (string.IsNullOrEmpty(AvailableModules))
+            {
+                return true;
+            }
+            List<Module> modules = System.Text.Json.JsonSerializer.Deserialize<List<Module>>(AvailableModules)
+                ?? throw new System.Text.Json.JsonException("Config data could not be parsed.");
+            return modules.Contains(module);
+        }
+
         [JsonProperty("maxMessages"), JsonPropertyName("maxMessages"), UserConfigData]
         public int MaxMessages { get; set; } = 3;
 

@@ -219,6 +219,31 @@ namespace FWO.Test
             Assert.That(userConfig.CanUseReportType(ReportType.TicketReport), Is.False);
         }
 
+        [TestCase(ReportType.GenericItems)]
+        [TestCase(ReportType.GenericRecertification)]
+        [TestCase(ReportType.GenericUnusedItems)]
+        public void GenericReports_NeedGenericRecertificationModuleEvenWithExplicitVisibleOverride(ReportType reportType)
+        {
+            UserConfig userConfig = BuildUserConfig(Roles.Admin);
+            userConfig.AvailableReportTypes = System.Text.Json.JsonSerializer.Serialize(new List<ReportType> { reportType });
+            userConfig.ReportTypeVisibilityByRole = ReportTypeRoleVisibilityConfig.Serialize(new()
+            {
+                [Roles.Admin] = new() { [reportType] = ReportTypeVisibilityOption.Visible }
+            });
+
+            userConfig.AvailableModules = "[1,2,3,4,5,6,7]";
+            bool visibleWithModule = userConfig.CanSelectReportTypeForGeneration(reportType) && userConfig.CanUseReportType(reportType);
+            userConfig.AvailableModules = "[1,2,3,4,5,6]";
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(visibleWithModule, Is.True);
+                Assert.That(userConfig.CanSelectReportTypeForGeneration(reportType), Is.False);
+                Assert.That(userConfig.CanUseReportType(reportType), Is.False);
+                Assert.That(userConfig.CanUseReportType(ReportType.Rules), Is.True);
+            });
+        }
+
         [Test]
         public void GetExplicitlyDeniedRoles_ReturnsOnlyRolesSetToNotVisible()
         {

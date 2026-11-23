@@ -114,8 +114,11 @@
     <RulesReport Recertification="true" ReadonlyMode="@( !CanWriteSelectedOwner() )" Managements="managementsReport"
                  RulesPerPage="rulesPerPage" @bind-SelectedRules="selectedRules"
                  SelectedReportType="ReportType.Recertification" />
-    <GenericRecertSection @ref="genericRecertSection" SelectedOwner="selectedOwner" RecertifiableOwnerIds="recertifiableOwnerIds"
-                          ReadableOwnerIds="@([.. collectedOwnerships.Select(owner => owner.Id)])" />
+    @if (showGenericRecert)
+    {
+        <GenericRecertSection @ref="genericRecertSection" SelectedOwner="selectedOwner" RecertifiableOwnerIds="recertifiableOwnerIds"
+                              ReadableOwnerIds="@([.. collectedOwnerships.Select(owner => owner.Id)])" />
+    }
 </div>
 
 <PopUp Title="@(userConfig.GetText("add_comment"))" Show="@AddCommentMode" Size=PopupSize.Large
@@ -177,6 +180,7 @@
 
     private ReportBase? currentReport;
     private GenericRecertSection? genericRecertSection;
+    private bool showGenericRecert = false;
 
     private bool AddCommentMode = false;
     private string actComment = "";
@@ -190,6 +194,7 @@
         try
         {
             rulesFound = false;
+            showGenericRecert = userConfig.IsModuleAvailable(Module.GenericRecertification);
 
             ownerList = await apiConnection.SendQueryAsync<List<FwoOwner>>(FWO.Api.Client.Queries.OwnerQueries.getOwners);
             await CollectOwnerships();

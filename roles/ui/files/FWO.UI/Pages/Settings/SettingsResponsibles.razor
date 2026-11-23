@@ -195,7 +195,10 @@ else
                 .OrderBy(type => type.SortOrder)
                 .ThenBy(type => type.Name, StringComparer.OrdinalIgnoreCase)
                 .ToList();
-            genericDevTypes = await new GenericItemService(apiConnection).GetKeyConfigs();
+            // without the generic recertification module the device types are neither shown nor changed
+            genericDevTypes = userConfig.IsModuleAvailable(Module.GenericRecertification)
+                ? await new GenericItemService(apiConnection).GetKeyConfigs()
+                : [];
             devTypesByResponsibleType = genericDevTypes.Count > 0
                 ? await new GenericRecertScopeService(apiConnection).GetDevTypesByResponsibleType()
                 : [];

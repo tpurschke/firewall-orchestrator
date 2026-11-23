@@ -86,6 +86,20 @@ With demo data (`add_demo_data`, set by `testkeys=yes`) the installer sets this 
 
 Installations without demo data remove a mock service left from an earlier demo installation.
 
+## Switching the feature on and off
+
+Generic recertification is the module `GenericRecertification` (7) in `availableModules` (Settings > Further
+settings > Available Modules). Without it:
+
+- the generic items section on the recertification page is not shown,
+- the generic report types (61-63) cannot be selected, whatever `availableReportTypes` or a per-role override says,
+- the daily recertification check adds no generic items to its notifications,
+- Settings > Responsibles neither shows nor changes the generic device types of the responsible types.
+
+Fresh installations offer the module. The upgrade to 10.1.0 leaves an existing module list unchanged, so the module
+stays off until an admin enables it; a missing or empty list (meaning "all modules") is pinned to the modules 1-6.
+Import and storage of the items, and their GraphQL permissions, do not depend on the module: it only hides the feature.
+
 ## Access
 
 - Config items are written by the `importer` role only.

@@ -164,7 +164,7 @@ insert into config (config_key, config_value, config_user) VALUES ('sortMatrixBy
 insert into config (config_key, config_value, config_user) VALUES ('matrixAllowNestedZones', 'false', 0);
 insert into config (config_key, config_value, config_user) VALUES ('complianceDiffFilterExistingViolations', 'false', 0);
 insert into config (config_key, config_value, config_user) VALUES ('CustomFieldChangeIdKey', '["field-2","ChangeID"]', 0);
-insert into config (config_key, config_value, config_user) VALUES ('availableModules', '[1,2,3,4,5,6]', 0);
+insert into config (config_key, config_value, config_user) VALUES ('availableModules', '[1,2,3,4,5,6,7]', 0);
 insert into config (config_key, config_value, config_user) VALUES ('debugConfig', '{"debugLevel":8, "extendedLogComplianceCheck":true, "extendedLogReportGeneration":true, "extendedLogScheduler":true}', 0);
 insert into config (config_key, config_value, config_user) VALUES ('reportSchedulerConfig', '', 0);
 insert into config (config_key, config_value, config_user) VALUES ('autoCalculateInternetZone', 'true', 0);

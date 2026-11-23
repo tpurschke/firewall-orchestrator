@@ -1,9 +1,10 @@
--- Test of the generic schema of upgrade/10.1.0.sql (#5786). The test task inserts the upgrade file at the two
--- run-upgrade markers below, which also shows that the upgrade can be repeated on a fresh as well as on an upgraded
--- installation. This probes: the generic tables, constraints and indexes have the same names as in the creation
--- scripts, the Skyhigh device type and its key configuration exist once, the generic report types are available,
--- only one active version per item is possible, invalid key configurations are rejected, and a device type
--- can be assigned to a responsible type only once.
+-- Test of the generic schema of upgrade/10.1.0.sql (#5786). The test task inserts the upgrade file at each
+-- run-upgrade marker below. The first two show that the upgrade can be repeated on a fresh as well as on an
+-- upgraded installation. This probes: the generic tables, constraints and indexes have the same names as in the
+-- creation scripts, the Skyhigh device type and its key configuration exist once, the generic report types are
+-- available, an existing module list is left unchanged while a missing or empty one is pinned to the modules before
+-- 10.1.0 (so the generic recertification module stays off), only one active version per item is possible, invalid
+-- key configurations are rejected, and a device type can be assigned to a responsible type only once.
 -- The transaction is always rolled back.
 \set ON_ERROR_STOP 1
 BEGIN;
@@ -52,6 +53,35 @@ BEGIN
 
     IF NOT ((SELECT config_value::jsonb FROM config WHERE config_key = 'availableReportTypes' AND config_user = 0) @> '[61, 62, 63]'::jsonb) THEN
         RAISE EXCEPTION 'generic report types are not available';
+    END IF;
+
+    -- this (fresh) installation offers the generic recertification module, the upgrade leaves the list as it is
+    IF NOT ((SELECT config_value::jsonb FROM config WHERE config_key = 'availableModules' AND config_user = 0) @> '[7]'::jsonb) THEN
+        RAISE EXCEPTION 'the upgrade changed an existing module list';
+    END IF;
+END $$;
+
+-- an installation without module list (meaning "all modules") gets the modules existing before 10.1.0
+DELETE FROM config WHERE config_key = 'availableModules' AND config_user = 0;
+
+-- @run-upgrade-10.1.0
+
+DO $$
+BEGIN
+    IF (SELECT config_value FROM config WHERE config_key = 'availableModules' AND config_user = 0) IS DISTINCT FROM '[1,2,3,4,5,6]' THEN
+        RAISE EXCEPTION 'a missing module list was not pinned to the modules before 10.1.0';
+    END IF;
+END $$;
+
+-- the same for an empty module list
+UPDATE config SET config_value = '' WHERE config_key = 'availableModules' AND config_user = 0;
+
+-- @run-upgrade-10.1.0
+
+DO $$
+BEGIN
+    IF (SELECT config_value FROM config WHERE config_key = 'availableModules' AND config_user = 0) IS DISTINCT FROM '[1,2,3,4,5,6]' THEN
+        RAISE EXCEPTION 'an empty module list was not pinned to the modules before 10.1.0';
     END IF;
 END $$;
 

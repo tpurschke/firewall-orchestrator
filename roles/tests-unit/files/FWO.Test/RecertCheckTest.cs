@@ -505,6 +505,26 @@ namespace FWO.Test
             Assert.That(onError, Is.Empty);
         }
 
+        [Test]
+        public async Task LoadDueGenericItemsByOwner_IsEmptyWithoutGenericRecertificationModule()
+        {
+            SimulatedGlobalConfig globalConfig = CreateGlobalConfig();
+            globalConfig.AvailableModules = "[1,2,3,4,5,6]";
+            RecertCheck recertCheck = CreateRecertCheck(new RecertCheckApiConnection(), globalConfig);
+            GenericItemManagement proxy = new() { Id = 1, Name = "proxy", DevTypId = 33 };
+            SimulatedGenericApiConnection genericApi = new()
+            {
+                KeyConfigs = [new GenericKeyConfig { DevTypId = 33 }],
+                Managements = [proxy],
+                Items = [new GenericConfigItem { Id = 1, MgmId = 1, ItemUid = "due", OwnerId = 7, FirstSeen = DateTime.Now.AddDays(-1000), Management = proxy }]
+            };
+
+            Dictionary<int, List<GenericConfigItem>> dueItems = await InvokePrivateAsync<Dictionary<int, List<GenericConfigItem>>>(
+                recertCheck, "LoadDueGenericItemsByOwner", genericApi);
+
+            Assert.That(dueItems, Is.Empty);
+        }
+
         private static RuleRecertNotificationContent RulesOnly(List<Rule> upcomingRules, List<Rule> overdueRules)
         {
             return new RuleRecertNotificationContent(upcomingRules, overdueRules, [], []);

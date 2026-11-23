@@ -306,6 +306,40 @@ namespace FWO.Test
             });
         }
 
+        [TestCase("[1,2,3,4,5,6,7]", true)]
+        [TestCase("[1,2,3,4,5,6]", false)]
+        public async Task Render_ShowsGenericSectionOnlyWithGenericRecertificationModule(string availableModules, bool expectSection)
+        {
+            RecordingCertificationApiConnection apiConnection = new();
+            SimulatedUserConfig userConfig = new() { AvailableModules = availableModules };
+            userConfig.User.Roles = [Roles.Admin];
+            await using BunitContext context = new();
+            context.JSInterop.Mode = JSRuntimeMode.Loose;
+            context.Services.AddAuthorizationCore();
+            context.Services.AddSingleton<IAuthorizationService, AllowAllAuthorizationService>();
+            context.Services.AddSingleton<AuthenticationStateProvider>(new AllowAllAuthStateProvider(Roles.Admin));
+            context.Services.AddSingleton<DomEventService>();
+            context.Services.AddSingleton<ApiConnection>(apiConnection);
+            context.Services.AddSingleton<UserConfig>(userConfig);
+            context.Services.AddSingleton<MiddlewareClient>(new MiddlewareClient("http://localhost/"));
+            context.Services.AddSingleton<IRuleTreeBuilder>(Substitute.For<IRuleTreeBuilder>());
+
+            IRenderedComponent<CascadingAuthenticationState> wrapper = context.Render<CascadingAuthenticationState>(parameters => parameters
+                .AddChildContent<CascadingValue<Action<Exception?, string, string, bool>>>(child => child
+                    .Add(p => p.Value, (_, _, _, _) => { })
+                    .AddChildContent<Certification>()));
+            Certification component = wrapper.FindComponent<Certification>().Instance;
+
+            wrapper.WaitForAssertion(() => Assert.That(apiConnection.CountQuery(DeviceQueries.getDevicesByManagement), Is.EqualTo(1)));
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(GetMember<bool>(component, "showGenericRecert"), Is.EqualTo(expectSection));
+                Assert.That(wrapper.FindComponents<GenericRecertSection>(), Has.Count.EqualTo(expectSection ? 1 : 0));
+                Assert.That(apiConnection.CountQuery(GenericQueries.getGenericKeyConfigs) > 0, Is.EqualTo(expectSection));
+            });
+        }
+
         [Test]
         public async Task OnInitializedAsync_ShowsErrorWhenLoadingFails()
         {

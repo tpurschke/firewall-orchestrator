@@ -229,6 +229,7 @@ namespace FWO.Config.Api
         /// standard role-category rules with any per-role "Visible"/"Not Visible" override configured in
         /// <see cref="ConfigData.ReportTypeVisibilityByRole"/>. The global switch
         /// (<see cref="ConfigData.AvailableReportTypes"/>) is not applied here, see <see cref="CanSelectReportTypeForGeneration"/>.
+        /// The generic reports additionally need the module <see cref="Module.GenericRecertification"/>.
         /// </summary>
         public bool CanUseReportType(ReportType reportType, bool modellingOwnerAllowed = true)
         {
@@ -250,6 +251,12 @@ namespace FWO.Config.Api
             if (reportType == ReportType.Undefined)
             {
                 return true;
+            }
+
+            // the generic reports belong to the generic recertification module; no per-role override reinstates them
+            if (reportType.IsGenericReport() && !IsModuleAvailable(Module.GenericRecertification))
+            {
+                return false;
             }
 
             List<string> applicableRoles = GetApplicableRoles();
