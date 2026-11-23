@@ -3,13 +3,6 @@ query getGenericKeyConfig($devTypName: String!, $devTypVersion: String!) {
     where: { device_type: { dev_typ_name: { _eq: $devTypName }, dev_typ_version: { _eq: $devTypVersion } } }
   ) {
     dev_typ_id
-    uid_key
-    name_key
-    order_key
-    owner_key
     owner_match
-    last_used_key
-    last_used_format
-    reportable_fields
   }
 }

@@ -172,8 +172,8 @@ insert into stm_dev_typ (dev_typ_id,dev_typ_name,dev_typ_version,dev_typ_manufac
     VALUES (33,'Skyhigh Web Gateway','12ff','Skyhigh Security','',false,true,false) ON CONFLICT DO NOTHING;
 
 -- generic (non-firewall) device types: keys of the config items delivered by the importer module
-insert into generic.device_type_key_config (dev_typ_id, uid_key, name_key, order_key, owner_key, owner_match, last_used_key, last_used_format, reportable_fields)
-    VALUES (33, 'uid', 'name', NULL, 'owner', 'ext_id', NULL, NULL, '{path,name,enabled,condition,action,description}') ON CONFLICT (dev_typ_id) DO NOTHING;
+insert into generic.device_type_key_config (dev_typ_id, owner_match, has_last_used, reportable_fields)
+    VALUES (33, 'ext_id', false, '{}') ON CONFLICT (dev_typ_id) DO NOTHING;
 
 -- management types whose importer module reads rule hits (supports_rule_hits() of the importer module):
 -- Check Point R8x (9), FortiADOM 5ff (11), FortiManager 5ff (12), Check Point MDS R8x (13)

@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from fwo_exceptions import FwoImporterError, RuleHitsNotSupportedError
 
 if TYPE_CHECKING:
     from model_controllers.fwconfigmanagerlist_controller import FwConfigManagerListController
     from model_controllers.import_state_controller import ImportStateController
+    from models.generic_config import GenericConfigItem
     from models.rule_hit import RuleHit
 
 
@@ -41,8 +42,8 @@ class GenericConfigCommon(FwCommon):
     Base class of importer modules for generic (non-firewall) devices such as proxies or load balancers.
 
     These modules do not deliver a normalized firewall config but a flat list of rule-like config items
-    (one JSON object per item). The generic import step maps them to generic.config_item using the key
-    configuration of the device type (generic.device_type_key_config).
+    (GenericConfigItem: the same core fields for all device types, vendor-specific values in attributes and
+    the original object in raw). The generic import step maps them to generic.config_item.
     """
 
     def get_config(
@@ -53,6 +54,6 @@ class GenericConfigCommon(FwCommon):
         raise FwoImporterError(f"{type(self).__name__} delivers generic config items, not a firewall config")
 
     @abstractmethod
-    def get_config_items(self, import_state: ImportStateController) -> list[dict[str, Any]]:
+    def get_config_items(self, import_state: ImportStateController) -> list[GenericConfigItem]:
         """Read all rule-like config items of the management (full set, not incremental)."""
         raise NotImplementedError("Please Implement this method")

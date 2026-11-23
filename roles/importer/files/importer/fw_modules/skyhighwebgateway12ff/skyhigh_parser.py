@@ -1,10 +1,15 @@
 """
 Parser for the rule sets of a Skyhigh Web Gateway (Konfigurator REST API).
 
-Turns the XML of the top-level rule set list and of a rule set export into flat config items,
-one JSON object per rule:
+Turns the XML of the top-level rule set list and of a rule set export into one generic config item per rule:
 
-    uid, name, path, ruleset, enabled, condition, group_condition, action, description, owner
+- scope: path of rule groups, starting with the top-level rule set
+- enabled: rule set, all rule groups above the rule and the rule itself are enabled
+- match: effective condition, i.e. the conditions of all rule groups above the rule and the rule's own condition
+- action: action of the rule
+- owner: external app id from a line 'owner: <id>' of the description
+- attributes: ruleset, rule_condition (the rule's own condition), group_condition (the group part alone)
+- raw: the rule element of the export as parsed by xmltodict
 """
 
 from __future__ import annotations
@@ -17,6 +22,7 @@ from xml.parsers.expat import ExpatError
 import xmltodict
 from fwo_exceptions import FwoGenericConfigError
 from fwo_log import FWOLogger
+from models.generic_config import GenericConfigItem
 from pydantic import BaseModel
 
 PATH_SEPARATOR = " > "
@@ -50,7 +56,7 @@ class GroupContext(BaseModel):
     path: str
     ruleset: str
     enabled: bool
-    group_condition: str
+    group_conditions: list[str]
 
 
 def as_dict(value: Any) -> dict[str, Any]:
@@ -180,43 +186,56 @@ def format_condition(condition: dict[str, Any]) -> str:
     return " ".join(formatted)
 
 
+def combine_conditions(conditions: list[str]) -> str:
+    """Conditions that must all hold, joined with AND; 'always' and empty conditions are left out."""
+    relevant = [condition for condition in conditions if condition and condition != CONDITION_ALWAYS]
+    if len(relevant) <= 1:
+        return "".join(relevant)
+    return " AND ".join(f"({condition})" for condition in relevant)
+
+
 def extract_owner(description: str) -> str | None:
     """Owner tag of a rule: a description line 'owner: <external app id>'."""
     match = OWNER_TAG_PATTERN.search(description)
     return match.group(1) if match else None
 
 
-def build_rule_item(rule: dict[str, Any], context: GroupContext) -> dict[str, Any]:
+def build_rule_item(rule: dict[str, Any], context: GroupContext) -> GenericConfigItem:
     name = str(rule.get("@name", ""))
     description = get_text(rule, "description")
     action = str(as_dict(rule.get("actionContainer")).get("@actionId", ""))
     rule_id = rule.get("@id")
-    return {
-        "uid": str(rule_id) if rule_id else f"{context.path}{PATH_SEPARATOR}{name}",
-        "name": name,
-        "path": context.path,
-        "ruleset": context.ruleset,
-        "enabled": context.enabled and is_enabled(rule),
-        "condition": format_condition(as_dict(rule.get("condition"))),
-        "group_condition": context.group_condition,
-        "action": strip_vendor_prefix(action),
-        "description": description,
-        "owner": extract_owner(description),
-    }
+    rule_condition = format_condition(as_dict(rule.get("condition")))
+    effective_condition = combine_conditions([*context.group_conditions, rule_condition]) or CONDITION_ALWAYS
+    return GenericConfigItem(
+        uid=str(rule_id) if rule_id else f"{context.path}{PATH_SEPARATOR}{name}",
+        name=name,
+        scope=context.path,
+        enabled=context.enabled and is_enabled(rule),
+        match=effective_condition,
+        action=strip_vendor_prefix(action),
+        description=description,
+        owner=extract_owner(description),
+        attributes={
+            "ruleset": context.ruleset,
+            "rule_condition": rule_condition,
+            "group_condition": combine_conditions(context.group_conditions),
+        },
+        raw=rule,
+    )
 
 
-def collect_rules(group: dict[str, Any], parent: GroupContext, depth: int, items: list[dict[str, Any]]) -> None:
+def collect_rules(group: dict[str, Any], parent: GroupContext, depth: int, items: list[GenericConfigItem]) -> None:
     """Walk a rule group and its nested groups, appending one item per rule."""
     if depth > MAX_GROUP_DEPTH:
         raise FwoGenericConfigError(f"skyhigh: rule groups nested deeper than {MAX_GROUP_DEPTH} levels")
     group_name = str(group.get("@name", ""))
     group_condition = format_condition(as_dict(group.get("condition")))
-    conditions = [c for c in (parent.group_condition, group_condition) if c and c != CONDITION_ALWAYS]
     context = GroupContext(
         path=f"{parent.path}{PATH_SEPARATOR}{group_name}" if parent.path else group_name,
         ruleset=parent.ruleset,
         enabled=parent.enabled and is_enabled(group),
-        group_condition=" AND ".join(conditions),
+        group_conditions=[*parent.group_conditions, group_condition],
     )
     rules = as_dict_list(as_dict(group.get("rules")).get("rule"))
     items.extend(build_rule_item(rule, context) for rule in rules)
@@ -224,11 +243,11 @@ def collect_rules(group: dict[str, Any], parent: GroupContext, depth: int, items
         collect_rules(sub_group, context, depth + 1, items)
 
 
-def parse_ruleset_export(xml_text: str, ruleset: RulesetEntry) -> list[dict[str, Any]]:
+def parse_ruleset_export(xml_text: str, ruleset: RulesetEntry) -> list[GenericConfigItem]:
     """Parse the export of one top-level rule set into config items."""
     library_content = as_dict(parse_xml(xml_text, f"rule set export of '{ruleset.title}'").get("libraryContent"))
-    items: list[dict[str, Any]] = []
-    root_context = GroupContext(path="", ruleset=ruleset.title, enabled=ruleset.enabled, group_condition="")
+    items: list[GenericConfigItem] = []
+    root_context = GroupContext(path="", ruleset=ruleset.title, enabled=ruleset.enabled, group_conditions=[])
     for group in as_dict_list(library_content.get("ruleGroup")):
         collect_rules(group, root_context, 0, items)
     return items

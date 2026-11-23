@@ -1,13 +1,11 @@
 """
 Import step for generic (non-firewall) config items such as proxy or load balancer rules.
 
-The importer module delivers the full list of config items of a management as plain JSON objects.
-This step applies the key configuration of the device type (generic.device_type_key_config) and brings
-generic.config_item up to date:
+The importer module delivers the full list of config items of a management as GenericConfigItem objects.
+This step maps them to generic.config_item and brings the stored items up to date:
 
 - a new item gets a new row,
-- a changed item (config line without the last-used value, name or owner) gets a new version,
-  the old one is marked removed,
+- a changed item (config line, name or owner) gets a new version, the old one is marked removed,
 - a vanished item is marked removed,
 - order and last-used value are updated in place, as they change without the item changing.
 
@@ -16,15 +14,15 @@ Recertification data is never touched here.
 
 from __future__ import annotations
 
-import copy
-from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, cast
+from datetime import datetime  # noqa: TC003 - Pydantic resolves this type at runtime
+from typing import TYPE_CHECKING, Any
 
 from fwo_api import FwoApi
 from fwo_const import GRAPHQL_QUERY_PATH
 from fwo_exceptions import FwoApiWriteError, FwoImporterError
 from fwo_log import FWOLogger
 from models.generic_config import (
+    GenericConfigItem,
     GenericConfigItemRecord,
     GenericItemChanges,
     GenericKeyConfig,
@@ -35,63 +33,6 @@ from models.generic_config import (
 if TYPE_CHECKING:
     from model_controllers.import_state_controller import ImportStateController
     from models.fw_common import GenericConfigCommon
-
-KEY_PATH_SEPARATOR = "."
-MILLISECONDS_PER_SECOND = 1000
-UTC = timezone.utc
-
-
-def as_json_object(value: Any) -> dict[str, Any] | None:
-    """A JSON value as object (dict), or None if it is no object."""
-    return cast("dict[str, Any]", value) if isinstance(value, dict) else None
-
-
-def get_value_at_path(item: dict[str, Any], path: str | None) -> Any:
-    """Return the value at a dot-separated path of a JSON object, or None if any part is missing."""
-    if not path:
-        return None
-    current: Any = item
-    for part in path.split(KEY_PATH_SEPARATOR):
-        current_object = as_json_object(current)
-        if current_object is None or part not in current_object:
-            return None
-        current = current_object[part]
-    return current
-
-
-def without_path(item: dict[str, Any], path: str | None) -> dict[str, Any]:
-    """Return a deep copy of a JSON object without the value at the given dot-separated path."""
-    reduced = copy.deepcopy(item)
-    if not path:
-        return reduced
-    parts = path.split(KEY_PATH_SEPARATOR)
-    parent: dict[str, Any] | None = reduced
-    for part in parts[:-1]:
-        if parent is None or part not in parent:
-            return reduced
-        parent = as_json_object(parent[part])
-    if parent is not None:
-        parent.pop(parts[-1], None)
-    return reduced
-
-
-def parse_last_used(value: Any, value_format: str | None) -> datetime | None:
-    """Convert the last-used value of an item to a time zone aware timestamp; unparsable values give None."""
-    if value is None or value == "":
-        return None
-    try:
-        if value_format in ("unix", "unix_ms"):
-            seconds = float(value)
-            if value_format == "unix_ms":
-                seconds /= MILLISECONDS_PER_SECOND
-            return datetime.fromtimestamp(seconds, tz=UTC)
-        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-    except (TypeError, ValueError, OverflowError, OSError):
-        FWOLogger.debug(f"generic import: cannot parse last-used value '{value}' as {value_format}")
-        return None
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=UTC)
-    return parsed
 
 
 def build_owner_lookup(owners: list[GenericOwnerRef], owner_match: str) -> dict[str, int]:
@@ -104,62 +45,38 @@ def build_owner_lookup(owners: list[GenericOwnerRef], owner_match: str) -> dict[
     return lookup
 
 
-def resolve_order(raw_item: dict[str, Any], key_config: GenericKeyConfig, position: int) -> int:
-    """Use the order key of the item if it holds a number, otherwise the position in the delivered list."""
-    order_value = get_value_at_path(raw_item, key_config.order_key)
-    if order_value is None:
-        return position
-    try:
-        return int(order_value)
-    except (TypeError, ValueError):
-        return position
-
-
-def normalize_item(
-    raw_item: dict[str, Any], key_config: GenericKeyConfig, owner_lookup: dict[str, int], position: int
-) -> NormalizedGenericItem | None:
-    """Apply the key configuration to one delivered item; items without uid are skipped."""
-    uid_value = get_value_at_path(raw_item, key_config.uid_key)
-    if uid_value is None or str(uid_value) == "":
-        FWOLogger.warning(f"generic import: skipping config item at position {position} without uid")
-        return None
-    name_value = get_value_at_path(raw_item, key_config.name_key)
-    owner_value = get_value_at_path(raw_item, key_config.owner_key)
-    owner_id = owner_lookup.get(str(owner_value)) if owner_value is not None else None
-    if owner_value is not None and owner_id is None:
-        FWOLogger.debug(f"generic import: no owner found for '{owner_value}' of item {uid_value}")
+def normalize_item(item: GenericConfigItem, owner_lookup: dict[str, int], position: int) -> NormalizedGenericItem:
+    """Map one delivered item to the columns of generic.config_item."""
+    owner_id = owner_lookup.get(item.owner) if item.owner else None
+    if item.owner and owner_id is None:
+        FWOLogger.debug(f"generic import: no owner found for '{item.owner}' of item {item.uid}")
     return NormalizedGenericItem(
-        item_uid=str(uid_value),
-        item_name=str(name_value) if name_value is not None else None,
-        item_order=resolve_order(raw_item, key_config, position),
-        config_line=raw_item,
+        item_uid=item.uid,
+        item_name=item.name,
+        item_order=item.order if item.order is not None else position,
+        config_line=item.to_config_line(),
         owner_id=owner_id,
-        last_used=parse_last_used(get_value_at_path(raw_item, key_config.last_used_key), key_config.last_used_format),
+        last_used=item.last_used,
     )
 
 
-def normalize_items(
-    raw_items: list[dict[str, Any]], key_config: GenericKeyConfig, owner_lookup: dict[str, int]
-) -> dict[str, NormalizedGenericItem]:
+def normalize_items(items: list[GenericConfigItem], owner_lookup: dict[str, int]) -> dict[str, NormalizedGenericItem]:
     """Normalize all delivered items; of several items with the same uid only the first one is kept."""
     normalized: dict[str, NormalizedGenericItem] = {}
-    for position, raw_item in enumerate(raw_items):
-        item = normalize_item(raw_item, key_config, owner_lookup, position)
-        if item is None:
+    for position, item in enumerate(items):
+        if item.uid in normalized:
+            FWOLogger.warning(f"generic import: duplicate config item uid '{item.uid}' - keeping the first one")
             continue
-        if item.item_uid in normalized:
-            FWOLogger.warning(f"generic import: duplicate config item uid '{item.item_uid}' - keeping the first one")
-            continue
-        normalized[item.item_uid] = item
+        normalized[item.uid] = normalize_item(item, owner_lookup, position)
     return normalized
 
 
-def is_new_version(existing: GenericConfigItemRecord, item: NormalizedGenericItem, last_used_key: str | None) -> bool:
+def is_new_version(existing: GenericConfigItemRecord, item: NormalizedGenericItem) -> bool:
     """Whether an item changed in a way that needs a new version (everything except order and last use)."""
     return (
         existing.item_name != item.item_name
         or existing.owner_id != item.owner_id
-        or without_path(existing.config_line, last_used_key) != without_path(item.config_line, last_used_key)
+        or existing.config_line != item.config_line
     )
 
 
@@ -189,7 +106,6 @@ def needs_in_place_update(existing: GenericConfigItemRecord, item: NormalizedGen
 def calculate_changes(
     existing_items: list[GenericConfigItemRecord],
     new_items: dict[str, NormalizedGenericItem],
-    key_config: GenericKeyConfig,
     mgm_id: int,
     import_id: int,
 ) -> GenericItemChanges:
@@ -201,7 +117,7 @@ def calculate_changes(
         if existing is None:
             changes.new_items.append(to_insert_object(item, mgm_id, import_id, None))
             changes.added += 1
-        elif is_new_version(existing, item, key_config.last_used_key):
+        elif is_new_version(existing, item):
             changes.removed_ids.append(existing.id)
             changes.new_items.append(to_insert_object(item, mgm_id, import_id, existing.first_seen))
             changes.changed += 1
@@ -247,8 +163,8 @@ class GenericConfigImport:
             )
         return GenericKeyConfig(**configs[0])
 
-    def get_owner_lookup(self, key_config: GenericKeyConfig) -> dict[str, int]:
-        if not key_config.owner_key:
+    def get_owner_lookup(self, key_config: GenericKeyConfig, items: list[GenericConfigItem]) -> dict[str, int]:
+        if not any(item.owner for item in items):
             return {}
         data = self._call("generic/getOwnersForGenericMapping.graphql", {})
         owners = [GenericOwnerRef(**owner) for owner in data["owner"]]
@@ -271,14 +187,14 @@ class GenericConfigImport:
             },
         )
 
-    def import_items(self, raw_items: list[dict[str, Any]]) -> GenericItemChanges:
+    def import_items(self, items: list[GenericConfigItem]) -> GenericItemChanges:
         """Bring the stored config items of the management in line with the delivered ones."""
         state = self.import_state.state
         mgm_details = state.mgm_details
         key_config = self.get_key_config(mgm_details.device_type_name, mgm_details.device_type_version)
-        normalized = normalize_items(raw_items, key_config, self.get_owner_lookup(key_config))
+        normalized = normalize_items(items, self.get_owner_lookup(key_config, items))
         changes = calculate_changes(
-            self.get_existing_items(mgm_details.mgm_id), normalized, key_config, mgm_details.mgm_id, state.import_id
+            self.get_existing_items(mgm_details.mgm_id), normalized, mgm_details.mgm_id, state.import_id
         )
         self.write_changes(changes, state.import_id)
         stats = state.stats.statistics
@@ -296,5 +212,5 @@ def import_generic_config(
     import_state: ImportStateController, module: GenericConfigCommon, clear_management_data: bool
 ) -> GenericItemChanges:
     """Read the config items with the module (or none when clearing the management) and import them."""
-    raw_items: list[dict[str, Any]] = [] if clear_management_data else module.get_config_items(import_state)
-    return GenericConfigImport(import_state).import_items(raw_items)
+    items: list[GenericConfigItem] = [] if clear_management_data else module.get_config_items(import_state)
+    return GenericConfigImport(import_state).import_items(items)

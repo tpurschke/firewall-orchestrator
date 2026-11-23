@@ -28,7 +28,7 @@ namespace FWO.Test
         {
             return new SimulatedGenericApiConnection
             {
-                KeyConfigs = [new GenericKeyConfig { DevTypId = 33, UidKey = "uid", ReportableFields = ["action"] }],
+                KeyConfigs = [new GenericKeyConfig { DevTypId = 33 }],
                 Managements = withManagements ? [kProxy] : [],
                 Items =
                 [

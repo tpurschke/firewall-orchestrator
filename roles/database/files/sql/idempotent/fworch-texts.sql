@@ -1567,6 +1567,8 @@ INSERT INTO txt VALUES ('generic_items',		'German', 	'Generische Konfigurationse
 INSERT INTO txt VALUES ('generic_items',		'English', 	'Generic config items');
 INSERT INTO txt VALUES ('generic_no_items',		'German', 	'Keine generischen Konfigurationselemente gefunden');
 INSERT INTO txt VALUES ('generic_no_items',		'English', 	'No generic config items found');
+INSERT INTO txt VALUES ('generic_match',		'German', 	'Bedingung');
+INSERT INTO txt VALUES ('generic_match',		'English', 	'Match');
 INSERT INTO txt VALUES ('recertify_owner_generic','German', 	'Alle Elemente des Eigent&uuml;mers rezertifizieren');
 INSERT INTO txt VALUES ('recertify_owner_generic','English', 	'Recertify all items of owner');
 INSERT INTO txt VALUES ('last_used',		    'German', 	'Zuletzt benutzt');
@@ -5778,8 +5780,8 @@ INSERT INTO txt VALUES ('H1167a', 'German',  'Workflow: Tickets - Darstellung vo
 INSERT INTO txt VALUES ('H1167a', 'English', 'Workflow: Tickets - display workflow tickets with their current state and related tasks.');
 INSERT INTO txt VALUES ('H1168', 'German',  'Eigent&uuml;mer - Darstellung aller Eigent&uuml;mer mit Kritikalit&auml;t, Lebenszyklusstatus und zus&auml;tzlichen Informationen.');
 INSERT INTO txt VALUES ('H1168', 'English', 'Owners - display all owners with criticality, lifecycle status and additional information.');
-INSERT INTO txt VALUES ('H1169', 'German',  'Generisch: Konfigurationselemente - Darstellung der aktuellen regel&auml;hnlichen Konfigurationselemente generischer Ger&auml;te wie Proxies, je Management mit den f&uuml;r den Ger&auml;tetyp festgelegten Feldern. Eine Zeile kann aufgeklappt werden, um das vollst&auml;ndige Element anzuzeigen.');
-INSERT INTO txt VALUES ('H1169', 'English', 'Generic: Config Items - display the current rule-like config items of generic devices such as proxies, per management with the fields defined for the device type. A row can be expanded to show the complete item.');
+INSERT INTO txt VALUES ('H1169', 'German',  'Generisch: Konfigurationselemente - Darstellung der aktuellen regel&auml;hnlichen Konfigurationselemente generischer Ger&auml;te wie Proxies, je Management mit den f&uuml;r alle Ger&auml;tetypen gleichen Spalten Bereich, Aktiviert, Bedingung und Aktion sowie zus&auml;tzlichen Spalten je Ger&auml;tetyp. Eine Zeile kann aufgeklappt werden, um das vollst&auml;ndige Element mit Beschreibung und Originalobjekt des Ger&auml;ts anzuzeigen.');
+INSERT INTO txt VALUES ('H1169', 'English', 'Generic: Config Items - display the current rule-like config items of generic devices such as proxies, per management with the columns scope, enabled, match and action, which are the same for all device types, and additional columns per device type. A row can be expanded to show the complete item with its description and the original object of the device.');
 INSERT INTO txt VALUES ('H1170', 'German',  'Generisch: Rezertifizierung - Darstellung der generischen Konfigurationselemente, die innerhalb der angegebenen Anzahl von Tagen zur Rezertifizierung f&auml;llig sind, mit letzter Entscheidung und Rezertifizierer. Kann auf einen Eigent&uuml;mer eingeschr&auml;nkt werden.');
 INSERT INTO txt VALUES ('H1170', 'English', 'Generic: Recertification - display the generic config items due for recertification within the given number of days, with the latest decision and recertifier. Can be restricted to one owner.');
 INSERT INTO txt VALUES ('H1171', 'German',  'Generisch: Unbenutzt - Darstellung der generischen Konfigurationselemente, die seit der angegebenen Anzahl von Tagen nicht benutzt wurden. Nur f&uuml;r Ger&auml;tetypen, die eine letzte Benutzung liefern.');
@@ -6508,6 +6510,7 @@ mutation addSingleOwner {
 </pre>
 ');
 INSERT INTO txt VALUES ('H4036', 'German',  'Generische Konfigurationselemente: Regel&auml;hnliche Elemente von Ger&auml;ten, die keine Firewalls sind (z.B. Proxy-Regeln), werden unterhalb der Firewall-Regeln angezeigt, wenn sie innerhalb des Vorausschau-Zeitraums f&auml;llig sind.<br>
+    Die Spalten Bereich, Aktiviert, Bedingung und Aktion zeigen, wo das Element liegt, ob es wirksam ist, worauf es zutrifft und was es bewirkt. Eine aufgeklappte Zeile zeigt Beschreibung und Originalobjekt des Ger&auml;ts.<br>
     Einzelne Elemente werden &uuml;ber "Rezertifizieren" oder "Dezertifizieren" ausgew&auml;hlt und mit "Auswahl ausf&uuml;hren" gespeichert.<br>
     "Alle Elemente des Eigent&uuml;mers rezertifizieren" rezertifiziert den ausgew&auml;hlten Eigent&uuml;mer zusammen mit allen seinen generischen Elementen.<br>
     Die n&auml;chste F&auml;lligkeit ergibt sich aus dem Rezertifizierungsintervall des Eigent&uuml;mers bzw. dem allgemeinen Rezertifizierungsintervall.<br>
@@ -6515,6 +6518,7 @@ INSERT INTO txt VALUES ('H4036', 'German',  'Generische Konfigurationselemente: 
     Rezertifiziert werden k&ouml;nnen nur Elemente der generischen Ger&auml;tetypen, die dem Verantwortlichen-Typ in den Einstellungen zugeordnet sind.<br>
     Der Abschnitt wird nur angezeigt, wenn das Modul &quot;GenericRecertification&quot; in den Einstellungen verf&uuml;gbar ist.');
 INSERT INTO txt VALUES ('H4036', 'English', 'Generic config items: rule-like items of devices which are not firewalls (e.g. proxy rules) are shown below the firewall rules when they are due within the lookahead period.<br>
+    The columns scope, enabled, match and action show where the item lives, whether it is in effect, what it applies to and what it does. An expanded row shows the description and the original object of the device.<br>
     Single items are selected with "Recertify" or "Decertify" and saved with "Execute Selected".<br>
     "Recertify all items of owner" recertifies the selected owner together with all of its generic items.<br>
     The next due date results from the recertification interval of the owner or the general recertification interval.<br>

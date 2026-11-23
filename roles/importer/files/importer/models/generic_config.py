@@ -2,28 +2,67 @@
 
 from __future__ import annotations
 
-from datetime import datetime  # noqa: TC003 - Pydantic resolves this type at runtime
+from datetime import datetime, timezone
 from typing import Any, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+# order and last use are stored in their own columns and change without the item changing
+CONFIG_LINE_EXCLUDED_FIELDS = {"order", "last_used"}
+
+
+class GenericConfigItem(BaseModel):
+    """
+    Rule-like config item of a generic (non-firewall) device as delivered by an importer module.
+
+    The core fields mean the same for all device types, so reports and the recertification page show
+    the same columns for all of them:
+
+    - uid: stable unique id of the item within its management
+    - scope: where the item lives on the device (rule set and group path, partition, policy, ...)
+    - order: position among the items of the management; without it the position in the delivered list is used
+    - enabled: whether the item is in effect, including everything it inherits (disabled parent groups, ...)
+    - match: readable form of what the item applies to (effective condition, virtual address, ...)
+    - action: readable form of what the item does (block, redirect, forward to pool, ...)
+    - owner: owner name or external app id, mapped as configured in generic.device_type_key_config
+    - last_used: last use, needed by the unused items report
+
+    Vendor-specific normalized values go into attributes, the original object of the device into raw.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    uid: str = Field(min_length=1)
+    name: str | None = None
+    scope: str | None = None
+    order: int | None = None
+    enabled: bool = True
+    match: str | None = None
+    action: str | None = None
+    description: str | None = None
+    owner: str | None = None
+    last_used: datetime | None = None
+    attributes: dict[str, Any] = {}
+    raw: dict[str, Any] = {}
+
+    @field_validator("last_used")
+    @classmethod
+    def assume_utc(cls, value: datetime | None) -> datetime | None:
+        """Timestamps without time zone are taken as UTC."""
+        if value is not None and value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value
+
+    def to_config_line(self) -> dict[str, Any]:
+        """JSON object stored as generic.config_item.config_line."""
+        return self.model_dump(mode="json", exclude=CONFIG_LINE_EXCLUDED_FIELDS)
 
 
 class GenericKeyConfig(BaseModel):
-    """
-    Meaning of the JSON keys of the config items of one device type (generic.device_type_key_config).
-
-    All *_key values are dot-separated paths into a config item.
-    """
+    """Per device type settings the generic import needs (part of generic.device_type_key_config)."""
 
     dev_typ_id: int
-    uid_key: str
-    name_key: str | None = None
-    order_key: str | None = None
-    owner_key: str | None = None
     owner_match: Literal["name", "ext_id"] = "name"
-    last_used_key: str | None = None
-    last_used_format: Literal["iso8601", "unix", "unix_ms"] | None = None
-    reportable_fields: list[str] = []
 
 
 class GenericOwnerRef(BaseModel):
@@ -48,7 +87,7 @@ class GenericConfigItemRecord(BaseModel):
 
 
 class NormalizedGenericItem(BaseModel):
-    """Config item read from the device, with the key configuration applied."""
+    """Config item read from the device, mapped to the columns of generic.config_item."""
 
     item_uid: str
     item_name: str | None = None

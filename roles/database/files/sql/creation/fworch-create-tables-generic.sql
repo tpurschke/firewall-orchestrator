@@ -3,19 +3,17 @@
 -- Keep in sync with the generic part of roles/database/files/upgrade/10.1.0.sql.
 create schema generic;
 
--- per device type: which JSON keys of a config item carry which meaning
--- all *_key values are dot-separated paths into generic.config_item.config_line
+-- per device type settings of generic config items; the items themselves have the same core fields for all
+-- device types (uid, name, scope, enabled, match, action, description, owner, attributes, raw)
+-- owner_match: the owner value of an item is an owner name ('name') or external app id ('ext_id')
+-- has_last_used: the device type delivers the last use of its items (needed by the unused items report)
+-- reportable_fields: keys of the item attributes shown as additional columns in reports
 create table generic.device_type_key_config
 (
 	id SERIAL PRIMARY KEY,
 	dev_typ_id INTEGER NOT NULL,
-	uid_key VARCHAR NOT NULL,
-	name_key VARCHAR,
-	order_key VARCHAR,
-	owner_key VARCHAR,
 	owner_match VARCHAR NOT NULL DEFAULT 'name',
-	last_used_key VARCHAR,
-	last_used_format VARCHAR,
+	has_last_used BOOLEAN NOT NULL DEFAULT false,
 	reportable_fields VARCHAR[] NOT NULL DEFAULT '{}'
 );
 

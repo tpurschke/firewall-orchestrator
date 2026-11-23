@@ -9,13 +9,8 @@ CREATE TABLE IF NOT EXISTS generic.device_type_key_config
 (
 	id SERIAL PRIMARY KEY,
 	dev_typ_id INTEGER NOT NULL,
-	uid_key VARCHAR NOT NULL,
-	name_key VARCHAR,
-	order_key VARCHAR,
-	owner_key VARCHAR,
 	owner_match VARCHAR NOT NULL DEFAULT 'name',
-	last_used_key VARCHAR,
-	last_used_format VARCHAR,
+	has_last_used BOOLEAN NOT NULL DEFAULT false,
 	reportable_fields VARCHAR[] NOT NULL DEFAULT '{}'
 );
 
@@ -79,8 +74,6 @@ BEGIN
 				'ALTER TABLE generic.device_type_key_config ADD CONSTRAINT generic_device_type_key_config_dev_typ_id_unique UNIQUE (dev_typ_id)'),
 			('generic.device_type_key_config'::regclass, 'generic_device_type_key_config_owner_match_check',
 				'ALTER TABLE generic.device_type_key_config ADD CONSTRAINT generic_device_type_key_config_owner_match_check CHECK ( owner_match IN (''name'', ''ext_id'') )'),
-			('generic.device_type_key_config'::regclass, 'generic_device_type_key_config_last_used_format_check',
-				'ALTER TABLE generic.device_type_key_config ADD CONSTRAINT generic_device_type_key_config_last_used_format_check CHECK ( last_used_format IS NULL OR last_used_format IN (''iso8601'', ''unix'', ''unix_ms'') )'),
 			('generic.device_type_key_config'::regclass, 'generic_device_type_key_config_stm_dev_typ_foreign_key',
 				'ALTER TABLE generic.device_type_key_config ADD CONSTRAINT generic_device_type_key_config_stm_dev_typ_foreign_key FOREIGN KEY (dev_typ_id) REFERENCES stm_dev_typ(dev_typ_id) ON UPDATE RESTRICT ON DELETE CASCADE'),
 			('generic.config_item'::regclass, 'generic_config_item_management_foreign_key',
@@ -131,8 +124,8 @@ CREATE INDEX IF NOT EXISTS idx_generic_responsible_type_dev_type_dev_typ_id ON g
 insert into stm_dev_typ (dev_typ_id,dev_typ_name,dev_typ_version,dev_typ_manufacturer,dev_typ_predef_svc,dev_typ_is_multi_mgmt,dev_typ_is_mgmt,is_pure_routing_device)
     VALUES (33,'Skyhigh Web Gateway','12ff','Skyhigh Security','',false,true,false) ON CONFLICT DO NOTHING;
 
-insert into generic.device_type_key_config (dev_typ_id, uid_key, name_key, order_key, owner_key, owner_match, last_used_key, last_used_format, reportable_fields)
-    VALUES (33, 'uid', 'name', NULL, 'owner', 'ext_id', NULL, NULL, '{path,name,enabled,condition,action,description}') ON CONFLICT (dev_typ_id) DO NOTHING;
+insert into generic.device_type_key_config (dev_typ_id, owner_match, has_last_used, reportable_fields)
+    VALUES (33, 'ext_id', false, '{}') ON CONFLICT (dev_typ_id) DO NOTHING;
 
 -- make the generic report types (61 items, 62 recertification, 63 unused items) available
 -- without touching any other customized entry of the list

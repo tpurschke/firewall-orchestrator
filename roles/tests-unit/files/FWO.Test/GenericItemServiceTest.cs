@@ -14,7 +14,7 @@ namespace FWO.Test
         {
             SimulatedGenericApiConnection api = new()
             {
-                KeyConfigs = [new GenericKeyConfig { DevTypId = 33, UidKey = "uid" }],
+                KeyConfigs = [new GenericKeyConfig { DevTypId = 33 }],
                 Managements = [new GenericItemManagement { Id = 1, Name = "proxy", DevTypId = 33 }, new GenericItemManagement { Id = 2, Name = "fw", DevTypId = 9 }]
             };
             for (int index = 0; index < itemCount; index++)

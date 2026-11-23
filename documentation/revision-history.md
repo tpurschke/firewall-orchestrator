@@ -3,6 +3,7 @@
 ## 10.1.0 - 21.11.2026
 - recertification of generic (non-firewall) config items such as proxy rules (#5786)
   - new database schema `generic`: per device type key configuration, versioned config items, item and owner recertification
+  - config items have the same core fields for all device types (uid, name, scope, enabled, match, action, description, owner, last use), vendor-specific values in `attributes` and the original object in `raw`
   - new importer module for Skyhigh Web Gateway (device type 33); the owner of a rule is taken from an `owner:` tag in the rule description
   - new report types: generic items (61), generic recertification (62) and unused generic items (63)
   - recertification page: recertify single generic items or all generic items of an owner

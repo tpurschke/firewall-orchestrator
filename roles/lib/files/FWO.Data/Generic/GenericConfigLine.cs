@@ -8,9 +8,24 @@ namespace FWO.Data.Generic
     /// <summary>
     /// Reads values of the config line of a generic config item by dot-separated key paths.
     /// The nested values are tokens of whichever JSON deserializer read the item (Newtonsoft or System.Text.Json).
+    /// The config line has the same core fields for all device types (the k*Field constants);
+    /// vendor-specific values are in <see cref="kAttributesField"/>, the original object of the device in <see cref="kRawField"/>.
     /// </summary>
     public static class GenericConfigLine
     {
+        /// <summary>Where the item lives on the device (rule set and group path, partition, policy, ...).</summary>
+        public const string kScopeField = "scope";
+        /// <summary>Whether the item is in effect, including everything it inherits.</summary>
+        public const string kEnabledField = "enabled";
+        /// <summary>Readable form of what the item applies to.</summary>
+        public const string kMatchField = "match";
+        /// <summary>Readable form of what the item does.</summary>
+        public const string kActionField = "action";
+        /// <summary>Vendor-specific normalized values.</summary>
+        public const string kAttributesField = "attributes";
+        /// <summary>Original object of the device.</summary>
+        public const string kRawField = "raw";
+
         private const char kPathSeparator = '.';
         private const string kListSeparator = ", ";
         private const int kMaxPathDepth = 100;

@@ -113,16 +113,20 @@ class TestAgainstTheModule:
 
         items = SkyhighWebGateway12ffCommon().get_config_items(import_state_controller)
 
-        by_uid = {item["uid"]: item for item in items}
+        by_uid = {item.uid: item for item in items}
         assert sorted(by_uid) == ["10011", "10012", "10021", "10022", "10031", "11001", "11002"]
-        assert by_uid["10011"]["owner"] == "123"
-        assert by_uid["10022"]["owner"] == "234"
-        assert by_uid["10031"]["owner"] is None
-        assert by_uid["10031"]["enabled"] is False
-        assert by_uid["11002"]["enabled"] is False
-        assert by_uid["11001"]["path"] == "URL Filtering > Coaching"
-        assert by_uid["11001"]["group_condition"] == "authentication.isauthenticated equals true"
-        assert by_uid["10021"]["condition"] == "urlfilter.categories atLeastOneInList Malicious Categories"
+        assert by_uid["10011"].owner == "123"
+        assert by_uid["10022"].owner == "234"
+        assert by_uid["10031"].owner is None
+        assert by_uid["10031"].enabled is False
+        assert by_uid["11002"].enabled is False
+        assert by_uid["11001"].scope == "URL Filtering > Coaching"
+        assert by_uid["11001"].attributes["group_condition"] == "authentication.isauthenticated equals true"
+        assert by_uid["11001"].match == (
+            "(authentication.isauthenticated equals true) AND (urlfilter.categories atLeastOneInList Social Networking)"
+        )
+        assert by_uid["11001"].raw["@id"] == "11001"
+        assert by_uid["10021"].match == "urlfilter.categories atLeastOneInList Malicious Categories"
         assert mock_server.server.state.sessions == set()
 
     def test_wrong_password_is_rejected(self, mock_server: MockServerHandle) -> None:

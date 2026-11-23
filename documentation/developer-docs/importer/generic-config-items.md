@@ -3,11 +3,34 @@
 Since 10.1.0 Firewall Orchestrator imports and recertifies rule-like config items of devices that are not firewalls,
 for example proxy or load balancer rules (#5786). This page explains the data model and how to add a new device type.
 
+## Config item
+
+Every importer module delivers its items as `models.generic_config.GenericConfigItem`. The core fields mean the same
+for all device types, so reports and the recertification page show the same columns for all of them:
+
+| Field | Content | Skyhigh rule | F5 virtual server (example) |
+|---|---|---|---|
+| `uid` (required) | stable unique ID within the management | rule ID | `fullPath` |
+| `name` | display name | rule name | name |
+| `scope` | where the item lives on the device | rule set > group path | partition / folder |
+| `order` | position; without it the position in the delivered list is used | - | - |
+| `enabled` | in effect, including everything inherited | rule set, groups and rule enabled | enabled / disabled |
+| `match` | readable form of what the item applies to | effective condition | destination address:port |
+| `action` | readable form of what the item does | block, redirect, ... | pool |
+| `description` | free text | description | description |
+| `owner` | owner name or external app ID | `owner:` tag in the description | tag or metadata |
+| `last_used` | last use (timestamps without time zone are taken as UTC) | - | - |
+| `attributes` | vendor-specific normalized values | rule set, rule and group condition | e.g. `pool`, `profiles` |
+| `raw` | original object of the device | rule element of the export | object from the device API |
+
+The item without `order` and `last_used` is stored as `config_line`. The reports show uid, name, owner, scope, enabled,
+match and action as columns; the details of an item show the whole config line.
+
 ## Data model (schema `generic`)
 
 | Table | Content |
 |---|---|
-| `generic.device_type_key_config` | Per device type: which keys of a config item mean what. All `*_key` values are dot-separated paths into the item (`meta.owner`). |
+| `generic.device_type_key_config` | Per device type settings, see below. |
 | `generic.config_item` | One item per row, versioned like `firewall.rule` (`created` / `removed` import IDs). Only one active version per `(mgm_id, item_uid)`. |
 | `generic.recertification` | Recertification decisions, append-only. `config_item_id` is the certified version; the decision applies to the item (`mgm_id`, `item_uid`) until its next due date. |
 | `generic.owner_recertification` | Owner-level recertification of all generic items of an owner. |
@@ -15,19 +38,16 @@ for example proxy or load balancer rules (#5786). This page explains the data mo
 
 Key configuration columns:
 
-- `uid_key` (required): stable unique ID of an item within its management
-- `name_key`: display name
-- `order_key`: numeric order; without it the position in the delivered list is used
-- `owner_key` + `owner_match` (`name` or `ext_id`): value mapped to an owner by owner name or external app ID
-- `last_used_key` + `last_used_format` (`iso8601`, `unix`, `unix_ms`): last use, needed by the unused items report
-- `reportable_fields`: fields shown in the reports (short view); the detailed view shows the whole item
+- `owner_match` (`name` or `ext_id`): the `owner` of an item is mapped to an owner by owner name or external app ID
+- `has_last_used`: the device type delivers `last_used`; only then its items appear in the unused items report
+- `reportable_fields`: keys (or dot-separated paths) of `attributes` shown as additional report columns, after the core columns
 
 ## Import
 
-1. The importer module returns all items of the management as plain JSON objects (`GenericConfigCommon.get_config_items`).
-2. `model_controllers/generic_config_import.py` applies the key configuration and compares with the active items:
+1. The importer module returns all items of the management (`GenericConfigCommon.get_config_items`).
+2. `model_controllers/generic_config_import.py` maps them to `generic.config_item` and compares with the active items:
    - new item: new row
-   - changed item (item without its last-used value, name or owner): new version, the old one gets `removed`
+   - changed item (config line, name or owner): new version, the old one gets `removed`
    - vanished item: `removed`
    - order and last-used value only: updated in place
 3. All writes go in one mutation (`generic/updateGenericConfigItems.graphql`). A failed import is rolled back by
@@ -38,20 +58,29 @@ Key configuration columns:
 1. Add the device type to `stm_dev_typ` and its key configuration to `generic.device_type_key_config`
    (`fworch-fill-stm.sql` for fresh installs, a new upgrade script for existing ones).
 2. Create `roles/importer/files/importer/fw_modules/<name><version>/` with a `fwcommon.py` whose class derives from
-   `models.fw_common.GenericConfigCommon` and implements `get_config_items`.
+   `models.fw_common.GenericConfigCommon` and implements `get_config_items`, mapping each device object to the
+   core fields of `GenericConfigItem`.
    Use the management's import credential and `import_state.state.verify_certs` for the device connection.
 3. Map the package name to the class in `common.get_generic_module` and add the device type ID to the list of
    `import_main_loop.py`.
 4. Add unit tests with sample data under `roles/importer/files/importer/test/`.
 
-No UI or report change is needed: reports and the recertification page read the reportable fields from the key configuration.
+No UI or report change is needed: reports and the recertification page show the core fields and the reportable
+attributes from the key configuration.
 
 ## Skyhigh Web Gateway (device type 33)
 
 The module `skyhighwebgateway12ff` uses the Konfigurator REST API (`https://<host>:<port>/Konfigurator/REST/`):
-login with basic auth, list the top-level rule sets, export each rule set and log out. Each rule becomes one item
-with `uid`, `name`, `path`, `ruleset`, `enabled`, `condition`, `group_condition`, `action`, `description` and `owner`.
-The owner is taken from a line `owner: <external app id>` in the rule description.
+login with basic auth, list the top-level rule sets, export each rule set and log out. Each rule becomes one item:
+
+- `scope` is the path of rule groups, starting with the top-level rule set.
+- `enabled` is only true if the rule set, all rule groups above the rule and the rule itself are enabled.
+- `match` is the effective condition: the conditions of all rule groups above the rule and the rule's own
+  condition, joined with AND. `attributes` hold the rule set name, the rule's own condition (`rule_condition`) and
+  the group part alone (`group_condition`).
+- `raw` is the rule element of the rule set export as parsed by xmltodict. Referenced lists appear with their
+  name only, not with their entries.
+- The owner is taken from a line `owner: <external app id>` in the rule description.
 Links to other hosts in the rule set list are ignored, as the session cookie would be sent there.
 
 ### Testing without a Skyhigh gateway

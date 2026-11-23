@@ -1,13 +1,8 @@
 query getGenericKeyConfigs {
   generic_device_type_key_config(order_by: { dev_typ_id: asc }) {
     dev_typ_id
-    uid_key
-    name_key
-    order_key
-    owner_key
     owner_match
-    last_used_key
-    last_used_format
+    has_last_used
     reportable_fields
     device_type {
       id: dev_typ_id

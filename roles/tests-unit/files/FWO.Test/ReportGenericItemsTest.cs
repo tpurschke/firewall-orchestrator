@@ -21,14 +21,14 @@ namespace FWO.Test
             GenericItemManagement other = new() { Id = 2, Name = "proxy-2", DevTypId = 33 };
             return new SimulatedGenericApiConnection
             {
-                KeyConfigs = [new GenericKeyConfig { DevTypId = 33, UidKey = "uid", NameKey = "name", LastUsedKey = "lastUsed", ReportableFields = ["name", "action"] }],
+                KeyConfigs = [new GenericKeyConfig { DevTypId = 33, HasLastUsed = true, ReportableFields = ["pool"] }],
                 Managements = [proxy, other],
                 Items =
                 [
                     new GenericConfigItem
                     {
                         Id = 1, MgmId = 1, ItemUid = "r1", ItemName = "due", OwnerId = 7, FirstSeen = kNow.AddDays(-400), Management = proxy,
-                        LastUsed = kNow.AddDays(-100), ConfigLine = new() { ["action"] = JToken.FromObject(kPayload) }
+                        LastUsed = kNow.AddDays(-100), ConfigLine = new() { ["action"] = JToken.FromObject(kPayload), ["attributes"] = new JObject { ["pool"] = kPayload + "pool" } }
                     },
                     new GenericConfigItem { Id = 2, MgmId = 1, ItemUid = "r2", ItemName = "fresh", OwnerId = 8, FirstSeen = kNow, Management = proxy, LastUsed = kNow },
                     new GenericConfigItem { Id = 3, MgmId = 2, ItemUid = "r3", ItemName = "other", OwnerId = 7, FirstSeen = kNow.AddDays(-400), Management = other }
@@ -110,7 +110,7 @@ namespace FWO.Test
 
             Assert.That(report.SelectItems(items, []), Is.Empty);
             Assert.That(report.SelectItems(items, [new GenericKeyConfig { DevTypId = 99 }]), Is.Empty);
-            Assert.That(report.SelectItems(items, [new GenericKeyConfig { DevTypId = 99, LastUsedKey = "l" }]), Has.Count.EqualTo(1));
+            Assert.That(report.SelectItems(items, [new GenericKeyConfig { DevTypId = 99, HasLastUsed = true }]), Has.Count.EqualTo(1));
         }
 
         [Test]
@@ -126,7 +126,9 @@ namespace FWO.Test
                 Assert.That(html, Does.Not.Contain("<b>x</b>"));
                 Assert.That(html, Does.Contain(System.Net.WebUtility.HtmlEncode(kPayload)));
                 Assert.That(html, Does.Contain("<h3>proxy-1</h3>"));
-                Assert.That(html, Does.Contain("<th>action</th>"));
+                Assert.That(html, Does.Contain("<th>Action</th>"));
+                Assert.That(html, Does.Contain("<th>pool</th>"));
+                Assert.That(html, Does.Contain(System.Net.WebUtility.HtmlEncode(kPayload + "pool")));
             });
         }
 

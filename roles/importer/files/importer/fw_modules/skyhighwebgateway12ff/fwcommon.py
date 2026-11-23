@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from fw_modules.skyhighwebgateway12ff.skyhigh_getter import SkyhighRestClient, build_base_url
 from fw_modules.skyhighwebgateway12ff.skyhigh_parser import parse_ruleset_export, parse_ruleset_feed
@@ -11,11 +11,12 @@ from models.fw_common import GenericConfigCommon
 
 if TYPE_CHECKING:
     from model_controllers.import_state_controller import ImportStateController
+    from models.generic_config import GenericConfigItem
 
 
-def read_config_items(client: SkyhighRestClient) -> list[dict[str, Any]]:
+def read_config_items(client: SkyhighRestClient) -> list[GenericConfigItem]:
     """Export all top-level rule sets and flatten their rules into config items."""
-    items: list[dict[str, Any]] = []
+    items: list[GenericConfigItem] = []
     for ruleset in parse_ruleset_feed(client.get_rulesets(), client.base_url):
         ruleset_items = parse_ruleset_export(client.export_ruleset(ruleset.href), ruleset)
         FWOLogger.debug(f"skyhigh: rule set '{ruleset.title}' has {len(ruleset_items)} rules")
@@ -24,7 +25,7 @@ def read_config_items(client: SkyhighRestClient) -> list[dict[str, Any]]:
 
 
 class SkyhighWebGateway12ffCommon(GenericConfigCommon):
-    def get_config_items(self, import_state: ImportStateController) -> list[dict[str, Any]]:
+    def get_config_items(self, import_state: ImportStateController) -> list[GenericConfigItem]:
         mgm_details = import_state.state.mgm_details
         client = SkyhighRestClient(
             build_base_url(mgm_details.hostname, mgm_details.port), import_state.state.verify_certs

@@ -10,6 +10,7 @@ from fw_modules.skyhighwebgateway12ff import fwcommon
 from fw_modules.skyhighwebgateway12ff.fwcommon import SkyhighWebGateway12ffCommon, read_config_items
 from fw_modules.skyhighwebgateway12ff.skyhigh_getter import SkyhighRestClient, build_base_url
 from fwo_exceptions import FwLoginFailedError, FwoGenericConfigError, FwoImporterError
+from models.generic_config import GenericConfigItem
 
 if TYPE_CHECKING:
     from model_controllers.import_state_controller import ImportStateController
@@ -109,11 +110,12 @@ class TestModule:
     ) -> None:
         client = MagicMock()
         client_class = mocker.patch.object(fwcommon, "SkyhighRestClient", return_value=client)
-        mocker.patch.object(fwcommon, "read_config_items", return_value=[{"uid": "1"}])
+        delivered = [GenericConfigItem(uid="1")]
+        mocker.patch.object(fwcommon, "read_config_items", return_value=delivered)
 
         items = SkyhighWebGateway12ffCommon().get_config_items(import_state_controller)
 
-        assert items == [{"uid": "1"}]
+        assert items == delivered
         assert client_class.call_args.args[0] == "https://mock.example.com:443/Konfigurator/REST/"
         client.login.assert_called_once_with("mock-user", "mock-secret")
         client.logout.assert_called_once()

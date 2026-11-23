@@ -29,13 +29,8 @@
                     "columns": [
                       "id",
                       "dev_typ_id",
-                      "uid_key",
-                      "name_key",
-                      "order_key",
-                      "owner_key",
                       "owner_match",
-                      "last_used_key",
-                      "last_used_format",
+                      "has_last_used",
                       "reportable_fields"
                     ],
                     "filter": {},
@@ -49,13 +44,8 @@
                     "columns": [
                       "id",
                       "dev_typ_id",
-                      "uid_key",
-                      "name_key",
-                      "order_key",
-                      "owner_key",
                       "owner_match",
-                      "last_used_key",
-                      "last_used_format",
+                      "has_last_used",
                       "reportable_fields"
                     ],
                     "filter": {},
@@ -69,13 +59,8 @@
                     "columns": [
                       "id",
                       "dev_typ_id",
-                      "uid_key",
-                      "name_key",
-                      "order_key",
-                      "owner_key",
                       "owner_match",
-                      "last_used_key",
-                      "last_used_format",
+                      "has_last_used",
                       "reportable_fields"
                     ],
                     "filter": {},
@@ -89,13 +74,8 @@
                     "columns": [
                       "id",
                       "dev_typ_id",
-                      "uid_key",
-                      "name_key",
-                      "order_key",
-                      "owner_key",
                       "owner_match",
-                      "last_used_key",
-                      "last_used_format",
+                      "has_last_used",
                       "reportable_fields"
                     ],
                     "filter": {},
@@ -109,13 +89,8 @@
                     "columns": [
                       "id",
                       "dev_typ_id",
-                      "uid_key",
-                      "name_key",
-                      "order_key",
-                      "owner_key",
                       "owner_match",
-                      "last_used_key",
-                      "last_used_format",
+                      "has_last_used",
                       "reportable_fields"
                     ],
                     "filter": {},
@@ -129,13 +104,8 @@
                     "columns": [
                       "id",
                       "dev_typ_id",
-                      "uid_key",
-                      "name_key",
-                      "order_key",
-                      "owner_key",
                       "owner_match",
-                      "last_used_key",
-                      "last_used_format",
+                      "has_last_used",
                       "reportable_fields"
                     ],
                     "filter": {},
@@ -149,13 +119,8 @@
                     "columns": [
                       "id",
                       "dev_typ_id",
-                      "uid_key",
-                      "name_key",
-                      "order_key",
-                      "owner_key",
                       "owner_match",
-                      "last_used_key",
-                      "last_used_format",
+                      "has_last_used",
                       "reportable_fields"
                     ],
                     "filter": {},

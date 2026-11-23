@@ -21,7 +21,6 @@ BEGIN
     FROM (VALUES
         ('generic_device_type_key_config_dev_typ_id_unique'),
         ('generic_device_type_key_config_owner_match_check'),
-        ('generic_device_type_key_config_last_used_format_check'),
         ('generic_device_type_key_config_stm_dev_typ_foreign_key'),
         ('generic_config_item_management_foreign_key'),
         ('generic_config_item_owner_foreign_key'),
@@ -47,8 +46,15 @@ BEGIN
     IF (SELECT count(*) FROM stm_dev_typ WHERE dev_typ_id = 33 AND dev_typ_name = 'Skyhigh Web Gateway') <> 1 THEN
         RAISE EXCEPTION 'Skyhigh device type missing';
     END IF;
-    IF (SELECT count(*) FROM generic.device_type_key_config WHERE dev_typ_id = 33 AND uid_key = 'uid' AND owner_match = 'ext_id') <> 1 THEN
-        RAISE EXCEPTION 'Skyhigh key configuration missing or duplicated';
+    -- Skyhigh rules have no last use and no attributes worth an extra column, the core columns show the rule
+    IF (SELECT count(*) FROM generic.device_type_key_config
+        WHERE dev_typ_id = 33 AND owner_match = 'ext_id' AND NOT has_last_used AND reportable_fields = '{}') <> 1 THEN
+        RAISE EXCEPTION 'Skyhigh key configuration missing, duplicated or unexpected';
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'generic' AND table_name = 'device_type_key_config'
+            AND column_name IN ('uid_key', 'name_key', 'order_key', 'owner_key', 'last_used_key', 'last_used_format')) THEN
+        RAISE EXCEPTION 'key configuration still has key path columns';
     END IF;
 
     IF NOT ((SELECT config_value::jsonb FROM config WHERE config_key = 'availableReportTypes' AND config_user = 0) @> '[61, 62, 63]'::jsonb) THEN
@@ -101,14 +107,8 @@ BEGIN
         NULL;
     END;
     BEGIN
-        INSERT INTO generic.device_type_key_config (dev_typ_id, uid_key, owner_match) VALUES (-1, 'uid', 'anything');
+        INSERT INTO generic.device_type_key_config (dev_typ_id, owner_match) VALUES (-1, 'anything');
         RAISE EXCEPTION 'an unknown owner match was accepted';
-    EXCEPTION WHEN check_violation THEN
-        NULL;
-    END;
-    BEGIN
-        INSERT INTO generic.device_type_key_config (dev_typ_id, uid_key, last_used_format) VALUES (-1, 'uid', 'dd.mm.yyyy');
-        RAISE EXCEPTION 'an unknown last-used format was accepted';
     EXCEPTION WHEN check_violation THEN
         NULL;
     END;
@@ -120,7 +120,7 @@ BEGIN
         NULL;
     END;
     BEGIN
-        INSERT INTO generic.device_type_key_config (dev_typ_id, uid_key) VALUES (33, 'other');
+        INSERT INTO generic.device_type_key_config (dev_typ_id) VALUES (33);
         RAISE EXCEPTION 'a second key configuration for a device type was accepted';
     EXCEPTION WHEN unique_violation THEN
         NULL;

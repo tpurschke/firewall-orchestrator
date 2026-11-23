@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
 from fw_modules.skyhighwebgateway12ff.skyhigh_parser import (
@@ -9,6 +10,7 @@ from fw_modules.skyhighwebgateway12ff.skyhigh_parser import (
     GroupContext,
     RulesetEntry,
     collect_rules,
+    combine_conditions,
     extract_owner,
     format_condition,
     format_parameter_value,
@@ -19,6 +21,9 @@ from fw_modules.skyhighwebgateway12ff.skyhigh_parser import (
 )
 from fwo_exceptions import FwoGenericConfigError
 
+if TYPE_CHECKING:
+    from models.generic_config import GenericConfigItem
+
 DATA_DIR = Path(__file__).parent / "data"
 BASE_URL = "https://swg.example.com:4712/Konfigurator/REST/"
 RULESET = RulesetEntry(title="URL Filtering", href=BASE_URL + "rulesets/1001", enabled=True)
@@ -28,8 +33,8 @@ def _read(name: str) -> str:
     return (DATA_DIR / name).read_text(encoding="utf-8")
 
 
-def _items_by_name() -> dict[str, dict[str, Any]]:
-    return {item["name"]: item for item in parse_ruleset_export(_read("skyhigh_ruleset_export.xml"), RULESET)}
+def _items_by_name() -> dict[str, GenericConfigItem]:
+    return {item.name or "": item for item in parse_ruleset_export(_read("skyhigh_ruleset_export.xml"), RULESET)}
 
 
 class TestRulesetFeed:
@@ -74,45 +79,59 @@ class TestRulesetExport:
     def test_rule_fields(self) -> None:
         item = _items_by_name()["Block Malware Sites"]
 
-        assert item == {
+        raw = item.raw
+        assert item.model_dump(exclude={"raw"}) == {
             "uid": "3001",
             "name": "Block Malware Sites",
-            "path": "URL Filtering",
-            "ruleset": "URL Filtering",
+            "scope": "URL Filtering",
+            "order": None,
             "enabled": True,
-            "condition": "urlfilter.categories in Malware Categories",
-            "group_condition": "",
+            "match": "urlfilter.categories in Malware Categories",
             "action": "block",
             "description": "Blocks known malware categories\nowner: APP-1234",
             "owner": "APP-1234",
+            "last_used": None,
+            "attributes": {
+                "ruleset": "URL Filtering",
+                "rule_condition": "urlfilter.categories in Malware Categories",
+                "group_condition": "",
+            },
         }
+        assert raw["@id"] == "3001"
+        assert raw["actionContainer"] == {"@actionId": "com.scur.mainaction.block"}
+        assert raw["condition"]["expressions"]["conditionExpression"]["@operatorId"] == "com.scur.operator.in"
+
+    def test_raw_rule_is_json_serializable(self) -> None:
+        for item in _items_by_name().values():
+            assert json.loads(json.dumps(item.raw))["@name"] == item.name
 
     def test_uid_falls_back_to_path_and_owner_tag_is_case_insensitive(self) -> None:
         item = _items_by_name()["Allow Intranet"]
 
-        assert item["uid"] == "URL Filtering > Allow Intranet"
-        assert item["owner"] == "APP-9"
-        assert item["enabled"] is False
-        assert item["condition"] == "always"
+        assert item.uid == "URL Filtering > Allow Intranet"
+        assert item.owner == "APP-9"
+        assert item.enabled is False
+        assert item.match == "always"
 
     def test_nested_group_path_and_condition_are_inherited(self) -> None:
         item = _items_by_name()["Coach Social Media"]
 
-        assert item["path"] == "URL Filtering > Coaching"
-        assert item["group_condition"] == (
-            '(authentication.isauthenticated equals true AND header.get("X-Coach") equals "yes")'
-        )
-        assert item["owner"] is None
+        group_condition = '(authentication.isauthenticated equals true AND header.get("X-Coach") equals "yes")'
+        assert item.scope == "URL Filtering > Coaching"
+        assert item.attributes["group_condition"] == group_condition
+        assert item.attributes["rule_condition"] == "always"
+        assert item.match == group_condition
+        assert item.owner is None
 
     def test_disabled_group_disables_its_rules(self) -> None:
-        assert _items_by_name()["Inside Disabled"]["enabled"] is False
+        assert _items_by_name()["Inside Disabled"].enabled is False
 
     def test_disabled_ruleset_disables_all_rules(self) -> None:
         disabled = RULESET.model_copy(update={"enabled": False})
 
         items = parse_ruleset_export(_read("skyhigh_ruleset_export.xml"), disabled)
 
-        assert not any(item["enabled"] for item in items)
+        assert not any(item.enabled for item in items)
 
     def test_empty_export(self) -> None:
         assert parse_ruleset_export("<libraryContent/>", RULESET) == []
@@ -122,7 +141,7 @@ class TestRulesetExport:
             parse_ruleset_export("not xml", RULESET)
 
     def test_nesting_depth_is_limited(self) -> None:
-        context = GroupContext(path="", ruleset="r", enabled=True, group_condition="")
+        context = GroupContext(path="", ruleset="r", enabled=True, group_conditions=[])
 
         with pytest.raises(FwoGenericConfigError, match=str(MAX_GROUP_DEPTH)):
             collect_rules({"@name": "deep"}, context, MAX_GROUP_DEPTH + 1, [])
@@ -131,6 +150,18 @@ class TestRulesetExport:
 class TestFormatting:
     def test_empty_condition(self) -> None:
         assert format_condition({}) == ""
+
+    @pytest.mark.parametrize(
+        ("conditions", "expected"),
+        [
+            ([], ""),
+            (["always", ""], ""),
+            (["always", "a OR b"], "a OR b"),
+            (["a OR b", "always", "c"], "(a OR b) AND (c)"),
+        ],
+    )
+    def test_combine_conditions(self, conditions: list[str], expected: str) -> None:
+        assert combine_conditions(conditions) == expected
 
     @pytest.mark.parametrize(
         ("parameter", "expected"),

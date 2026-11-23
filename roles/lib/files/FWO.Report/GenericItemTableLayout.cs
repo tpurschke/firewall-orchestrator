@@ -12,11 +12,13 @@ namespace FWO.Report
 
     /// <summary>
     /// Columns of the reports on generic (non-firewall) config items, shared by exports and UI.
-    /// The short view shows the reportable fields of the device type, the detailed view the whole config line.
+    /// The short view shows the core fields, which are the same for all device types, and the reportable
+    /// attributes of the device type; the detailed view shows the whole config line.
     /// </summary>
     public static class GenericItemTableLayout
     {
         private const string kDateFormat = "yyyy-MM-dd";
+        private const char kPathSeparator = '.';
 
         /// <summary>
         /// Columns for the items of one device type in a report of the given type.
@@ -27,17 +29,32 @@ namespace FWO.Report
             [
                 new(userConfig.GetText("uid"), item => item.ItemUid),
                 new(userConfig.GetText("name"), item => item.ItemName ?? ""),
-                new(userConfig.GetText("owner"), item => item.Owner?.Name ?? "")
+                new(userConfig.GetText("owner"), item => item.Owner?.Name ?? ""),
+                new(userConfig.GetText("scope"), item => GenericConfigLine.GetDisplayValue(item.ConfigLine, GenericConfigLine.kScopeField)),
+                new(userConfig.GetText("enabled"), item => FormatEnabled(item, userConfig)),
+                new(userConfig.GetText("generic_match"), item => GenericConfigLine.GetDisplayValue(item.ConfigLine, GenericConfigLine.kMatchField)),
+                new(userConfig.GetText("action"), item => GenericConfigLine.GetDisplayValue(item.ConfigLine, GenericConfigLine.kActionField))
             ];
             foreach (string field in keyConfig?.ReportableFields ?? [])
             {
-                if (field != keyConfig?.NameKey)
-                {
-                    columns.Add(new(field, item => GenericConfigLine.GetDisplayValue(item.ConfigLine, field)));
-                }
+                string attributePath = $"{GenericConfigLine.kAttributesField}{kPathSeparator}{field}";
+                columns.Add(new(field, item => GenericConfigLine.GetDisplayValue(item.ConfigLine, attributePath)));
             }
             columns.AddRange(BuildTypeSpecificColumns(reportType, userConfig));
             return columns;
+        }
+
+        /// <summary>
+        /// Enabled flag of an item as localized yes/no, empty if the item has none.
+        /// </summary>
+        public static string FormatEnabled(GenericConfigItem item, UserConfig userConfig)
+        {
+            string enabledText = GenericConfigLine.GetDisplayValue(item.ConfigLine, GenericConfigLine.kEnabledField);
+            if (!bool.TryParse(enabledText, out bool enabled))
+            {
+                return "";
+            }
+            return userConfig.GetText(enabled ? "yes" : "no");
         }
 
         /// <summary>

@@ -4,35 +4,29 @@ using Newtonsoft.Json;
 namespace FWO.Data.Generic
 {
     /// <summary>
-    /// Meaning of the JSON keys of the config items of one generic (non-firewall) device type
-    /// (generic.device_type_key_config). All *Key values are dot-separated paths into the config line.
+    /// Settings of one generic (non-firewall) device type (generic.device_type_key_config).
+    /// The config items themselves have the same core fields for all device types, see <see cref="GenericConfigLine"/>.
     /// </summary>
     public class GenericKeyConfig
     {
         [JsonProperty("dev_typ_id"), JsonPropertyName("dev_typ_id")]
         public int DevTypId { get; set; }
 
-        [JsonProperty("uid_key"), JsonPropertyName("uid_key")]
-        public string UidKey { get; set; } = "";
-
-        [JsonProperty("name_key"), JsonPropertyName("name_key")]
-        public string? NameKey { get; set; }
-
-        [JsonProperty("order_key"), JsonPropertyName("order_key")]
-        public string? OrderKey { get; set; }
-
-        [JsonProperty("owner_key"), JsonPropertyName("owner_key")]
-        public string? OwnerKey { get; set; }
-
+        /// <summary>
+        /// Whether the owner value of an item is an owner name ("name") or an external app id ("ext_id").
+        /// </summary>
         [JsonProperty("owner_match"), JsonPropertyName("owner_match")]
         public string OwnerMatch { get; set; } = "name";
 
-        [JsonProperty("last_used_key"), JsonPropertyName("last_used_key")]
-        public string? LastUsedKey { get; set; }
+        /// <summary>
+        /// Whether the device type delivers the last use of its items, which the unused items report needs.
+        /// </summary>
+        [JsonProperty("has_last_used"), JsonPropertyName("has_last_used")]
+        public bool HasLastUsed { get; set; }
 
-        [JsonProperty("last_used_format"), JsonPropertyName("last_used_format")]
-        public string? LastUsedFormat { get; set; }
-
+        /// <summary>
+        /// Keys of the item attributes shown as additional columns in reports.
+        /// </summary>
         [JsonProperty("reportable_fields"), JsonPropertyName("reportable_fields")]
         public List<string> ReportableFields { get; set; } = [];
 
@@ -43,10 +37,5 @@ namespace FWO.Data.Generic
         /// Name of the device type for display, the id if the device type is not known.
         /// </summary>
         public string DeviceTypeName => DeviceType != null ? $"{DeviceType.Name} {DeviceType.Version}".Trim() : DevTypId.ToString();
-
-        /// <summary>
-        /// Whether the device type delivers a last-used value, which the unused items report needs.
-        /// </summary>
-        public bool HasLastUsed => !string.IsNullOrWhiteSpace(LastUsedKey);
     }
 }
